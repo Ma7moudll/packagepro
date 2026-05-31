@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Shipping Label</title>
+</head>
+<body>
+  <h1>Shipping Label for Order {{order.orderNumber}}</h1>
+  <p>Please print and attach the shipping label to the package.</p>
+  <p><strong>Tracking Number:</strong> {{shipment.dhlTrackingNumber}}</p>
+  <p><a href="{{labelUrl}}">Download Shipping Label</a></p>
+  <p>Please schedule pickup or drop off at your nearest DHL location.</p>
+</body>
+</html>

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Purchase Order</title>
+</head>
+<body>
+  <h1>New Purchase Order</h1>
+  <p>You have received a new purchase order.</p>
+  <p><strong>PO Number:</strong> {{po.poNumber}}</p>
+  <p><strong>Order Number:</strong> {{po.order.orderNumber}}</p>
+  <p><strong>Amount:</strong> {{po.currency}} {{po.vendorCost}}</p>
+  <p>Please review and respond within 4 hours.</p>
+  <p><a href="{{handshake.url}}">View Purchase Order</a></p>
+</body>
+</html>

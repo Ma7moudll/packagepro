@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Payment Received</title>
+</head>
+<body>
+  <h1>Payment Received</h1>
+  <p>Your payment has been processed for order {{settlement.order.orderNumber}}.</p>
+  <p><strong>Amount:</strong> {{settlement.currency}} {{settlement.amount}}</p>
+  {{#if settlement.convertedAmount}}
+  <p><strong>Converted Amount:</strong> EGP {{settlement.convertedAmount}}</p>
+  {{/if}}
+  <p>Payment receipt: {{settlement.receiptUrl}}</p>
+  <p>Thank you for your services!</p>
+</body>
+</html>
