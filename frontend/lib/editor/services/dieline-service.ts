@@ -70,7 +70,7 @@ export function serializeSVG(geometry: DielineGeometry): string {
   const height = y1 - y0
 
   const renderPath = (path: DielinePath): string =>
-    `<path d="${toPathData(path)}" class="dieline-${path.class}" style="${CLASS_STYLE[path.class]}" />`
+    `<path d="${toPathData(path)}" data-path-id="${path.id}" class="dieline-${path.class}" style="${CLASS_STYLE[path.class]}" />`
 
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(width)}" height="${fmt(height)}" viewBox="0 0 ${fmt(width)} ${fmt(height)}">`
   for (const faceId of ordered) {
@@ -86,7 +86,7 @@ export function serializeSVG(geometry: DielineGeometry): string {
   }
   svg += `<g data-role="outline">`
   for (const path of geometry.outline) {
-    svg += `<path d="${toPathData(path)}" class="dieline-outline" style="stroke:#000000;fill:none;stroke-width:0.3" />`
+    svg += `<path d="${toPathData(path)}" data-path-id="${path.id}" class="dieline-outline" style="stroke:#000000;fill:none;stroke-width:0.3" />`
   }
   svg += `</g>`
   svg += `</svg>`
