@@ -3,7 +3,7 @@ import { NotFoundError, AppError } from '../../utils/errors';
 import { randomUUID } from 'crypto';
 import { getRedisClient } from '../../lib/redis';
 import { fileUploadService } from '../../services/file-upload/upload.service';
-import { DesignLifecycleService } from '../../services/design-lifecycle/design-lifecycle.service';
+import { DesignLifecycleService, DesignLifecycleState } from '../../services/design-lifecycle/design-lifecycle.service';
 import { isDesignOwner } from '../../middleware/auth.middleware';
 import { enqueueExport, ExportJobData } from '../../workers/export-queue/export.worker';
 
@@ -175,6 +175,18 @@ export class DesignService {
     });
 
     if (design) {
+      // M8-H: lifecycle save gate — only DRAFT designs are editable. The editor
+      // mirrors this via isReadOnly(), but the backend is authoritative: a
+      // SUBMITTED/IN_REVIEW/APPROVED session must reject saves (AC4). The client
+      // surfaces the rejection message; no route change.
+      const currentState: DesignLifecycleState = design.lifecycleStatus || 'DRAFT';
+      if (!DesignLifecycleService.isEditableState(currentState)) {
+        throw new AppError(
+          400,
+          `Cannot save design in ${currentState} status. Only DRAFT designs can be edited.`
+        );
+      }
+
       design = await prisma.design.update({
         where: { id: design.id },
         data: {

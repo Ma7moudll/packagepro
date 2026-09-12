@@ -448,6 +448,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
           type: config.product.type,
           boxType: config.product.boxType,
           ...(config.product.dieline ? { dieline: config.product.dieline } : {}),
+          ...(config.product.prepress ? { prepress: config.product.prepress } : {}),
         },
         structureType: config.product.structure?.type,
         zones: config.product.structure?.zones,
@@ -461,6 +462,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
         },
         ...(config.sessionId && { sessionId: config.sessionId }),
         lifecycleStatus: "DRAFT" as const,
+        manifestMetadata: undefined,
       }
 
       // Reset history so the EditorConfig init becomes the clean baseline

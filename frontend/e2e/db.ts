@@ -72,6 +72,55 @@ export async function findDesignBySession(sessionId: string): Promise<DesignRow 
   )
 }
 
+/* ── Design lifecycle / M8-H helpers ──────────────────────────────── */
+
+/**
+ * Set the design lifecycle state directly (test seam — mirrors the backend
+ * transition boundary that would normally perform a validated transition).
+ * The Prisma enum is materialized as the PG type "DesignLifecycleStatus"; the
+ * cast makes the parameter bind safely against it.
+ */
+export async function updateDesignLifecycle(sessionId: string, lifecycleStatus: string): Promise<void> {
+  await dbQuery(
+    `UPDATE "designs" SET "lifecycleStatus" = $1::"DesignLifecycleStatus", "updatedAt" = now() WHERE "sessionId" = $2`,
+    [lifecycleStatus, sessionId]
+  )
+}
+
+/** Read the current lifecycle state of a design. */
+export async function findDesignLifecycle(sessionId: string): Promise<string | null> {
+  const row = await dbSingle<{ lifecycleStatus: string }>(
+    `SELECT "lifecycleStatus" FROM "designs" WHERE "sessionId" = $1`,
+    [sessionId]
+  )
+  return row?.lifecycleStatus ?? null
+}
+
+/**
+ * Insert a pre-existing legacy (v1) design row — designData carries a raw
+ * core-state blob WITHOUT the v2 envelope (no schemaVersion). Used to prove
+ * the M8-H migration path: loading such a design and re-saving must produce a
+ * v2 envelope with `migrated`/`best_effort` provenance while keeping artwork.
+ */
+export async function insertLegacyDesignRow(opts: {
+  sessionId: string
+  productId?: string | null
+  designData: Record<string, unknown>
+}): Promise<void> {
+  const { randomUUID } = require_("crypto")
+  await dbQuery(
+    `INSERT INTO "designs" ("id", "sessionId", "productId", "designData", "status", "lifecycleStatus", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, $4::jsonb, 'saved', 'DRAFT', now(), now())
+     ON CONFLICT ("sessionId") DO UPDATE
+       SET "designData" = EXCLUDED."designData", "status" = 'saved', "updatedAt" = now()`,
+    [randomUUID(), opts.sessionId, opts.productId ?? null, JSON.stringify(opts.designData)]
+  )
+}
+
+export async function deleteDesignBySession(sessionId: string): Promise<void> {
+  await dbQuery(`DELETE FROM "designs" WHERE "sessionId" = $1`, [sessionId])
+}
+
 /* ── CartItem helpers ────────────────────────────────────────────── */
 
 export interface CartItemRow {

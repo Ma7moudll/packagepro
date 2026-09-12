@@ -249,11 +249,17 @@ export interface DesignCoreState {
   designId?: string // Backend design ID when loaded from server
   sessionId?: string // Backend editor-session ID (cloud save)
   product?: { id: string; slug: string; name: string; type: string; category?: string; boxType?: string; /** M8-D: canonical dieline blueprint (M8-B EditorConfig passthrough) — the single inputs for the migrated dieline UI. */
-    dieline?: DielineBlueprint }
+    dieline?: DielineBlueprint
+    /** M8-H: prepress baseline passthrough (caliper/flute/tolerance) snapshot. */
+    prepress?: { caliperMm?: number; fluteType?: string; glueFlapToleranceMm?: number } }
   productConfig?: { selectedSize?: string; selectedMaterial?: string; selectedFinish?: string; quantity?: number; customDimensions?: ModelDimensions; variantId?: string; sku?: string }
   /** M7: Backend-issued product structure (faces/zones/rules) for prepress + surfaces. */
   structureType?: string
   zones?: Record<string, FaceZone[]>
+  /** M8-H: provenance of the load that produced this state — carried into the
+   *  next save so legacy (`migrated`/`best_effort`) lineage is never re-claimed
+   *  as exactly reproducible. */
+  manifestMetadata?: { schemaVersion: number; manifestSource: "blueprint" | "migrated"; reproducibility: "exact" | "best_effort" }
 }
 
 export interface DesignState extends DesignCoreState {

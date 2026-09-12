@@ -2,6 +2,11 @@
 
 import { DesignCoreState } from "@/lib/editor/state/types"
 import { designsApi } from "@/lib/api/designs"
+import {
+  deserializeDesignData,
+  normalizeFromManifest,
+  serializeDesignData,
+} from "@/lib/editor/services/dieline-manifest"
 
 const DB_NAME = "packagepro-editor"
 const DB_VERSION = 1
@@ -161,7 +166,10 @@ export async function ensureCloudSession(
 
   await designsApi.save({
     sessionId: id,
-    designData: state,
+    // M8-H: persist a versioned snapshot — schemaVersion 2 + the resolved-
+    // geometry manifest (provenance flags carried from the load path). The
+    // state itself stays top-level for M7 consumers (traceability contract).
+    designData: serializeDesignData(state),
     // M7-E: retain product identity on the Design row for Cart->Order traceability.
     productId: state.product?.id,
     variantId: state.productConfig?.variantId,
@@ -176,7 +184,13 @@ export async function loadDesignFromCloud(sessionId: string): Promise<DesignCore
     const res = await designsApi.getSession(sessionId)
     const session = res.success && res.data ? (res.data as any) : null
     if (session?.designData) {
-      return session.designData as DesignCoreState
+      // M8-H: manifest-first restore. The persisted manifest (dimensions,
+      // canvas extent, product identity) is authoritative — reopen is
+      // deterministic for blueprint/exact designs and faithful for migrated
+      // ones. Provenance rides along for the next save's lineage.
+      const { state, provenance, manifest } = deserializeDesignData(session.designData)
+      const restored = normalizeFromManifest(state, manifest)
+      return { ...restored, manifestMetadata: provenance }
     }
     return null
   } catch (error) {
