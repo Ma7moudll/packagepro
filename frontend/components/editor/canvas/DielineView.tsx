@@ -14,15 +14,21 @@
 // resolveDieline / generateDieline / edgePoints / lineKey). Blueprint-absent
 // products (count: `M7DielineFallback`) keep the frozen M7 rendering.
 
-import { useRef, useEffect, useState } from "react"
+import { useRef, useEffect, useState, useMemo } from "react"
 import { useLanguage } from "@/providers/language-provider"
 import { flatBounds } from "@/lib/editor/geometry/dieline"
 import { serializeSVG } from "@/lib/editor/services/dieline-service"
+import {
+  deriveFoldAngleAnnotations,
+  deriveGlueTabAnnotations,
+  deriveCornerAnnotations,
+} from "@/lib/editor/geometry/annotations"
+import { DielineAnnotations } from "@/components/editor/canvas/DielineAnnotations"
 import { M7DielineFallback } from "@/components/editor/canvas/M7DielineFallback"
 import type { DielineResolution } from "@/lib/editor/geometry/resolve-dieline"
 import type { FaceId, DielinePath } from "@shared/types"
 import { Button } from "@/components/ui/button"
-import { Download, ZoomIn, ZoomOut, Move } from "lucide-react"
+import { Download, ZoomIn, ZoomOut, Move, Ruler } from "lucide-react"
 
 const FACE_LABEL: Record<FaceId, string> = {
   front: "Front",
@@ -65,6 +71,21 @@ export function DielineView({
   const bounds = geometry ? flatBounds(geometry) : undefined
   const sheetW = bounds ? bounds.x1 - bounds.x0 : 0
   const sheetH = bounds ? bounds.y1 - bounds.y0 : 0
+
+  // M8-E: annotations derived from the canonical geometry (presentation-only).
+  const [showAnnotations, setShowAnnotations] = useState(true)
+  const foldAnnotations = useMemo(
+    () => (geometry ? deriveFoldAngleAnnotations(geometry) : []),
+    [geometry],
+  )
+  const glueAnnotations = useMemo(
+    () => (geometry ? deriveGlueTabAnnotations(geometry) : []),
+    [geometry],
+  )
+  const cornerAnnotations = useMemo(
+    () => (geometry ? deriveCornerAnnotations(geometry) : []),
+    [geometry],
+  )
 
   // Center the view on the sheet (mm dims rendered 1:1).
   useEffect(() => {
@@ -139,6 +160,16 @@ export function DielineView({
           </span>
           <Button variant="outline" size="sm" onClick={() => handleZoom(0.1)}>
             <ZoomIn className="h-4 w-4" />
+          </Button>
+          <div className="w-px h-6 bg-slate-200 mx-1" />
+          <Button
+            variant={showAnnotations ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowAnnotations((v) => !v)}
+            data-annotations-toggle
+          >
+            <Ruler className="h-4 w-4 mr-1" />
+            {language === "ar" ? "القياسات" : "Annotations"}
           </Button>
           <div className="w-px h-6 bg-slate-200 mx-1" />
           <Button variant="outline" size="sm" onClick={handleExport}>
@@ -261,6 +292,20 @@ export function DielineView({
               />
             ))}
           </svg>
+
+          {/* M8-E annotation overlay — display-only, tied to canonical ids/FaceIds. */}
+          <DielineAnnotations
+            folds={foldAnnotations}
+            glue={glueAnnotations}
+            corners={cornerAnnotations}
+            visible={showAnnotations}
+            bounds={{
+              x0: bounds?.x0 ?? 0,
+              y0: bounds?.y0 ?? 0,
+              sheetW,
+              sheetH,
+            }}
+          />
         </div>
       </div>
 
