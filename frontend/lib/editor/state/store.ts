@@ -2,18 +2,39 @@
 
 import { create } from "zustand"
 import { nanoid } from "nanoid"
+import { mmToPx, facePanel } from "@/lib/editor/geometry/units"
 import {
   DesignCoreState,
   DesignState,
+  DesignLifecycleStatus,
   HistoryState,
   Layer,
   ToolType,
+  Face,
   FaceId,
   ModelState,
   CanvasState,
   CameraState,
   UIState,
 } from "./types"
+
+/** Minimal shape of EditorConfig consumed by the store (avoids circular import). */
+export interface EditorConfigLike {
+  product: {
+    id: string; slug: string; name: string; type: string; boxType?: string
+    structure?: {
+      type?: string
+      boxType?: string
+      faces?: Record<string, { width?: number; height?: number; depth?: number; label: string }>
+      zones?: Record<string, Array<{ label: string; required: boolean; position: [number, number, number]; rotation?: [number, number, number] }>>
+    }
+  }
+  variant: { id: string; sku: string; sizeCode: string | null; materialCode: string | null; color?: string; printMode: string; printSides: number; finish: string; dimensions: { length: number; width: number; height: number; unit?: string } }
+  material: { code: string; name: string; hex: string }
+  quantity: number
+  pricing?: { unitPrice: number; totalPrice: number; currency?: string }
+  sessionId?: string
+}
 
 function createInitialCoreState(): DesignCoreState {
   const defaultFaces: ModelState["faces"] = [
@@ -32,16 +53,18 @@ function createInitialCoreState(): DesignCoreState {
     { id: "inside_bottom", name: "Inside Bottom" },
   ]
 
+  const initialDimensions = { length: 200, width: 150, height: 100 }
+
   const canvas: CanvasState = {
-    width: 600, // Initial width for front face
-    height: 300,
+    width: mmToPx(initialDimensions.length), // front face (length × height) at PX_PER_MM
+    height: mmToPx(initialDimensions.height),
     backgroundColor: "#d2b48c", // Default for Kraft
   }
 
   const model: ModelState = {
     type: "mailer_box",
     category: "boxes",
-    dimensions: { length: 200, width: 150, height: 100 },
+    dimensions: initialDimensions,
     material: "cardboard-kraft",
     faces: defaultFaces,
     printCoverage: "outside",
@@ -78,6 +101,7 @@ function createInitialCoreState(): DesignCoreState {
     camera,
     activeTool: "select",
     ui,
+    lifecycleStatus: "DRAFT" as const,
   }
 }
 
@@ -104,27 +128,51 @@ export interface DesignStore extends DesignState {
   addLayer: (partial: Partial<Layer>) => string
   updateLayer: (id: string, updater: (layer: Layer) => Layer) => void
   removeLayer: (id: string) => void
+  clearLayers: () => void
   setSelectedLayers: (ids: string[]) => void
   reorderLayers: (idsInOrder: string[]) => void
   applyCoreState: (updater: (core: DesignCoreState) => DesignCoreState) => void
+  initFromEditorConfig: (config: EditorConfigLike) => void
   undo: () => void
   redo: () => void
   resetHistory: () => void
+  // Lifecycle actions
+  setLifecycleStatus: (status: DesignLifecycleStatus) => void
+  setDesignId: (id: string | undefined) => void
+  isReadOnly: () => boolean
+  submitDesign: (designId: string) => Promise<any>
+  recallDesign: (designId: string) => Promise<any>
 }
 
 export const useDesignStore = create<DesignStore>((set, get) => {
   const initialCore = createInitialCoreState()
   const initialHistory = wrapWithHistory(initialCore)
 
+  // Live workspace prefs (viewMode, panels, guides) must survive any state
+  // replacement that rebuilds history.present.ui back over the top-level `ui`
+  // (M7-C) — otherwise e.g. setSelectedFace or a history push silently reverts
+  // the chosen view mode and unmounts the 2D canvas.
+  const withPreservedLiveUi = (core: DesignCoreState, liveUi: UIState): UIState => ({
+    ...core.ui,
+    viewMode: liveUi.viewMode,
+    gridVisible: liveUi.gridVisible,
+    guidesVisible: liveUi.guidesVisible,
+    leftSidebarOpen: liveUi.leftSidebarOpen,
+    rightSidebarOpen: liveUi.rightSidebarOpen,
+  })
+
   const pushToHistory = (nextCore: DesignCoreState) => {
-    set((state) => ({
-      history: {
-        past: [...state.history.past, state.history.present],
-        present: nextCore,
-        future: [],
-      },
-      ...nextCore,
-    }))
+    set((state) => {
+      return {
+        history: {
+          past: [...state.history.past, state.history.present],
+          present: nextCore,
+          future: [],
+        },
+        ...nextCore,
+        ui: withPreservedLiveUi(nextCore, state.ui),
+      }
+    })
   }
 
   return {
@@ -141,22 +189,11 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     setSelectedFace: (faceId) => {
       set((state) => {
         const core = state.history.present
-        const { length, width, height } = core.model.dimensions
 
-        // Calculate canvas dimensions based on face
-        let canvasWidth = 800
-        let canvasHeight = 600
-
-        if (faceId === "front" || faceId === "back" || faceId === "inside_front" || faceId === "inside_back") {
-          canvasWidth = length * 3 // Scale factor for canvas view
-          canvasHeight = height * 3
-        } else if (faceId === "top" || faceId === "bottom" || faceId === "inside_top" || faceId === "inside_bottom") {
-          canvasWidth = length * 3
-          canvasHeight = width * 3
-        } else if (faceId === "left" || faceId === "right" || faceId === "inside_left" || faceId === "inside_right") {
-          canvasWidth = width * 3
-          canvasHeight = height * 3
-        }
+        // Canvas sized from the canonical face-panel mapping (§7) via mmToPx
+        const panel = facePanel(core.model.dimensions, faceId)
+        const canvasWidth = mmToPx(panel.w)
+        const canvasHeight = mmToPx(panel.h)
 
         const nextCore: DesignCoreState = {
           ...core,
@@ -171,7 +208,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
         return {
           ...state,
           canvas: nextCore.canvas,
-          ui: nextCore.ui,
+          ui: withPreservedLiveUi(nextCore, state.ui),
           history: {
             past: [...state.history.past, state.history.present],
             present: nextCore,
@@ -291,6 +328,12 @@ export const useDesignStore = create<DesignStore>((set, get) => {
       pushToHistory(nextCore)
     },
 
+    clearLayers: () => {
+      const core = get().history.present
+      const nextCore: DesignCoreState = { ...core, layers: [], selectedLayerIds: [] }
+      pushToHistory(nextCore)
+    },
+
     setSelectedLayers: (ids) => {
       set((state) => ({
         selectedLayerIds: ids,
@@ -315,8 +358,109 @@ export const useDesignStore = create<DesignStore>((set, get) => {
 
     applyCoreState: (updater) => {
       const core = get().history.present
-      const nextCore = updater(core)
+      let nextCore = updater(core)
+      // M7-C: the view mode is a live client preference — never let a state
+      // replacement (session restore, template load, editor re-init) revert it.
+      nextCore = { ...nextCore, ui: { ...nextCore.ui, viewMode: get().ui.viewMode } }
+      // M7-C: migrate legacy designs — scenes persist one flat layer list, so any
+      // layer without a faceId belongs to the default (front) face.
+      if (nextCore.layers.some((l) => !l.faceId)) {
+        nextCore = {
+          ...nextCore,
+          layers: nextCore.layers.map((l) =>
+            l.faceId ? l : { ...l, faceId: "front" as const }
+          ),
+        }
+      }
       pushToHistory(nextCore)
+    },
+
+    initFromEditorConfig: (config) => {
+      const current = get().history.present
+      const dims = config.variant.dimensions
+      const length = Number(dims.length) || 200
+      const width = Number(dims.width) || 150
+      const height = Number(dims.height) || 100
+
+      // Faces depend on print coverage — outside faces always, inside when 2-sided.
+      const outsideIds: FaceId[] = ["front", "back", "left", "right", "top", "bottom"]
+      const insideIds: FaceId[] = ["inside_front", "inside_back", "inside_left", "inside_right", "inside_top", "inside_bottom"]
+      const DEFAULT_OUTSIDE: Record<string, string> = {
+        front: "Front", back: "Back", left: "Left", right: "Right", top: "Top", bottom: "Bottom",
+      }
+      const DEFAULT_INSIDE: Record<string, string> = {
+        inside_front: "Inside Front", inside_back: "Inside Back", inside_left: "Inside Left",
+        inside_right: "Inside Right", inside_top: "Inside Top", inside_bottom: "Inside Bottom",
+      }
+      const structureFaces = config.product.structure?.faces
+
+      // M7: when the backend supplies real ProductStructure faces, use them as
+      // the source of truth (labels + geometry); fall back to canonical defaults.
+      const resolveFace = (id: FaceId): Face => {
+        const s = structureFaces?.[id]
+        return s
+          ? { id, name: s.label, width: s.width, height: s.height, depth: s.depth }
+          : { id, name: DEFAULT_OUTSIDE[id] ?? DEFAULT_INSIDE[id] ?? id }
+      }
+
+      const outsideFaces = outsideIds
+        .filter((id) => !structureFaces || structureFaces[id])
+        .map((id) => resolveFace(id))
+      const insideFaces = insideIds
+        .filter((id) => !structureFaces || structureFaces[id])
+        .map((id) => resolveFace(id))
+      const faces = (config.variant.printSides >= 2 ? [...outsideFaces, ...insideFaces] : outsideFaces)
+
+      // Canvas sized for the front face (length × height) via the canonical factor
+      const rawType = (config.product.boxType || config.product.type || "mailer_box").replace(/-/g, "_")
+      const modelType = rawType as ModelState["type"]
+      const canvas: CanvasState = {
+        width: mmToPx(length),
+        height: mmToPx(height),
+        backgroundColor: config.material.hex || "#d2b48c",
+      }
+
+      const model: ModelState = {
+        ...current.model,
+        type: modelType,
+        category: "boxes",
+        dimensions: { length, width, height },
+        material: config.material.code || "cardboard-kraft",
+        faces,
+        quantity: config.quantity,
+      }
+
+      const nextCore: DesignCoreState = {
+        ...current,
+        canvas,
+        model,
+        ui: { ...current.ui, selectedFace: "front", viewMode: get().ui.viewMode },
+        product: {
+          id: config.product.id,
+          slug: config.product.slug,
+          name: config.product.name,
+          type: config.product.type,
+          boxType: config.product.boxType,
+        },
+        structureType: config.product.structure?.type,
+        zones: config.product.structure?.zones,
+        productConfig: {
+          selectedSize: config.variant.sizeCode ?? undefined,
+          selectedMaterial: config.material.code,
+          selectedFinish: config.variant.finish !== "none" ? config.variant.finish : undefined,
+          quantity: config.quantity,
+          variantId: config.variant.id,
+          sku: config.variant.sku,
+        },
+        ...(config.sessionId && { sessionId: config.sessionId }),
+        lifecycleStatus: "DRAFT" as const,
+      }
+
+      // Reset history so the EditorConfig init becomes the clean baseline
+      set({
+        ...nextCore,
+        history: { past: [], present: nextCore, future: [] },
+      })
     },
 
     undo: () => {
@@ -360,6 +504,78 @@ export const useDesignStore = create<DesignStore>((set, get) => {
       return {
         ...core,
         history: wrapWithHistory(core),
+      }
+    },
+
+    setLifecycleStatus: (status) => {
+      set((state) => ({
+        lifecycleStatus: status,
+      }))
+    },
+
+    setDesignId: (id) => {
+      set((state) => ({
+        designId: id,
+      }))
+    },
+
+    isReadOnly: () => {
+      const state = get()
+      // Design is read-only if it's not in DRAFT status
+      return state.lifecycleStatus !== "DRAFT"
+    },
+
+    submitDesign: async (designId: string) => {
+      try {
+        const response = await fetch(`/api/designs/${designId}/submit`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("token") : ""}`,
+          },
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || "Failed to submit design")
+        }
+
+        const data = await response.json()
+        set({
+          lifecycleStatus: data.data.lifecycleStatus,
+        })
+
+        return data.data
+      } catch (error) {
+        console.error("Submit design error:", error)
+        throw error
+      }
+    },
+
+    recallDesign: async (designId: string) => {
+      try {
+        const response = await fetch(`/api/designs/${designId}/recall`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("token") : ""}`,
+          },
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || "Failed to recall design")
+        }
+
+        const data = await response.json()
+        set({
+          lifecycleStatus: data.data.lifecycleStatus,
+        })
+
+        return data.data
+      } catch (error) {
+        console.error("Recall design error:", error)
+        throw error
       }
     },
   }

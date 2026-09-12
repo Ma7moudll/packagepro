@@ -1,6 +1,7 @@
 "use client"
 
 import { useDesignStore } from "@/lib/editor/state/store"
+import { mmToPx, BLEED_MM, SAFE_MM } from "@/lib/editor/geometry/units"
 import { useLanguage } from "@/providers/language-provider"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -21,20 +22,18 @@ interface ZoneOverlaysProps {
   safeZoneSize?: number // in mm
   showBleed?: boolean
   showSafeZone?: boolean
-  scale?: number // pixels per mm
 }
 
 export function ZoneOverlays({
   canvasWidth,
   canvasHeight,
-  bleedSize = 3,
-  safeZoneSize = 5,
+  bleedSize = BLEED_MM,
+  safeZoneSize = SAFE_MM,
   showBleed = true,
   showSafeZone = true,
-  scale = 3, // 3 pixels per mm default
 }: ZoneOverlaysProps) {
-  const bleedPixels = bleedSize * scale
-  const safeZonePixels = safeZoneSize * scale
+  const bleedPixels = mmToPx(bleedSize)
+  const safeZonePixels = mmToPx(safeZoneSize)
 
   return (
     <div className="absolute inset-0 pointer-events-none z-10">
@@ -135,8 +134,8 @@ export function ZoneSettings() {
   const { language } = useLanguage()
   const [showBleed, setShowBleed] = useState(true)
   const [showSafeZone, setShowSafeZone] = useState(true)
-  const [bleedSize, setBleedSize] = useState(3)
-  const [safeZoneSize, setSafeZoneSize] = useState(5)
+  const [bleedSize, setBleedSize] = useState(BLEED_MM)
+  const [safeZoneSize, setSafeZoneSize] = useState(SAFE_MM)
 
   return (
     <Popover>
@@ -224,13 +223,13 @@ export function ZoneSettings() {
 }
 
 // Hook for validating element positions against zones
-export function useZoneValidation(bleedSize = 3, safeZoneSize = 5, scale = 3) {
+export function useZoneValidation(bleedSize = BLEED_MM, safeZoneSize = SAFE_MM) {
   const layers = useDesignStore((s) => s.layers)
   const canvas = useDesignStore((s) => s.canvas)
   const selectedFace = useDesignStore((s) => s.ui.selectedFace)
 
-  const bleedPixels = bleedSize * scale
-  const safeZonePixels = safeZoneSize * scale
+  const bleedPixels = mmToPx(bleedSize)
+  const safeZonePixels = mmToPx(safeZoneSize)
 
   const validateElement = (layer: typeof layers[0]) => {
     const warnings: string[] = []

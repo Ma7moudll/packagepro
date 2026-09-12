@@ -1,8 +1,11 @@
 import { Layer, Face, ModelState, ModelDimensions } from "@/lib/editor/state/types"
+import { TEXTURE_PX_PER_MM, pxToMm } from "@/lib/editor/geometry/units"
 
 interface TextureOptions {
   scale?: number
   backgroundColor?: string
+  width?: number
+  height?: number
 }
 
 function getFaceDimensions(faceId: string, dimensions: ModelDimensions) {
@@ -31,7 +34,7 @@ export async function generateTextureFromLayers(
   options: TextureOptions = {}
 ): Promise<Record<string, string>> {
   const textures: Record<string, string> = {}
-  const scale = options.scale || 5 // 5px per mm by default for high quality
+  const scale = options.scale ?? TEXTURE_PX_PER_MM // texture sampling resolution
   const backgroundColor = options.backgroundColor || "#ffffff"
 
   // 1. Gather all unique image URLs
@@ -98,18 +101,21 @@ export async function generateTextureFromLayers(
       ctx.save()
       ctx.globalAlpha = layer.opacity
 
-      // Convert 2D editor coordinates to mm, then to texture pixels
-      // 2D editor uses a factor of 3 from mm.
-      const editorToMm = 1 / 3
-      const mmToPx = scale
+      // Convert 2D editor coordinates to mm, then to texture pixels.
+      // Workspace px are mm × PX_PER_MM; the inverse is the canonical pxToMm(1).
+      const editorToMm = pxToMm(1)
+      const texturePxPerMm = scale
 
-      const x = layer.position.x * editorToMm * mmToPx
-      const y = layer.position.y * editorToMm * mmToPx
+      const x = layer.position.x * editorToMm * texturePxPerMm
+      const y = layer.position.y * editorToMm * texturePxPerMm
 
       // Apply transform
       ctx.translate(x, y)
       ctx.rotate(layer.rotation)
-      ctx.scale(layer.scale.x * scale * editorToMm, layer.scale.y * scale * editorToMm)
+      ctx.scale(
+        layer.scale.x * texturePxPerMm * editorToMm,
+        layer.scale.y * texturePxPerMm * editorToMm
+      )
 
       if (layer.type === "text" && layer.textProperties) {
         const props = layer.textProperties

@@ -3,18 +3,165 @@
 import { useRef, useEffect, useCallback, useState } from "react"
 import { fabric } from "fabric"
 import { useDesignStore } from "@/lib/editor/state/store"
+import { BLEED_MM, SAFE_MM } from "@/lib/editor/geometry/units"
 import { useLanguage } from "@/providers/language-provider"
+import { TextProperties, ImageFilterConfig, DEFAULT_IMAGE_FILTERS } from "@/lib/editor/state/types"
 import { Button } from "@/components/ui/button"
 import { ZoomIn, ZoomOut, RotateCcw, Grid, Download, Magnet } from "lucide-react"
 import { useSmartGuides } from "./SmartGuides"
 import { ZoneOverlays, ZoneSettings } from "./ZoneOverlays"
 
-interface DesignCanvas2DProps {
-  width?: number
-  height?: number
+function applyTextPropertiesToFabric(
+  obj: fabric.Text,
+  props: TextProperties,
+  _opacity: number
+) {
+  obj.set({
+    fontSize: props.fontSize || 40,
+    fill: props.color || "#000000",
+    fontFamily: props.fontFamily || "Arial",
+    fontWeight: props.fontWeight as any,
+    lineHeight: props.lineHeight || 1.2,
+    charSpacing: (props.letterSpacing || 0) * 10,
+    textAlign: props.align || "left",
+  })
+
+  if (props.shadow) {
+    const shadow = new fabric.Shadow({
+      color: props.shadow.color,
+      blur: props.shadow.blur,
+      offsetX: props.shadow.offsetX,
+      offsetY: props.shadow.offsetY,
+    })
+    ;(obj as any).shadow = shadow
+  }
+
+  if (props.stroke) {
+    obj.set({
+      stroke: props.stroke.color,
+      strokeWidth: props.stroke.width,
+      strokeUniform: true,
+    })
+  } else {
+    obj.set({ stroke: undefined, strokeWidth: 0 })
+  }
 }
 
-export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProps) {
+function createCurvedTextGroup(
+  text: string,
+  props: TextProperties,
+  radius: number,
+  layer: any
+): fabric.Group {
+  const chars = text.split("")
+  const charObjects: fabric.Object[] = []
+
+  const approxCharWidth = (props.fontSize || 40) * 0.55
+  const totalWidth = chars.length * approxCharWidth
+  const arcAngle = totalWidth / radius
+
+  const startAngle = -arcAngle / 2
+
+  chars.forEach((char, i) => {
+    const angle = startAngle + (i * approxCharWidth + approxCharWidth / 2) / radius
+    const x = radius * Math.sin(angle)
+    const y = radius * (1 - Math.cos(angle))
+
+    const charObj = new fabric.Text(char, {
+      left: x,
+      top: y,
+      fontSize: props.fontSize || 40,
+      fill: props.color || "#000000",
+      fontFamily: props.fontFamily || "Arial",
+      fontWeight: props.fontWeight as any,
+      angle: (angle * 180) / Math.PI,
+      originX: "center",
+      originY: "center",
+    })
+
+    if (props.shadow) {
+      const shadow = new fabric.Shadow({
+        color: props.shadow.color,
+        blur: props.shadow.blur,
+        offsetX: props.shadow.offsetX,
+        offsetY: props.shadow.offsetY,
+      })
+      ;(charObj as any).shadow = shadow
+    }
+    if (props.stroke) {
+      charObj.set({
+        stroke: props.stroke.color,
+        strokeWidth: props.stroke.width,
+        strokeUniform: true,
+      })
+    }
+
+    charObjects.push(charObj)
+  })
+
+  const group = new fabric.Group(charObjects, {
+    left: layer.position.x,
+    top: layer.position.y,
+    originX: "center",
+    originY: "center",
+  })
+  ;(group as any).layerId = layer.id
+  return group
+}
+
+function applyImageFilters(img: any, config?: ImageFilterConfig) {
+  const filters: any[] = []
+  const cfg = config ?? DEFAULT_IMAGE_FILTERS
+
+  if (cfg.brightness !== 100) {
+    filters.push(new (fabric.Image.filters as any).Brightness({
+      brightness: (cfg.brightness - 100) / 100,
+    }))
+  }
+
+  if (cfg.contrast !== 100) {
+    filters.push(new (fabric.Image.filters as any).Contrast({
+      contrast: (cfg.contrast - 100) / 100,
+    }))
+  }
+
+  if (cfg.saturation !== 100) {
+    filters.push(new (fabric.Image.filters as any).Saturation({
+      saturation: (cfg.saturation - 100) / 100,
+    }))
+  }
+
+  if (cfg.blur > 0) {
+    filters.push(new (fabric.Image.filters as any).Blur({
+      blur: cfg.blur * 0.05,
+    }))
+  }
+
+  if (cfg.grayscale > 50) {
+    filters.push(new (fabric.Image.filters as any).Grayscale())
+  }
+
+  if (cfg.sepia > 50) {
+    filters.push(new (fabric.Image.filters as any).Sepia())
+  }
+
+  if (cfg.invert > 50) {
+    filters.push(new (fabric.Image.filters as any).Invert())
+  }
+
+  if (cfg.hueRotate !== 0) {
+    filters.push(new (fabric.Image.filters as any).HueRotation({
+      rotation: cfg.hueRotate / 360,
+    }))
+  }
+
+  if (filters.length > 0) {
+    ;(img as any).filters = filters
+    img.applyFilters()
+  }
+}
+
+export function DesignCanvas2D() {
   const { language } = useLanguage()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null)
@@ -37,10 +184,11 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
   // Zone visibility state
   const [showBleed, setShowBleed] = useState(true)
   const [showSafeZone, setShowSafeZone] = useState(true)
+  const [canvasReady, setCanvasReady] = useState(false)
 
-  // Smart Guides hook
+  // Smart Guides hook - uses canvasReady state to ensure canvas is initialized
   useSmartGuides({
-    canvas: fabricCanvasRef.current,
+    canvas: canvasReady ? fabricCanvasRef.current : null,
     enabled: guidesVisible,
     snapThreshold: 10,
     guideColor: "#00d4ff",
@@ -50,14 +198,16 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
   useEffect(() => {
     if (canvasRef.current && !fabricCanvasRef.current) {
       const canvas = new fabric.Canvas(canvasRef.current, {
-        width,
-        height,
+        width: canvasState.width,
+        height: canvasState.height,
         backgroundColor: canvasState.backgroundColor,
         selection: true,
         preserveObjectStacking: true,
       })
 
       fabricCanvasRef.current = canvas
+      ;(window as any).__fabricCanvas = canvas
+      setCanvasReady(true)
 
       // Handle selection
       canvas.on("selection:created", (e) => {
@@ -127,6 +277,7 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
       })
 
       return () => {
+        if ((window as any).__fabricCanvas === canvas) (window as any).__fabricCanvas = null
         canvas.dispose()
         fabricCanvasRef.current = null
       }
@@ -142,13 +293,16 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
     }
   }, [canvasState.backgroundColor])
 
-  // Handle resize
+  // Handle resize (canvas dims are derived from the selected face's mm panel)
   useEffect(() => {
     if (fabricCanvasRef.current) {
-      fabricCanvasRef.current.setDimensions({ width, height })
+      fabricCanvasRef.current.setDimensions({
+        width: canvasState.width,
+        height: canvasState.height,
+      })
       fabricCanvasRef.current.renderAll()
     }
-  }, [width, height])
+  }, [canvasState.width, canvasState.height])
 
   // Sync layers from store to Fabric canvas
   useEffect(() => {
@@ -216,6 +370,7 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
       if (!layer) return
 
       if (layer.type === "text" && fabricObj instanceof fabric.Text) {
+        const fabShadow = fabricObj.shadow as any
         updateLayer(layerId, (l) => ({
           ...l,
           position: { x: fabricObj.left || 0, y: fabricObj.top || 0 },
@@ -227,7 +382,32 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
             fontSize: fabricObj.fontSize || 40,
             color: (fabricObj.fill as string) || "#000000",
             fontFamily: fabricObj.fontFamily || "Arial",
+            fontWeight: typeof fabricObj.fontWeight === "number" ? fabricObj.fontWeight : 400,
+            lineHeight: fabricObj.lineHeight || 1.2,
+            letterSpacing: (fabricObj.charSpacing || 0) / 10,
+            align: (fabricObj.textAlign as any) || "left",
+            shadow: fabShadow
+              ? {
+                  offsetX: fabShadow.offsetX || 0,
+                  offsetY: fabShadow.offsetY || 0,
+                  blur: fabShadow.blur || 0,
+                  color: fabShadow.color || "#000000",
+                }
+              : undefined,
+            stroke: fabricObj.stroke
+              ? {
+                  color: fabricObj.stroke as string,
+                  width: fabricObj.strokeWidth || 1,
+                }
+              : undefined,
           },
+        }))
+      } else if (fabricObj instanceof fabric.Group) {
+        updateLayer(layerId, (l) => ({
+          ...l,
+          position: { x: fabricObj.left || 0, y: fabricObj.top || 0 },
+          rotation: (fabricObj.angle || 0) * (Math.PI / 180),
+          scale: { x: fabricObj.scaleX || 1, y: fabricObj.scaleY || 1 },
         }))
       } else if (layer.type === "image" && fabricObj instanceof fabric.Image) {
         updateLayer(layerId, (l) => ({
@@ -235,8 +415,12 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
           position: { x: fabricObj.left || 0, y: fabricObj.top || 0 },
           rotation: (fabricObj.angle || 0) * (Math.PI / 180),
           scale: { x: fabricObj.scaleX || 1, y: fabricObj.scaleY || 1 },
+          imageProperties: {
+            ...l.imageProperties!,
+            filters: l.imageProperties?.filters,
+          },
         }))
-      } else if (layer.type === "shape" && fabricObj instanceof fabric.Rect) {
+      } else if (layer.type === "shape") {
         updateLayer(layerId, (l) => ({
           ...l,
           position: { x: fabricObj.left || 0, y: fabricObj.top || 0 },
@@ -261,12 +445,18 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
       let fabricObj: fabric.Object | null = null
 
       if (layer.type === "text" && layer.textProperties) {
-        fabricObj = new fabric.Text(layer.textProperties.content || "Text", {
+        const props = layer.textProperties
+
+        if (props.curveRadius && props.curveRadius > 0) {
+          const group = createCurvedTextGroup(props.content || "Text", props, props.curveRadius, layer)
+          ;(group as any).layerId = layer.id
+          fabricCanvasRef.current.add(group)
+          return
+        }
+
+        fabricObj = new fabric.Text(props.content || "Text", {
           left: layer.position.x,
           top: layer.position.y,
-          fontSize: layer.textProperties.fontSize || 40,
-          fill: layer.textProperties.color || "#000000",
-          fontFamily: layer.textProperties.fontFamily || "Arial",
           angle: (layer.rotation * 180) / Math.PI,
           scaleX: layer.scale.x,
           scaleY: layer.scale.y,
@@ -274,6 +464,8 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
           originX: "center",
           originY: "center",
         })
+
+        applyTextPropertiesToFabric(fabricObj as fabric.Text, props, layer.opacity)
       } else if (layer.type === "image" && layer.imageProperties) {
         fabric.Image.fromURL(layer.imageProperties.src, (img) => {
           img.set({
@@ -287,10 +479,21 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
             originY: "center",
           })
             ; (img as any).layerId = layer.id
-          fabricCanvasRef.current?.add(img)
+          if (layer.imageProperties?.filters) {
+            applyImageFilters(img, layer.imageProperties.filters)
+          }
+          // Image loads are async — the face may have changed (or the layer been
+          // hidden/deleted) before the callback fires. Only add the object when it
+          // is still the current, visible layer of the active face.
+          const live = useDesignStore.getState().layers.find((l) => l.id === layer.id)
+          const stillShown = !!live && live.visible && live.faceId === useDesignStore.getState().ui.selectedFace
+          if (stillShown) {
+            fabricCanvasRef.current?.add(img)
+          }
+          fabricCanvasRef.current?.renderAll()
         })
         return
-      } else if (layer.type === "shape" && layer.shapeProperties) {
+    } else if (layer.type === "shape" && layer.shapeProperties) {
         if (layer.shapeProperties.shape === "rect") {
           fabricObj = new fabric.Rect({
             left: layer.position.x,
@@ -313,6 +516,39 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
             left: layer.position.x,
             top: layer.position.y,
             radius: 50,
+            fill: layer.shapeProperties.fill || "#000000",
+            stroke: layer.shapeProperties.stroke || "",
+            strokeWidth: layer.shapeProperties.strokeWidth || 0,
+            angle: (layer.rotation * 180) / Math.PI,
+            scaleX: layer.scale.x,
+            scaleY: layer.scale.y,
+            opacity: layer.opacity,
+            originX: "center",
+            originY: "center",
+          })
+        } else if (layer.shapeProperties.shape === "line") {
+          const len = 100
+          fabricObj = new fabric.Line(
+            [-len / 2, 0, len / 2, 0],
+            {
+              left: layer.position.x,
+              top: layer.position.y,
+              stroke: layer.shapeProperties.fill || "#000000",
+              strokeWidth: layer.shapeProperties.strokeWidth || 2,
+              angle: (layer.rotation * 180) / Math.PI,
+              scaleX: layer.scale.x,
+              scaleY: layer.scale.y,
+              opacity: layer.opacity,
+              originX: "center",
+              originY: "center",
+            }
+          )
+        } else if (layer.shapeProperties.shape === "triangle") {
+          fabricObj = new fabric.Triangle({
+            left: layer.position.x,
+            top: layer.position.y,
+            width: 100,
+            height: 100,
             fill: layer.shapeProperties.fill || "#000000",
             stroke: layer.shapeProperties.stroke || "",
             strokeWidth: layer.shapeProperties.strokeWidth || 0,
@@ -347,11 +583,9 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
     })
 
     if (layer.type === "text" && layer.textProperties && fabricObj instanceof fabric.Text) {
+      applyTextPropertiesToFabric(fabricObj, layer.textProperties, layer.opacity)
       fabricObj.set({
         text: layer.textProperties.content || "",
-        fontSize: layer.textProperties.fontSize || 40,
-        fill: layer.textProperties.color || "#000000",
-        fontFamily: layer.textProperties.fontFamily || "Arial",
       })
     } else if (layer.type === "shape" && layer.shapeProperties) {
       if (fabricObj instanceof fabric.Rect) {
@@ -362,6 +596,17 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
           rx: layer.shapeProperties.cornerRadius || 0,
         })
       } else if (fabricObj instanceof fabric.Circle) {
+        fabricObj.set({
+          fill: layer.shapeProperties.fill || "#000000",
+          stroke: layer.shapeProperties.stroke || "",
+          strokeWidth: layer.shapeProperties.strokeWidth || 0,
+        })
+      } else if (fabricObj instanceof fabric.Line) {
+        fabricObj.set({
+          stroke: layer.shapeProperties.fill || "#000000",
+          strokeWidth: layer.shapeProperties.strokeWidth || 2,
+        })
+      } else if (fabricObj instanceof fabric.Triangle) {
         fabricObj.set({
           fill: layer.shapeProperties.fill || "#000000",
           stroke: layer.shapeProperties.stroke || "",
@@ -411,7 +656,7 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
         locked: false,
         opacity: 1,
         blendMode: "normal" as const,
-        position: { x: width / 2, y: height / 2 },
+        position: { x: store.canvas.width / 2, y: store.canvas.height / 2 },
         rotation: 0,
         scale: { x: 1, y: 1 },
         faceId: store.ui.selectedFace,
@@ -442,7 +687,7 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
           locked: false,
           opacity: 1,
           blendMode: "normal" as const,
-          position: { x: width / 2, y: height / 2 },
+          position: { x: store.canvas.width / 2, y: store.canvas.height / 2 },
           rotation: 0,
           scale: { x: 0.5, y: 0.5 },
           faceId: store.ui.selectedFace,
@@ -465,7 +710,7 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
         locked: false,
         opacity: 1,
         blendMode: "normal" as const,
-        position: { x: width / 2, y: height / 2 },
+        position: { x: store.canvas.width / 2, y: store.canvas.height / 2 },
         rotation: 0,
         scale: { x: 1, y: 1 },
         faceId: store.ui.selectedFace,
@@ -494,6 +739,80 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
           addLayer(newLayer)
         }
       })
+    }
+
+    // Test/Debug harness: mirror the existing __editor* hooks for E2E editing.
+    // @ts-ignore
+    window.__editorSetFace = (faceId: string) => {
+      useDesignStore.getState().setSelectedFace(faceId as any)
+    }
+
+    // @ts-ignore
+    window.__editorUpdateLayer = (id: string, patch: any) => {
+      const store = useDesignStore.getState()
+      store.updateLayer(id, (layer) =>
+        Object.assign({}, layer, typeof patch === "function" ? patch(layer) : patch)
+      )
+    }
+
+    // @ts-ignore
+    window.__editorSelect = (ids: string[]) => {
+      useDesignStore.getState().setSelectedLayers(Array.isArray(ids) ? ids : [ids])
+    }
+
+    // @ts-ignore
+    window.__editorSetViewMode = (mode: "2d" | "3d" | "dieline" | "wall") =>
+      useDesignStore.getState().setViewMode(mode)
+
+    // @ts-ignore
+    window.__editorZoom = (delta: number) => {
+      const store = useDesignStore.getState()
+      const newZoom = Math.max(0.5, Math.min(2, store.camera.zoom + delta))
+      store.setCameraZoom(newZoom)
+    }
+
+    // @ts-ignore
+    window.__editorUndo = () => useDesignStore.getState().undo()
+
+    // @ts-ignore
+    window.__editorRedo = () => useDesignStore.getState().redo()
+
+    // @ts-ignore
+    window.__editorDelete = () => {
+      const store = useDesignStore.getState()
+      store.selectedLayerIds.forEach((id) => store.removeLayer(id))
+      store.setSelectedLayers([])
+    }
+
+    // @ts-ignore
+    window.__editorDuplicate = () => {
+      const store = useDesignStore.getState()
+      store.selectedLayerIds.forEach((id) => {
+        const layer = store.layers.find((l) => l.id === id)
+        if (layer) {
+          store.addLayer({ ...layer, name: `${layer.name} Copy` })
+        }
+      })
+    }
+
+    // @ts-ignore
+    window.__editorState = () => {
+      const store = useDesignStore.getState()
+      return JSON.parse(
+        JSON.stringify({
+          model: store.model,
+          canvas: store.canvas,
+          camera: store.camera,
+          layers: store.layers,
+          selectedLayerIds: store.selectedLayerIds,
+          ui: { viewMode: store.ui.viewMode, selectedFace: store.ui.selectedFace },
+          history: { past: store.history.past.length, future: store.history.future.length },
+          product: store.product,
+          productConfig: store.productConfig,
+          zones: store.zones,
+          structureType: store.structureType,
+        })
+      )
     }
   }, [language, addLayer, removeLayer, selectedLayerIds, layers, setSelectedLayers])
 
@@ -529,13 +848,12 @@ export function DesignCanvas2D({ width = 800, height = 600 }: DesignCanvas2DProp
         <div className="relative" style={{ padding: showBleed ? "12px" : 0 }}>
           {/* Zone Overlays */}
           <ZoneOverlays
-            canvasWidth={width}
-            canvasHeight={height}
-            bleedSize={3}
-            safeZoneSize={5}
+            canvasWidth={canvasState.width}
+            canvasHeight={canvasState.height}
+            bleedSize={BLEED_MM}
+            safeZoneSize={SAFE_MM}
             showBleed={showBleed}
             showSafeZone={showSafeZone}
-            scale={3}
           />
           {gridVisible && (
             <div
