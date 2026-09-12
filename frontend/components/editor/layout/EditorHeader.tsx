@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useSearchParams, useRouter } from "next/navigation"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { Button } from "@/components/ui/button"
 import {
@@ -10,18 +11,19 @@ import {
   X,
   CheckCircle2,
   Loader2,
-  Eye,
-  Pencil,
   HelpCircle,
-  Camera,
-  Share2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Save,
 } from "lucide-react"
-import { scheduleAutoSave, cancelAutoSave } from "@/lib/editor/services/storage"
+import { scheduleAutoSave, cancelAutoSave, ensureCloudSession } from "@/lib/editor/services/storage"
 import { useLanguage } from "@/providers/language-provider"
 import { MockupGallery } from "@/components/editor/preview/MockupGallery"
 import { ShareDialog } from "@/components/editor/collaboration/ShareDialog"
 import { TutorialOverlay } from "@/components/editor/TutorialOverlay"
+import { AddToCart } from "@/components/design-editor/checkout/AddToCart"
 import {
   Tooltip,
   TooltipContent,
@@ -33,13 +35,28 @@ interface EditorHeaderProps {
   extra?: React.ReactNode
 }
 
+function mapProductType(type: string): "box" | "bag" | "label" {
+  const t = (type || "").toLowerCase()
+  if (t.includes("bag") || t.includes("pouch")) return "bag"
+  if (t.includes("label")) return "label"
+  return "box"
+}
+
 export function EditorHeader({ extra }: EditorHeaderProps) {
   const { language } = useLanguage()
-  const { model, history } = useDesignStore()
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const sessionId = searchParams.get("sessionId")
+  const model = useDesignStore((s) => s.model)
+  const layersCount = useDesignStore((s) => s.layers.length)
+  const pastLength = useDesignStore((s) => s.history.past.length)
+  const futureLength = useDesignStore((s) => s.history.future.length)
   const undo = useDesignStore((s) => s.undo)
   const redo = useDesignStore((s) => s.redo)
-  const setViewMode = useDesignStore((s) => s.setViewMode)
-  const viewMode = useDesignStore((s) => s.ui.viewMode)
+  const leftSidebarOpen = useDesignStore((s) => s.ui.leftSidebarOpen)
+  const rightSidebarOpen = useDesignStore((s) => s.ui.rightSidebarOpen)
+  const setLeftSidebarOpen = useDesignStore((s) => s.setLeftSidebarOpen)
+  const setRightSidebarOpen = useDesignStore((s) => s.setRightSidebarOpen)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [showTutorial, setShowTutorial] = useState(false)
 
@@ -64,7 +81,7 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
       cancelAutoSave()
       clearTimeout(timer)
     }
-  }, [history.present, title])
+  }, [model.dimensions, layersCount, title])
 
   const handleSave = async () => {
     setSaveStatus("saving")
@@ -75,6 +92,21 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
       const coreState = state.history.present
       const { saveDesignToIndexedDB } = await import("@/lib/editor/services/storage")
       await saveDesignToIndexedDB(designId, name, coreState)
+
+      // Persist to the backend (durable, reload-safe)
+      try {
+        const sid = await ensureCloudSession(sessionId, name, coreState)
+        if (sid && sid !== sessionId) {
+          const params = new URLSearchParams(searchParams.toString())
+          params.set("sessionId", sid)
+          router.replace(`${window.location.pathname}?${params.toString()}`)
+        }
+      } catch (cloudError) {
+        console.error("Cloud save failed:", cloudError)
+        // IndexedDB already saved; surface error state still marks saved so the
+        // user knows their work is not lost locally.
+      }
+
       setSaveStatus("saved")
       setTimeout(() => setSaveStatus("idle"), 2000)
     } catch (error) {
@@ -84,22 +116,73 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
     }
   }
 
-  const canUndo = history.past.length > 0
-  const canRedo = history.future.length > 0
+  const handleEnsureSession = async () => {
+    const name = title
+    const coreState = useDesignStore.getState().history.present
+    const sid = await ensureCloudSession(sessionId, name, coreState)
+    if (sid && sid !== sessionId) {
+      const params = new URLSearchParams(searchParams.toString())
+      params.set("sessionId", sid)
+      router.replace(`${window.location.pathname}?${params.toString()}`)
+    }
+    return sid
+  }
+
+  const canUndo = pastLength > 0
+  const canRedo = futureLength > 0
 
   return (
     <TooltipProvider>
-      <header className="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between">
-        {/* Left: Logo & Title */}
-        <div className="flex items-center gap-3 min-w-0">
+      <header className="h-14 bg-white border-b border-slate-200 px-3 flex items-center justify-between gap-2">
+        {/* Left: Logo, Sidebar Toggles & Title */}
+        <div className="flex items-center gap-2 min-w-0">
           <Link href="/" className="flex items-center gap-2 shrink-0">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white font-bold text-sm">
               P
             </span>
           </Link>
-          
+
+          {/* Sidebar Toggles */}
+          <div className="flex items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-md text-slate-400 hover:text-slate-700"
+                  onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
+                >
+                  {leftSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                {leftSidebarOpen
+                  ? (language === "ar" ? "إخفاء الشريط الجانبي" : "Hide Sidebar")
+                  : (language === "ar" ? "إظهار الشريط الجانبي" : "Show Sidebar")}
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-md text-slate-400 hover:text-slate-700"
+                  onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
+                >
+                  {rightSidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                {rightSidebarOpen
+                  ? (language === "ar" ? "إخفاء الخصائص" : "Hide Properties")
+                  : (language === "ar" ? "إظهار الخصائص" : "Show Properties")}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+
           <div className="h-5 w-px bg-slate-200" />
-          
+
           <div className="min-w-0">
             <h1 className="text-sm font-semibold text-slate-800 truncate capitalize">{title}</h1>
             <div className="flex items-center gap-1 text-[10px] text-slate-400">
@@ -124,34 +207,11 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
           {extra}
         </div>
 
-        {/* Center: View Mode Toggle */}
-        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setViewMode("2d")}
-            className={`h-8 px-4 rounded-md text-xs font-medium ${
-              viewMode === "2d"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            <Pencil className="h-3.5 w-3.5 mr-1.5" />
-            {language === "ar" ? "تصميم" : "Design"}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setViewMode("3d")}
-            className={`h-8 px-4 rounded-md text-xs font-medium ${
-              viewMode === "3d"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            <Eye className="h-3.5 w-3.5 mr-1.5" />
-            {language === "ar" ? "معاينة 3D" : "Preview 3D"}
-          </Button>
+        {/* Center: Title Info */}
+        <div className="hidden md:flex items-center gap-3 text-xs text-slate-400">
+          <span>{model.type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</span>
+          <span className="text-slate-300">|</span>
+          <span>{language === "ar" ? "طبقات" : "Layers"}: {layersCount}</span>
         </div>
 
         {/* Right: Actions */}
@@ -174,7 +234,7 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
                 {language === "ar" ? "تراجع (Ctrl+Z)" : "Undo (Ctrl+Z)"}
               </TooltipContent>
             </Tooltip>
-            
+
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -217,6 +277,18 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
 
           <div className="h-5 w-px bg-slate-200" />
 
+          {/* Add to Cart */}
+          <AddToCart
+            productType={mapProductType(model.type)}
+            materialCode={model.material || "cardboard-kraft"}
+            dimensions={model.dimensions}
+            defaultQuantity={model.quantity || 30}
+            sessionId={sessionId}
+            onEnsureSession={handleEnsureSession}
+          />
+
+          <div className="h-5 w-px bg-slate-200" />
+
           {/* Save Button */}
           <Button
             size="sm"
@@ -236,9 +308,9 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
           <Tooltip>
             <TooltipTrigger asChild>
               <Link href="/">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="h-8 w-8 rounded-lg hover:bg-red-50 hover:text-red-500"
                 >
                   <X className="h-4 w-4" />

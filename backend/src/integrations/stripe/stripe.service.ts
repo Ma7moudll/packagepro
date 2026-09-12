@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import { prisma } from '../../lib/prisma';
 import { NotFoundError, ValidationError } from '../../utils/errors';
+import { notificationService } from '../../modules/notifications/notifications.service';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2023-10-16',
@@ -122,6 +123,31 @@ export class StripeService {
           status: 'awaiting_approval',
         },
       });
+
+      const orderCustomer = await prisma.order.findUnique({
+        where: { id: payment.orderId },
+        select: {
+          orderNumber: true,
+          customer: {
+            select: {
+              userId: true,
+            },
+          },
+        },
+      });
+
+      if (orderCustomer?.customer?.userId) {
+        await notificationService.createIfUnseen(
+          orderCustomer.customer.userId,
+          { entityType: 'order', entityId: payment.orderId },
+          {
+            type: 'payment_received',
+            title: `Payment received for ${orderCustomer.orderNumber}`,
+            message: `Your payment for ${orderCustomer.orderNumber} was successful.`,
+            link: `/orders/${payment.orderId}`,
+          }
+        );
+      }
     } else if (paymentIntent.status === 'canceled' || (paymentIntent.status as string) === 'payment_failed') {
       await prisma.payment.update({
         where: { id: payment.id },

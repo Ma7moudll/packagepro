@@ -7,8 +7,9 @@ const schedules: any[] = []
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -16,7 +17,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const schedule = schedules.find((s) => s.id === params.id)
+    const schedule = schedules.find((s) => s.id === id)
 
     if (!schedule) {
       return NextResponse.json({ error: "Schedule not found" }, { status: 404 })
@@ -48,8 +49,9 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -57,7 +59,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const scheduleIndex = schedules.findIndex((s) => s.id === params.id)
+    const scheduleIndex = schedules.findIndex((s) => s.id === id)
 
     if (scheduleIndex === -1) {
       return NextResponse.json({ error: "Schedule not found" }, { status: 404 })

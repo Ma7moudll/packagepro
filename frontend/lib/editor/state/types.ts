@@ -2,6 +2,14 @@
 
 export type ToolType = "select" | "text" | "shape" | "draw" | "upload"
 
+export type DesignLifecycleStatus = 
+  | "DRAFT" 
+  | "SUBMITTED" 
+  | "IN_REVIEW" 
+  | "APPROVED" 
+  | "REJECTED" 
+  | "IN_PRODUCTION"
+
 export type FaceId =
   | "front" | "back" | "left" | "right" | "top" | "bottom"
   | "inside_front" | "inside_back" | "inside_left" | "inside_right" | "inside_top" | "inside_bottom"
@@ -22,6 +30,17 @@ export interface ModelDimensions {
 export interface Face {
   id: FaceId
   name: string
+  width?: number
+  height?: number
+  depth?: number
+}
+
+/** M7: Required-zone descriptor carried from the backend ProductStructure. */
+export interface FaceZone {
+  label: string
+  required: boolean
+  position: [number, number, number]
+  rotation?: [number, number, number]
 }
 
 export type LayerType = "text" | "image" | "shape" | "group"
@@ -40,6 +59,18 @@ export interface BaseLayer {
   faceId: FaceId
 }
 
+export interface TextShadow {
+  offsetX: number
+  offsetY: number
+  blur: number
+  color: string
+}
+
+export interface TextStroke {
+  width: number
+  color: string
+}
+
 export interface TextProperties {
   content: string
   fontFamily: string
@@ -49,12 +80,38 @@ export interface TextProperties {
   letterSpacing: number
   align: "left" | "center" | "right" | "justify"
   color: string
+  shadow?: TextShadow
+  stroke?: TextStroke
+  curveRadius?: number
+}
+
+export interface ImageFilterConfig {
+  brightness: number
+  contrast: number
+  saturation: number
+  blur: number
+  grayscale: number
+  sepia: number
+  hueRotate: number
+  invert: number
+}
+
+export const DEFAULT_IMAGE_FILTERS: ImageFilterConfig = {
+  brightness: 100,
+  contrast: 100,
+  saturation: 100,
+  blur: 0,
+  grayscale: 0,
+  sepia: 0,
+  hueRotate: 0,
+  invert: 0,
 }
 
 export interface ImageProperties {
   src: string
   naturalWidth?: number
   naturalHeight?: number
+  filters?: ImageFilterConfig
 }
 
 export interface ShapeProperties {
@@ -132,6 +189,19 @@ export type ProductCategory =
   | "all" | "boxes" | "mailing_bags" | "pouches" | "bags" 
   | "envelopes" | "food_packaging" | "accessories" | "labels" | "cards"
 
+export const PRODUCT_CATEGORY_TO_TEMPLATE: Record<ProductCategory, string[]> = {
+  all: [],
+  boxes: ["box"],
+  mailing_bags: ["pouch"],
+  bags: ["bag"],
+  pouches: ["pouch"],
+  envelopes: ["other"],
+  food_packaging: ["box", "pouch"],
+  labels: ["label"],
+  cards: ["other"],
+  accessories: ["other"],
+}
+
 // Size presets
 export interface SizePreset {
   id: string
@@ -173,6 +243,14 @@ export interface DesignCoreState {
   camera: CameraState
   activeTool: ToolType
   ui: UIState
+  lifecycleStatus: DesignLifecycleStatus
+  designId?: string // Backend design ID when loaded from server
+  sessionId?: string // Backend editor-session ID (cloud save)
+  product?: { id: string; slug: string; name: string; type: string; category?: string; boxType?: string }
+  productConfig?: { selectedSize?: string; selectedMaterial?: string; selectedFinish?: string; quantity?: number; customDimensions?: ModelDimensions; variantId?: string; sku?: string }
+  /** M7: Backend-issued product structure (faces/zones/rules) for prepress + surfaces. */
+  structureType?: string
+  zones?: Record<string, FaceZone[]>
 }
 
 export interface DesignState extends DesignCoreState {

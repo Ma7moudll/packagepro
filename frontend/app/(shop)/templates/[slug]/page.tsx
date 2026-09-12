@@ -6,14 +6,16 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
-import { Star, ArrowLeft, Download, Share2 } from "lucide-react"
+import { Star, ArrowLeft, ArrowRight, Download, Share2 } from "lucide-react"
 import { useLanguage } from "@/providers/language-provider"
+import { useToast } from "@/hooks/use-toast"
 import { getTemplateBySlug, addTemplateRating, getTemplateRatings } from "@/lib/editor/services/template-service"
 import { Template, TemplateRating } from "@/lib/editor/types/template"
 import Link from "next/link"
 
 export default function TemplateDetailPage() {
-  const { language } = useLanguage()
+  const { language, isRTL } = useLanguage()
+  const { toast } = useToast()
   const params = useParams()
   const router = useRouter()
   const slug = params.slug as string
@@ -63,7 +65,10 @@ export default function TemplateDetailPage() {
 
   const handleSubmitRating = async () => {
     if (!template || rating === 0) {
-      alert(language === "ar" ? "يرجى اختيار تقييم" : "Please select a rating")
+      toast({
+        title: language === "ar" ? "يرجى اختيار تقييم" : "Please select a rating",
+        variant: "destructive",
+      })
       return
     }
 
@@ -74,9 +79,14 @@ export default function TemplateDetailPage() {
       setComment("")
       await loadRatings(template.id)
       await loadTemplate() // Refresh to update avgRating
-      alert(language === "ar" ? "تم إضافة التقييم بنجاح" : "Rating added successfully")
+      toast({
+        title: language === "ar" ? "تم إضافة التقييم بنجاح" : "Rating added successfully",
+      })
     } catch (error: any) {
-      alert(language === "ar" ? `خطأ: ${error.message}` : `Error: ${error.message}`)
+      toast({
+        title: language === "ar" ? `خطأ: ${error.message}` : `Error: ${error.message}`,
+        variant: "destructive",
+      })
     } finally {
       setSubmitting(false)
     }
@@ -115,7 +125,7 @@ export default function TemplateDetailPage() {
         {/* Back Button */}
         <Link href="/templates">
           <Button variant="ghost" className="mb-6">
-            <ArrowLeft className="h-4 w-4 mr-2" />
+            {isRTL ? <ArrowRight className="h-4 w-4 ml-2" /> : <ArrowLeft className="h-4 w-4 mr-2" />}
             {language === "ar" ? "العودة" : "Back"}
           </Button>
         </Link>
@@ -221,7 +231,7 @@ export default function TemplateDetailPage() {
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-2 block">
-                        {language === "ar" ? "تعليق" : "Comment"} (اختياري)
+                        {language === "ar" ? "تعليق (اختياري)" : "Comment (Optional)"}
                       </label>
                       <Textarea
                         value={comment}
@@ -262,7 +272,7 @@ export default function TemplateDetailPage() {
                           <div>
                             <p className="font-medium">{r.userName || "Anonymous"}</p>
                             <p className="text-xs text-slate-500">
-                              {new Date(r.createdAt).toLocaleDateString()}
+                              {new Date(r.createdAt).toLocaleDateString(language === "ar" ? "ar-SA" : "en-US")}
                             </p>
                           </div>
                           <div className="flex items-center gap-1">
@@ -324,7 +334,7 @@ export default function TemplateDetailPage() {
                     {language === "ar" ? "تاريخ الإنشاء" : "Created"}
                   </p>
                   <p className="text-sm">
-                    {new Date(template.createdAt).toLocaleDateString()}
+                    {new Date(template.createdAt).toLocaleDateString(language === "ar" ? "ar-SA" : "en-US")}
                   </p>
                 </div>
               </CardContent>
@@ -339,11 +349,11 @@ export default function TemplateDetailPage() {
                 {language === "ar" ? "استخدام هذا القالب" : "Use This Template"}
               </Button>
               <Button variant="outline" className="w-full" size="lg">
-                <Download className="h-4 w-4 mr-2" />
+                <Download className={`h-4 w-4 ${isRTL ? "ml-2" : "mr-2"}`} />
                 {language === "ar" ? "تحميل" : "Download"}
               </Button>
               <Button variant="outline" className="w-full" size="lg">
-                <Share2 className="h-4 w-4 mr-2" />
+                <Share2 className={`h-4 w-4 ${isRTL ? "ml-2" : "mr-2"}`} />
                 {language === "ar" ? "مشاركة" : "Share"}
               </Button>
             </div>

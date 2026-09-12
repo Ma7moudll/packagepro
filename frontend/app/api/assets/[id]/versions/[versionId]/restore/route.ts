@@ -7,8 +7,9 @@ const assets: any[] = []
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; versionId: string } }
+  { params }: { params: Promise<{ id: string; versionId: string }> }
 ) {
+  const { id, versionId } = await params
   try {
     const session = await auth()
 
@@ -16,7 +17,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const asset = assets.find((a) => a.id === params.id)
+    const asset = assets.find((a) => a.id === id)
 
     if (!asset) {
       return NextResponse.json({ error: "Asset not found" }, { status: 404 })
@@ -27,7 +28,7 @@ export async function POST(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const version = versions.find((v) => v.id === params.versionId && v.assetId === params.id)
+    const version = versions.find((v) => v.id === versionId && v.assetId === id)
 
     if (!version) {
       return NextResponse.json({ error: "Version not found" }, { status: 404 })
@@ -35,7 +36,7 @@ export async function POST(
 
     // Mark previous version as not current
     const previousVersions = versions.filter(
-      (v) => v.assetId === params.id && v.isCurrent
+      (v) => v.assetId === id && v.isCurrent
     )
     previousVersions.forEach((v) => {
       v.isCurrent = false

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/session"
+import { getSessionUser } from "@/lib/auth/server-session"
 // import jsPDF from "jspdf"
 
 // Mock database
@@ -7,16 +7,17 @@ const invoices: any[] = []
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
-    const session = await auth()
+    const session = await getSessionUser(request)
 
-    if (!session?.user) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const invoice = invoices.find((i) => i.id === params.id)
+    const invoice = invoices.find((i) => i.id === id)
 
     if (!invoice) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 })

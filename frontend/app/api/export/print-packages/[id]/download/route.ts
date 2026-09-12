@@ -7,8 +7,9 @@ const printPackages: any[] = []
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -16,7 +17,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const printPackage = printPackages.find((p) => p.id === params.id)
+    const printPackage = printPackages.find((p) => p.id === id)
 
     if (!printPackage) {
       return NextResponse.json({ error: "Package not found" }, { status: 404 })
@@ -31,7 +32,7 @@ export async function GET(
     // const zipBlob = await zip.generateAsync({ type: "blob" })
 
     // For now, return mock ZIP
-    const mockZipContent = `ZIP file for print package ${params.id}`
+    const mockZipContent = `ZIP file for print package ${id}`
     const blob = new Blob([mockZipContent], { type: "application/zip" })
 
     return new NextResponse(blob, {

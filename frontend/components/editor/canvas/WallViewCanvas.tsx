@@ -24,7 +24,7 @@ interface WallViewSettings {
 
 export function WallViewCanvas() {
   const { language } = useLanguage()
-  const canvas = useDesignStore((s) => s.history.present.canvas)
+  const canvas = useDesignStore((s) => s.canvas)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 

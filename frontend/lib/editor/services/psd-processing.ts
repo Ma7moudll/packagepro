@@ -29,7 +29,7 @@ export async function processPSD(file: File): Promise<ParsedPSD> {
   try {
     const arrayBuffer = await file.arrayBuffer()
     const psd = readPsd(arrayBuffer, {
-      logErrors: true,
+      logMissingFeatures: false,
       skipLayerImageData: false,
       skipCompositeImageData: false,
     })

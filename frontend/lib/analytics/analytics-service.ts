@@ -3,6 +3,45 @@
 import { AnalyticsEvent, EventType, UserBehavior } from "./types"
 import { nanoid } from "nanoid"
 
+function getStorageArea(area: "local" | "session"): Storage | null {
+  if (typeof window === "undefined") return null
+  try {
+    return area === "local" ? window.localStorage : window.sessionStorage
+  } catch {
+    return null
+  }
+}
+
+export function storageGet(area: "local" | "session", key: string): string | null {
+  const storage = getStorageArea(area)
+  if (!storage) return null
+  try {
+    return storage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+export function storageSet(area: "local" | "session", key: string, value: string): void {
+  const storage = getStorageArea(area)
+  if (!storage) return
+  try {
+    storage.setItem(key, value)
+  } catch {
+    // Storage unavailable (private browsing, blocked cookies) — degrade silently
+  }
+}
+
+export function storageRemove(area: "local" | "session", key: string): void {
+  const storage = getStorageArea(area)
+  if (!storage) return
+  try {
+    storage.removeItem(key)
+  } catch {
+    // Storage unavailable — nothing to clean up
+  }
+}
+
 class AnalyticsService {
   private sessionId: string
   private userId?: string
@@ -19,23 +58,23 @@ class AnalyticsService {
   private getOrCreateSessionId(): string {
     if (typeof window === "undefined") return nanoid()
 
-    const stored = sessionStorage.getItem("analytics_session_id")
+    const stored = storageGet("session", "analytics_session_id")
     if (stored) return stored
 
     const newId = nanoid()
-    sessionStorage.setItem("analytics_session_id", newId)
+    storageSet("session", "analytics_session_id", newId)
     return newId
   }
 
   private loadUserId(): void {
     if (typeof window === "undefined") return
 
-    const stored = localStorage.getItem("analytics_user_id")
+    const stored = storageGet("local", "analytics_user_id")
     if (stored) {
       this.userId = stored
     } else {
       const newId = nanoid()
-      localStorage.setItem("analytics_user_id", newId)
+      storageSet("local", "analytics_user_id", newId)
       this.userId = newId
     }
   }
@@ -142,6 +181,7 @@ class AnalyticsService {
    * Send event to server
    */
   private async sendEvent(event: AnalyticsEvent): Promise<void> {
+    if (typeof window === "undefined") return
     try {
       await fetch("/api/packagepro/analytics/track", {
         method: "POST",
@@ -151,8 +191,7 @@ class AnalyticsService {
         body: JSON.stringify(event),
         keepalive: true, // Send even if page is unloading
       })
-    } catch (error) {
-      console.error("Failed to send analytics event:", error)
+    } catch {
       // Event is stored locally, will be retried later
     }
   }
@@ -163,17 +202,20 @@ class AnalyticsService {
   private storeEvent(event: AnalyticsEvent): void {
     if (typeof window === "undefined") return
 
-    try {
-      const stored = localStorage.getItem("analytics_events")
-      const events: AnalyticsEvent[] = stored ? JSON.parse(stored) : []
-      events.push(event)
-
-      // Keep only last 100 events
-      const recentEvents = events.slice(-100)
-      localStorage.setItem("analytics_events", JSON.stringify(recentEvents))
-    } catch (error) {
-      console.error("Failed to store analytics event:", error)
+    let events: AnalyticsEvent[] = []
+    const stored = storageGet("local", "analytics_events")
+    if (stored) {
+      try {
+        events = JSON.parse(stored)
+      } catch {
+        events = []
+      }
     }
+    events.push(event)
+
+    // Keep only last 100 events
+    const recentEvents = events.slice(-100)
+    storageSet("local", "analytics_events", JSON.stringify(recentEvents))
   }
 
   /**
@@ -182,13 +224,18 @@ class AnalyticsService {
   async flushEvents(): Promise<void> {
     if (typeof window === "undefined") return
 
+    const stored = storageGet("local", "analytics_events")
+    if (!stored) return
+
+    let events: AnalyticsEvent[] = []
     try {
-      const stored = localStorage.getItem("analytics_events")
-      if (!stored) return
+      events = JSON.parse(stored)
+    } catch {
+      return
+    }
+    if (events.length === 0) return
 
-      const events: AnalyticsEvent[] = JSON.parse(stored)
-      if (events.length === 0) return
-
+    try {
       await fetch("/api/packagepro/analytics/batch", {
         method: "POST",
         headers: {
@@ -197,9 +244,9 @@ class AnalyticsService {
         body: JSON.stringify({ events }),
       })
 
-      localStorage.removeItem("analytics_events")
-    } catch (error) {
-      console.error("Failed to flush analytics events:", error)
+      storageRemove("local", "analytics_events")
+    } catch {
+      // Silently fail
     }
   }
 }

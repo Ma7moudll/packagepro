@@ -11,7 +11,7 @@ import { Loader2, Mail, AlertCircle, CheckCircle2, ArrowLeft } from "lucide-reac
 import { useLanguage } from "@/providers/language-provider"
 
 export default function ResetPasswordPage() {
-  const { language } = useLanguage()
+  const { language, isRTL } = useLanguage()
   const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -37,7 +37,7 @@ export default function ResetPasswordPage() {
       }
 
       setSuccess(true)
-    } catch (err) {
+    } catch {
       setError(
         language === "ar"
           ? "حدث خطأ أثناء إرسال طلب إعادة تعيين كلمة المرور"
@@ -60,12 +60,12 @@ export default function ResetPasswordPage() {
               </h2>
               <p className="text-slate-600">
                 {language === "ar"
-                  ? "تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني. يرجى التحقق من صندوق الوارد."
-                  : "Password reset link has been sent to your email. Please check your inbox."}
+                  ? "تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني. يرجى التحقق من صندوق الوارد (ورسائل البريد الغير مرغوب)."
+                  : "Password reset link has been sent to your email. Please check your inbox (and spam folder)."}
               </p>
-              <Link href="/auth/signin">
+              <Link href="/login">
                 <Button variant="outline" className="w-full">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  <ArrowLeft className={`h-4 w-4 ${isRTL ? "ml-2" : "mr-2"}`} />
                   {language === "ar" ? "العودة لتسجيل الدخول" : "Back to Sign In"}
                 </Button>
               </Link>
@@ -91,7 +91,7 @@ export default function ResetPasswordPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {error && (
-            <Alert variant="destructive">
+            <Alert variant="destructive" role="alert">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
@@ -103,23 +103,24 @@ export default function ResetPasswordPage() {
                 {language === "ar" ? "البريد الإلكتروني" : "Email"}
               </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Mail className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400`} />
                 <Input
                   id="email"
                   type="email"
+                  autoComplete="email"
                   placeholder={language === "ar" ? "example@email.com" : "example@email.com"}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="pl-10"
+                  className={isRTL ? "pr-10" : "pl-10"}
                 />
               </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading} aria-busy={loading}>
               {loading ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className={`h-4 w-4 ${isRTL ? "ml-2" : "mr-2"} animate-spin`} />
                   {language === "ar" ? "جارٍ الإرسال..." : "Sending..."}
                 </>
               ) : (
@@ -129,8 +130,8 @@ export default function ResetPasswordPage() {
           </form>
 
           <div className="text-center text-sm">
-            <Link href="/auth/signin" className="text-emerald-600 hover:underline">
-              <ArrowLeft className="h-4 w-4 inline mr-1" />
+            <Link href="/login" className="text-emerald-600 hover:underline inline-flex items-center gap-1">
+              <ArrowLeft className="h-4 w-4" />
               {language === "ar" ? "العودة لتسجيل الدخول" : "Back to Sign In"}
             </Link>
           </div>
@@ -139,4 +140,3 @@ export default function ResetPasswordPage() {
     </div>
   )
 }
-

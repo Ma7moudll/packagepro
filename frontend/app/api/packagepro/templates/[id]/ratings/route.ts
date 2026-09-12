@@ -6,10 +6,11 @@ let ratingIdCounter = 1
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
-    const templateRatings = ratings.filter((r) => r.templateId === params.id)
+    const templateRatings = ratings.filter((r) => r.templateId === id)
     return NextResponse.json(templateRatings)
   } catch (error) {
     console.error("Error fetching ratings:", error)
@@ -19,8 +20,9 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     // TODO: Add authentication
     const body = await request.json()
@@ -36,7 +38,7 @@ export async function POST(
     // Create rating
     const newRating = {
       id: `rating-${ratingIdCounter++}`,
-      templateId: params.id,
+      templateId: id,
       userId: "current-user", // TODO: Get from session
       userName: "User", // TODO: Get from session
       rating,

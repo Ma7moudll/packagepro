@@ -6,8 +6,9 @@ const integrations: any[] = []
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -15,7 +16,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const integration = integrations.find((i) => i.id === params.id)
+    const integration = integrations.find((i) => i.id === id)
 
     if (!integration) {
       return NextResponse.json({ error: "Integration not found" }, { status: 404 })
@@ -30,8 +31,9 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -39,7 +41,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const integration = integrations.find((i) => i.id === params.id)
+    const integration = integrations.find((i) => i.id === id)
 
     if (!integration) {
       return NextResponse.json({ error: "Integration not found" }, { status: 404 })
@@ -59,8 +61,9 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -68,7 +71,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const integrationIndex = integrations.findIndex((i) => i.id === params.id)
+    const integrationIndex = integrations.findIndex((i) => i.id === id)
 
     if (integrationIndex === -1) {
       return NextResponse.json({ error: "Integration not found" }, { status: 404 })

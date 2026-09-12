@@ -24,6 +24,10 @@ export type TemplateStyle =
   | "vintage" 
   | "modern"
 
+export type ClosureType = "self-locking" | "tuck" | "snap" | "velcro" | "metal-clasp" | "tape-seal"
+
+export type CardboardColor = "kraft-brown" | "white" | "black" | "recycled-gray" | "custom"
+
 export interface Template {
   id: string
   slug: string
@@ -33,10 +37,13 @@ export interface Template {
   style: TemplateStyle
   thumbnailUrl: string
   preview3DUrl?: string
+  realisticPreview?: string
   designState: DesignCoreState
   createdBy: string
   isPublic: boolean
   tags: string[]
+  closureType?: ClosureType
+  cardboardColor?: CardboardColor
   avgRating: number
   ratingsCount: number
   createdAt: string

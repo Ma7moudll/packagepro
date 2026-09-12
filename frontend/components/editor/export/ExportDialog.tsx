@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Download, Loader2 } from "lucide-react"
 import { exportDesign, ExportOptions } from "@/lib/editor/services/export"
 import { useLanguage } from "@/providers/language-provider"
+import { generateAI, generateEPS, downloadBlob } from "@/lib/editor/services/vector-export"
 
 export function ExportDialog() {
   const { language } = useLanguage()
@@ -29,12 +30,33 @@ export function ExportDialog() {
   const handleExport = async () => {
     setExporting(true)
     try {
+      const fmt = options.format || "pdf"
+      if (fmt === "ai" || fmt === "eps") {
+        const canvasEl = document.querySelector("canvas")
+        if (canvasEl) {
+          const fabricCanvas = (window as any).__fabricCanvas || null
+          if (fabricCanvas) {
+            const svg = fabricCanvas.toSVG()
+            const w = fabricCanvas.getWidth()
+            const h = fabricCanvas.getHeight()
+            if (fmt === "ai") {
+              const content = generateAI(svg, w, h)
+              downloadBlob(content, `design-${Date.now()}.ai`, "application/postscript")
+            } else {
+              const content = generateEPS(svg, w, h)
+              downloadBlob(content, `design-${Date.now()}.eps`, "application/postscript")
+            }
+            setOpen(false)
+            return
+          }
+        }
+      }
       const blob = await exportDesign(options)
       if (blob) {
         const url = URL.createObjectURL(blob)
         const link = document.createElement("a")
         link.href = url
-        link.download = `design-${Date.now()}.${options.format || "pdf"}`
+        link.download = `design-${Date.now()}.${fmt}`
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
@@ -66,7 +88,7 @@ export function ExportDialog() {
             <Label>{language === "ar" ? "التنسيق" : "Format"}</Label>
             <Select
               value={options.format}
-              onValueChange={(v: "pdf" | "png" | "jpg" | "svg") =>
+              onValueChange={(v: "pdf" | "png" | "jpg" | "svg" | "ai" | "eps") =>
                 setOptions({ ...options, format: v })
               }
             >
@@ -78,6 +100,8 @@ export function ExportDialog() {
                 <SelectItem value="png">PNG (High-res)</SelectItem>
                 <SelectItem value="jpg">JPEG</SelectItem>
                 <SelectItem value="svg">SVG (Vector)</SelectItem>
+                <SelectItem value="ai">Adobe Illustrator (AI)</SelectItem>
+                <SelectItem value="eps">EPS Vector</SelectItem>
               </SelectContent>
             </Select>
           </div>

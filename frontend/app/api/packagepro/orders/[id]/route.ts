@@ -10,10 +10,11 @@ import { logger } from "@/lib/packagepro/utils/logger"
 export const GET = withAuth(async (
   request: NextRequest,
   user: any,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) => {
+  const { id } = await params
   try {
-    const order = await getOrder(params.id)
+    const order = await getOrder(id)
 
     // Check authorization
     if (user.role !== "ADMIN" && order.userId !== user.id) {
@@ -28,7 +29,7 @@ export const GET = withAuth(async (
       order,
     })
   } catch (error: any) {
-    logger.error("Error getting order", { error, orderId: params.id })
+    logger.error("Error getting order", { error, orderId: id })
 
     if (error.message === "Order not found") {
       return NextResponse.json(

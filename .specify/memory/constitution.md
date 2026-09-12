@@ -1,50 +1,67 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# PackagePro Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Type-First & API Clarity
+- **All code is written in TypeScript**, with `any` prohibited unless explicitly justified.
+- **Public interfaces** (APIs, services, React components) are clearly documented (JSDoc/TSDoc).
+- **DTOs are explicitly defined** for each layer: database (Prisma), service logic, and API.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Domain-Driven Modules
+- **Each module** is self-contained within `backend/src/modules/` and `frontend/components/`.
+- **Modules do not cross responsibilities** (e.g., `orders` module does not directly call `payments` without a clear service boundary).
+- **Files follow kebab-case**, functions/variables use camelCase, classes/interfaces use PascalCase.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Conventional Commits (Non-negotiable)
+- **Every commit must follow the format** `<type>(<scope>): <subject>`.
+- **Allowed types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`.
+- **Scope** can be a module name (e.g., `auth`, `orders`) or `frontend`/`backend`.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Testing Gate
+- **Any new feature or bug fix** must be accompanied by tests (unit for services, integration for APIs, e2e for critical flows).
+- **Coverage target**: at least 80% for `services/` and `modules/` directories.
+- **Tests should ideally be written before implementation** (TDD encouraged but not strictly enforced).
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Observability & Error Handling
+- **Every service logs structured logs** (using `pino` or `winston`).
+- **Expected errors** (e.g., payment failure) must be thrown as `AppError` with `code` and `statusCode`.
+- **No internal details** (e.g., stack traces) are leaked to end users.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+## Additional Constraints
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### Stack & Versioning
+- **Backend**: Node.js (LTS) + Fastify + Prisma.
+- **Frontend**: Next.js (App Router) + React + Zustand (state management).
+- **Database**: PostgreSQL (development: SQLite or PostgreSQL container).
+- **Version control**: Git, with `main` as stable branch, and optional `develop` for integration.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+### Security Requirements
+- **All API endpoints** (except `/health`, `/auth/login`, `/auth/register`) are protected by JWT middleware.
+- **Passwords are never stored as plaintext** – only via `bcrypt`.
+- **Input validation** is required using `zod` or `joi` (in Fastify `preValidation` hooks).
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### Performance Standards
+- **API response time** does not exceed 200ms (p95) for reads, and 500ms for writes.
+- **First Paint** less than 1.5 seconds on simulated 3G connection.
+- **Caching (Redis)** is used when the same request repeats within 10 seconds (e.g., product lists).
 
-## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
+## Development Workflow
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+### Code Review Quality Gates
+- **Each PR requires at least one reviewer approval** after:
+  - ✅ All automated CI checks pass (`npm test && npm run lint`).
+  - ✅ No conflicts with `main`.
+  - ✅ Code follows Conventional Commits and defined style.
+  - ✅ Test coverage does not decrease.
+- **Reviewer checks**:
+  - Code readability (naming, comments).
+  - No obvious security vulnerabilities (SQL injection, XSS, etc.).
+  - Compliance with domain boundaries.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+### Local Development Flow
+1. **Fork or clone** the repository.
+2. **Create a branch** with a meaningful name (`feature/`, `fix/`, `docs/`).
+3. **Start development**:
+   ```bash
+   cd backend && npm run dev   # port 5000
+   cd frontend && npm run dev  # port 3000

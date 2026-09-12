@@ -46,10 +46,10 @@ export function GLTFModel({
     }
   })
 
-  const scaleArray = Array.isArray(scale) ? scale : [scale, scale, scale]
+  const scaleArray = (Array.isArray(scale) ? scale : [scale, scale, scale]) as [number, number, number]
 
   return (
-    <group ref={groupRef} position={position} rotation={rotation} scale={scaleArray}>
+    <group ref={groupRef} position={position as [number, number, number]} rotation={rotation as [number, number, number]} scale={scaleArray}>
       <primitive object={scene} />
     </group>
   )

@@ -7,8 +7,9 @@ const projects: any[] = []
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; stepId: string } }
+  { params }: { params: Promise<{ id: string; stepId: string }> }
 ) {
+  const { id, stepId } = await params
   try {
     const session = await auth()
 
@@ -16,13 +17,13 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const workflow = workflows.find((w) => w.projectId === params.id)
+    const workflow = workflows.find((w) => w.projectId === id)
 
     if (!workflow) {
       return NextResponse.json({ error: "Workflow not found" }, { status: 404 })
     }
 
-    const step = workflow.steps.find((s: any) => s.id === params.stepId)
+    const step = workflow.steps.find((s: any) => s.id === stepId)
 
     if (!step) {
       return NextResponse.json({ error: "Step not found" }, { status: 404 })
@@ -59,7 +60,7 @@ export async function POST(
         workflow.completedAt = new Date().toISOString()
 
         // Update project status
-        const project = projects.find((p) => p.id === params.id)
+        const project = projects.find((p) => p.id === id)
         if (project) {
           project.status = "approved"
         }
@@ -70,7 +71,7 @@ export async function POST(
       workflow.completedAt = new Date().toISOString()
 
       // Update project status
-      const project = projects.find((p) => p.id === params.id)
+      const project = projects.find((p) => p.id === id)
       if (project) {
         project.status = "rejected"
       }

@@ -53,7 +53,8 @@ export function ProjectVersioning({ projectId, onVersionChange }: ProjectVersion
         snapshot: currentState,
         changeLog,
         tags: [],
-      })
+        version: `v${Date.now()}`,
+      } as any)
       await loadVersions()
       onVersionChange?.()
     } catch (error) {
@@ -181,7 +182,7 @@ function CreateVersionForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit(name.trim() || undefined, description.trim() || undefined, changeLog.trim() || undefined)
+    onSubmit(name.trim(), description?.trim(), changeLog?.trim())
     setName("")
     setDescription("")
     setChangeLog("")

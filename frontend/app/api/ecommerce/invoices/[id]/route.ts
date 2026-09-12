@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/session"
+import { getSessionUser } from "@/lib/auth/server-session"
 import { nanoid } from "nanoid"
 
 // Mock database
@@ -8,16 +8,17 @@ const orders: any[] = []
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
-    const session = await auth()
+    const session = await getSessionUser(request)
 
-    if (!session?.user) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const invoice = invoices.find((i) => i.id === params.id)
+    const invoice = invoices.find((i) => i.id === id)
 
     if (!invoice) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 })
@@ -25,7 +26,7 @@ export async function GET(
 
     // Check if user owns the invoice
     const order = orders.find((o) => o.id === invoice.orderId)
-    if (!order || order.userId !== (session.user as any).id) {
+    if (!order || order.userId !== session.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -39,16 +40,17 @@ export async function GET(
 // Generate invoice for order
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
-    const session = await auth()
+    const session = await getSessionUser(request)
 
-    if (!session?.user) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const order = orders.find((o) => o.id === params.id)
+    const order = orders.find((o) => o.id === id)
 
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 })

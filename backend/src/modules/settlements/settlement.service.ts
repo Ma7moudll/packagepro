@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { NotFoundError, ValidationError } from '../../utils/errors';
+import { notificationService } from '../notifications/notifications.service';
 import axios from 'axios';
 
 export class SettlementService {
@@ -172,12 +173,26 @@ export class SettlementService {
    */
   private async sendSettlementNotification(settlement: any): Promise<void> {
     const { emailService } = await import('../../services/email/email.service');
+    const vendorUserId = settlement.order.purchaseOrder.vendor.user?.id;
+
     await emailService.sendEmail({
       to: settlement.order.purchaseOrder.vendor.user?.email || '',
       subject: `Payment Received - ${settlement.order.orderNumber}`,
       template: 'settlement-notification',
       templateData: { settlement },
     });
+
+    if (vendorUserId) {
+      await notificationService.createIfUnseen(
+        vendorUserId,
+        { entityType: 'settlement', entityId: settlement.id },
+        {
+          type: 'settlement_completed',
+          title: `Settlement completed for ${settlement.order.orderNumber}`,
+          message: `Your settlement for ${settlement.order.orderNumber} has been completed.`,
+        }
+      );
+    }
   }
 }
 

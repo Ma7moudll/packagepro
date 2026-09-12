@@ -10,11 +10,12 @@ import { logger } from "@/lib/packagepro/utils/logger"
 export const POST = withRole("SUPPLIER")(async (
   request: NextRequest,
   user: any,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) => {
+  const { id } = await params
   try {
     // Verify order belongs to supplier
-    const order = await getOrder(params.id)
+    const order = await getOrder(id)
 
     // TODO: Verify supplier owns this order
     // const supplierId = await getSupplierIdFromUser(user.id)
@@ -24,7 +25,7 @@ export const POST = withRole("SUPPLIER")(async (
 
     // Transition to IN_PRODUCTION
     await transitionOrderState(
-      params.id,
+      id,
       "IN_PRODUCTION",
       { id: user.id, role: user.role },
       { action: "ACCEPTED_BY_SUPPLIER" },
@@ -35,7 +36,7 @@ export const POST = withRole("SUPPLIER")(async (
       message: "Order accepted",
     })
   } catch (error: any) {
-    logger.error("Error accepting order", { error, orderId: params.id })
+    logger.error("Error accepting order", { error, orderId: id })
     return NextResponse.json(
       { error: error.message || "Failed to accept order" },
       { status: 500 },

@@ -29,8 +29,9 @@ const rfqSchema = z.object({
 export const POST = withAuth(async (
   request: NextRequest,
   user: any,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) => {
+  const { id } = await params
   try {
     const body = await request.json()
     const validated = rfqSchema.parse(body)
@@ -38,7 +39,7 @@ export const POST = withAuth(async (
     // Enqueue RFQ job
     await enqueueJob("routing-queue", {
       type: "send_rfq",
-      supplierId: params.id,
+      supplierId: id,
       orderId: validated.orderId,
       requirements: validated.requirements,
     })

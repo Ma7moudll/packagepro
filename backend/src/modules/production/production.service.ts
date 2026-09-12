@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { NotFoundError, ValidationError } from '../../utils/errors';
+import { notificationService } from '../notifications/notifications.service';
 
 export class ProductionService {
   /**
@@ -53,6 +54,31 @@ export class ProductionService {
         status: 'in_production',
       },
     });
+
+    const orderCustomer = await prisma.order.findUnique({
+      where: { id: po.orderId },
+      select: {
+        orderNumber: true,
+        customer: {
+          select: {
+            userId: true,
+          },
+        },
+      },
+    });
+
+    if (orderCustomer?.customer?.userId) {
+      await notificationService.createIfUnseen(
+        orderCustomer.customer.userId,
+        { entityType: 'order', entityId: po.orderId },
+        {
+          type: 'production_started',
+          title: `Production started for ${orderCustomer.orderNumber}`,
+          message: `Good news — your order ${orderCustomer.orderNumber} is now in production.`,
+          link: `/orders/${po.orderId}`,
+        }
+      );
+    }
 
     return production;
   }

@@ -15,20 +15,17 @@ import {
   CheckCircle,
   Download,
   DollarSign,
-  Scissors,
   Type,
   Image as ImageIcon,
   Box,
-  ChevronDown,
-  ChevronUp,
   Trash2,
 } from "lucide-react"
 import { PRODUCTS, PRODUCT_CATEGORIES, COLOR_VARIANTS, FINISHING_OPTIONS, LAMINATION_OPTIONS, MATERIAL_TYPES, getProductById } from "@/lib/editor/data/products-data"
 import { ProductCategory } from "@/lib/editor/state/types"
 import { useLanguage } from "@/providers/language-provider"
 import { ValidationPanel } from "@/components/editor/panels/ValidationPanel"
+import { ColorPicker } from "@/components/editor/panels/ColorPicker"
 import { PriceCalculator } from "@/components/editor/panels/PriceCalculator"
-import { DielineEditor } from "@/components/editor/panels/DielineEditor"
 import { ExportDialog } from "@/components/editor/export/ExportDialog"
 import { TextStylesPanel } from "@/components/editor/panels/TextStylesPanel"
 import { ImageEditPanel } from "@/components/editor/panels/ImageEditPanel"
@@ -43,6 +40,7 @@ import {
 // Sidebar tabs
 const SIDEBAR_TABS = [
   { id: "design", icon: Settings2, label: { en: "Design", ar: "تصميم" } },
+  { id: "comments", icon: MessageSquare, label: { en: "Comments", ar: "تعليقات" } },
   { id: "price", icon: DollarSign, label: { en: "Price", ar: "السعر" } },
   { id: "check", icon: CheckCircle, label: { en: "Check", ar: "فحص" } },
   { id: "export", icon: Download, label: { en: "Export", ar: "تصدير" } },
@@ -51,7 +49,7 @@ const SIDEBAR_TABS = [
 type TabId = (typeof SIDEBAR_TABS)[number]["id"]
 
 export function EditorRightSidebar() {
-  const { language } = useLanguage()
+  const { language, isRTL } = useLanguage()
   const layers = useDesignStore((s) => s.layers)
   const selectedIds = useDesignStore((s) => s.selectedLayerIds)
   const model = useDesignStore((s) => s.model)
@@ -220,18 +218,17 @@ export function EditorRightSidebar() {
               className="h-8 text-xs"
               placeholder={language === "ar" ? "النص" : "Content"}
             />
-                      <div className="flex gap-2">
-              <input
-                type="color"
-                value={selected.textProperties.color}
-                onChange={(e) =>
-                  updateLayer(selected.id, (l) => ({
-                    ...l,
-                    textProperties: { ...l.textProperties!, color: e.target.value },
-                  }))
-                }
-                className="w-8 h-8 rounded cursor-pointer"
-              />
+                      <div className="flex items-center gap-2">
+                <ColorPicker
+                  value={selected.textProperties.color}
+                  onChange={(color) =>
+                    updateLayer(selected.id, (l) => ({
+                      ...l,
+                      textProperties: { ...l.textProperties!, color },
+                    }))
+                  }
+                  size="sm"
+                />
               <Input
                 value={selected.textProperties.color}
                 onChange={(e) =>
@@ -264,18 +261,17 @@ export function EditorRightSidebar() {
             <h4 className="text-[10px] font-bold text-slate-500">
               {language === "ar" ? "خصائص الشكل" : "Shape"}
             </h4>
-            <div className="flex gap-2 items-center">
+            <div className="flex items-center gap-2">
               <Label className="text-[10px] text-slate-400 w-10">{language === "ar" ? "تعبئة" : "Fill"}</Label>
-              <input
-                type="color"
+              <ColorPicker
                 value={selected.shapeProperties.fill}
-                onChange={(e) =>
+                onChange={(color) =>
                   updateLayer(selected.id, (l) => ({
                     ...l,
-                    shapeProperties: { ...l.shapeProperties!, fill: e.target.value },
+                    shapeProperties: { ...l.shapeProperties!, fill: color },
                   }))
                 }
-                className="w-7 h-7 rounded cursor-pointer"
+                size="sm"
               />
               <Input
                 value={selected.shapeProperties.fill}
@@ -288,18 +284,17 @@ export function EditorRightSidebar() {
                 className="h-7 text-xs font-mono flex-1"
               />
                       </div>
-            <div className="flex gap-2 items-center">
+            <div className="flex items-center gap-2">
               <Label className="text-[10px] text-slate-400 w-10">{language === "ar" ? "حدود" : "Stroke"}</Label>
-              <input
-                type="color"
+              <ColorPicker
                 value={selected.shapeProperties.stroke}
-                onChange={(e) =>
+                onChange={(color) =>
                   updateLayer(selected.id, (l) => ({
                     ...l,
-                    shapeProperties: { ...l.shapeProperties!, stroke: e.target.value },
+                    shapeProperties: { ...l.shapeProperties!, stroke: color },
                   }))
                 }
-                className="w-7 h-7 rounded cursor-pointer"
+                size="sm"
               />
               <Input
                 value={selected.shapeProperties.stroke}
@@ -646,7 +641,7 @@ export function EditorRightSidebar() {
 
   // Design Tab Content
   const renderDesignContent = () => (
-    <ScrollArea className="flex-1">
+    <ScrollArea className="flex-1 min-h-0">
       <div className="p-3">
         {selected ? renderLayerProperties() : renderProductSettings()}
       </div>
@@ -654,25 +649,27 @@ export function EditorRightSidebar() {
   )
 
   return (
-    <aside className="w-72 bg-white border-l border-slate-200 flex flex-col h-full">
+    <aside className={`w-full bg-white ${isRTL ? "border-r" : "border-l"} border-slate-200 flex flex-col h-full min-h-0`}>
       {/* Tab Navigation */}
-      <div className="flex border-b bg-slate-50/50">
+      <div className="flex border-b bg-slate-50/50 overflow-x-auto" role="tablist">
         {SIDEBAR_TABS.map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
           return (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={isActive}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "flex-1 py-2.5 flex flex-col items-center gap-1 transition-all border-b-2",
+                "flex-1 py-2.5 flex flex-col items-center gap-1 transition-all border-b-2 min-w-0",
                 isActive
                   ? "border-slate-900 bg-white text-slate-900"
-                  : "border-transparent text-slate-400 hover:text-slate-600"
+                  : "border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-100"
               )}
             >
-              <Icon className="h-4 w-4" />
-              <span className="text-[10px] font-medium">
+              <Icon className={`h-4 w-4 ${isActive ? "text-slate-900" : ""}`} aria-hidden="true" />
+              <span className={`text-[10px] font-medium ${isActive ? "text-slate-900" : ""}`}>
                 {language === "ar" ? tab.label.ar : tab.label.en}
               </span>
             </button>
@@ -681,20 +678,25 @@ export function EditorRightSidebar() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden flex flex-col">
+      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
         {activeTab === "design" && renderDesignContent()}
+        {activeTab === "comments" && (
+          <ScrollArea className="flex-1 min-h-0">
+            <CommentsPanel />
+          </ScrollArea>
+        )}
         {activeTab === "price" && (
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             <PriceCalculator />
           </ScrollArea>
         )}
         {activeTab === "check" && (
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             <ValidationPanel />
           </ScrollArea>
         )}
         {activeTab === "export" && (
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             <div className="p-4 space-y-4">
               <div className="text-center py-4">
                 <Download className="h-10 w-10 text-slate-300 mx-auto mb-2" />

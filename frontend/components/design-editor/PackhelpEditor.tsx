@@ -61,6 +61,14 @@ export function PackhelpEditor({
   useEffect(() => {
     if (isInitialized.current) return
 
+    // When the store was already hydrated by initFromEditorConfig (catalog-driven entry),
+    // do not clobber it with the default initialDesign props.
+    const existing = useDesignStore.getState()
+    if (existing.product?.id) {
+      isInitialized.current = true
+      return
+    }
+
     applyCoreState((core) => {
       let newState = { ...core }
 

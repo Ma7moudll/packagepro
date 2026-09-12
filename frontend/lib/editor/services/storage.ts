@@ -1,6 +1,7 @@
 "use client"
 
 import { DesignCoreState } from "@/lib/editor/state/types"
+import { designsApi } from "@/lib/api/designs"
 
 const DB_NAME = "packagepro-editor"
 const DB_VERSION = 1
@@ -125,45 +126,63 @@ export async function deleteDesignFromIndexedDB(designId: string): Promise<void>
 }
 
 export async function saveDesignToCloud(
-  designId: string,
+  sessionId: string,
   name: string,
   state: DesignCoreState
 ): Promise<void> {
   try {
-    const response = await fetch("/api/packagepro/designs", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: designId,
-        name,
-        state,
-      }),
-    })
-
-    if (!response.ok) {
-      throw new Error(`Failed to save design: ${response.statusText}`)
-    }
+    await ensureCloudSession(sessionId, name, state)
   } catch (error) {
     console.error("Failed to save design to cloud:", error)
     // Fallback to IndexedDB only
-    await saveDesignToIndexedDB(designId, name, state)
+    await saveDesignToIndexedDB(sessionId, name, state)
   }
 }
 
-export async function loadDesignFromCloud(designId: string): Promise<DesignCoreState | null> {
-  try {
-    const response = await fetch(`/api/packagepro/designs/${designId}`)
-    if (!response.ok) {
-      throw new Error(`Failed to load design: ${response.statusText}`)
+/**
+ * Persist the design editor state to the backend. If no session exists yet,
+ * create one and return its id (used to key future saves and cart items).
+ */
+export async function ensureCloudSession(
+  sessionId: string | null,
+  name: string,
+  state: DesignCoreState
+): Promise<string> {
+  let id = sessionId
+
+  if (!id) {
+    const res = await designsApi.createSession({ name })
+    const session = res.success && res.data ? (res.data as any) : null
+    id = session?.sessionId ?? null
+    if (!id) {
+      throw new Error("Failed to create design session")
     }
-    const data = await response.json()
-    return data.state
+  }
+
+  await designsApi.save({
+    sessionId: id,
+    designData: state,
+    // M7-E: retain product identity on the Design row for Cart->Order traceability.
+    productId: state.product?.id,
+    variantId: state.productConfig?.variantId,
+    sku: state.productConfig?.sku,
+    designConfig: state.productConfig,
+  })
+  return id
+}
+
+export async function loadDesignFromCloud(sessionId: string): Promise<DesignCoreState | null> {
+  try {
+    const res = await designsApi.getSession(sessionId)
+    const session = res.success && res.data ? (res.data as any) : null
+    if (session?.designData) {
+      return session.designData as DesignCoreState
+    }
+    return null
   } catch (error) {
     console.error("Failed to load design from cloud:", error)
     // Fallback to IndexedDB
-    const stored = await loadDesignFromIndexedDB(designId)
+    const stored = await loadDesignFromIndexedDB(sessionId)
     return stored?.state || null
   }
 }

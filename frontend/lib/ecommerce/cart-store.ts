@@ -1,148 +1,102 @@
 "use client"
 
 import { create } from "zustand"
-import { persist, createJSONStorage } from "zustand/middleware"
-import { Cart, CartItem } from "./types"
-import { nanoid } from "nanoid"
+import type { Cart, AddCartItemRequest } from "@shared/types"
+import { cartApi } from "@/lib/api/cart"
+import { ApiClientError } from "@/lib/api/client"
 
-interface CartStore extends Cart {
-  // Actions
-  addItem: (item: Omit<CartItem, "id">) => void
-  removeItem: (id: string) => void
-  updateQuantity: (id: string, quantity: number) => void
-  clearCart: () => void
-  calculateTotals: () => void
+interface CartStore {
+  cart: Cart | null
+  loading: boolean
+  error: string | null
+  refresh: () => Promise<Cart | null>
+  addItem: (item: AddCartItemRequest) => Promise<Cart | null>
+  updateQuantity: (id: string, quantity: number) => Promise<Cart | null>
+  removeItem: (id: string) => Promise<Cart | null>
+  clearCart: () => Promise<Cart | null>
 }
 
-const calculateTax = (subtotal: number, taxRate: number = 0.15): number => {
-  return subtotal * taxRate
-}
+export const useCartStore = create<CartStore>((set, get) => ({
+  cart: null,
+  loading: false,
+  error: null,
 
-const calculateShipping = (subtotal: number, itemsCount: number): number => {
-  // Free shipping over 500, otherwise 25
-  if (subtotal >= 500) return 0
-  return 25 + (itemsCount - 1) * 5 // Base 25, +5 per additional item
-}
-
-const createInitialCart = (): Cart => ({
-  items: [],
-  subtotal: 0,
-  tax: 0,
-  shipping: 0,
-  total: 0,
-  currency: "SAR",
-})
-
-export const useCartStore = create<CartStore>()(
-  persist(
-    (set, get) => ({
-      ...createInitialCart(),
-
-      addItem: (item) => {
-        set((state) => {
-          // Check if item already exists (same productId and customization)
-          const existingIndex = state.items.findIndex(
-            (i) =>
-              i.productId === item.productId &&
-              JSON.stringify(i.customization) === JSON.stringify(item.customization)
-          )
-
-          let newItems: CartItem[]
-
-          if (existingIndex !== -1) {
-            // Update quantity
-            newItems = state.items.map((i, idx) =>
-              idx === existingIndex
-                ? { ...i, quantity: i.quantity + item.quantity }
-                : i
-            )
-          } else {
-            // Add new item
-            newItems = [...state.items, { ...item, id: nanoid() }]
-          }
-
-          const subtotal = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-          const tax = calculateTax(subtotal)
-          const shipping = calculateShipping(subtotal, newItems.length)
-          const total = subtotal + tax + shipping
-
-          return {
-            items: newItems,
-            subtotal,
-            tax,
-            shipping,
-            total,
-          }
-        })
-      },
-
-      removeItem: (id) => {
-        set((state) => {
-          const newItems = state.items.filter((item) => item.id !== id)
-          const subtotal = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-          const tax = calculateTax(subtotal)
-          const shipping = calculateShipping(subtotal, newItems.length)
-          const total = subtotal + tax + shipping
-
-          return {
-            items: newItems,
-            subtotal,
-            tax,
-            shipping,
-            total,
-          }
-        })
-      },
-
-      updateQuantity: (id, quantity) => {
-        if (quantity <= 0) {
-          get().removeItem(id)
-          return
-        }
-
-        set((state) => {
-          const newItems = state.items.map((item) =>
-            item.id === id ? { ...item, quantity } : item
-          )
-          const subtotal = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-          const tax = calculateTax(subtotal)
-          const shipping = calculateShipping(subtotal, newItems.length)
-          const total = subtotal + tax + shipping
-
-          return {
-            items: newItems,
-            subtotal,
-            tax,
-            shipping,
-            total,
-          }
-        })
-      },
-
-      clearCart: () => {
-        set(createInitialCart())
-      },
-
-      calculateTotals: () => {
-        set((state) => {
-          const subtotal = state.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-          const tax = calculateTax(subtotal)
-          const shipping = calculateShipping(subtotal, state.items.length)
-          const total = subtotal + tax + shipping
-
-          return {
-            subtotal,
-            tax,
-            shipping,
-            total,
-          }
-        })
-      },
-    }),
-    {
-      name: "packagepro-cart",
-      storage: createJSONStorage(() => localStorage),
+  refresh: async () => {
+    set({ loading: true, error: null })
+    try {
+      const res = await cartApi.get()
+      const cart = res.data
+      set({ cart, loading: false })
+      return cart
+    } catch (err) {
+      const message =
+        err instanceof ApiClientError ? err.message : "Failed to load cart"
+      set({ loading: false, error: message })
+      return null
     }
-  )
-)
+  },
 
+  addItem: async (item) => {
+    try {
+      const res = await cartApi.addItem(item)
+      set({ cart: res.data, error: null })
+      return res.data
+    } catch (err) {
+      const message =
+        err instanceof ApiClientError
+          ? err.message
+          : "Failed to add item to cart"
+      set({ error: message })
+      throw err
+    }
+  },
+
+  updateQuantity: async (id, quantity) => {
+    try {
+      const res = await cartApi.updateItem(id, { quantity })
+      set({ cart: res.data, error: null })
+      return res.data
+    } catch (err) {
+      const message =
+        err instanceof ApiClientError ? err.message : "Failed to update cart"
+      set({ error: message })
+      throw err
+    }
+  },
+
+  removeItem: async (id) => {
+    try {
+      const res = await cartApi.removeItem(id)
+      set({ cart: res.data, error: null })
+      return res.data
+    } catch (err) {
+      const message =
+        err instanceof ApiClientError ? err.message : "Failed to remove item"
+      set({ error: message })
+      throw err
+    }
+  },
+
+  clearCart: async () => {
+    try {
+      const res = await cartApi.clear()
+      set({ cart: res.data, error: null })
+      return res.data
+    } catch (err) {
+      const message =
+        err instanceof ApiClientError ? err.message : "Failed to clear cart"
+      set({ error: message })
+      throw err
+    }
+  },
+}))
+
+export function useCartSnapshot() {
+  return {
+    items: useCartStore((s) => s.cart?.items ?? []),
+    summary: useCartStore((s) => s.cart?.summary),
+    loading: useCartStore((s) => s.loading),
+    error: useCartStore((s) => s.error),
+    actions: useCartStore.getState(),
+  }
+}

@@ -1,6 +1,10 @@
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+const API_URL = (() => {
+  const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+  const trimmed = base.replace(/\/+$/, '');
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+})();
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -40,7 +44,7 @@ api.interceptors.response.use(
       } catch (refreshError) {
         // Redirect to login or clear state
         if (typeof window !== 'undefined') {
-          window.location.href = '/auth/login';
+          window.location.href = '/login';
         }
         return Promise.reject(refreshError);
       }

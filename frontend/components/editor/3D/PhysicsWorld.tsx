@@ -1,6 +1,6 @@
 "use client"
 
-import { Physics, RigidBody, CuboidCollider } from "@react-three/cannon"
+import { Physics } from "@react-three/cannon"
 import { useDesignStore } from "@/lib/editor/state/store"
 
 interface PhysicsWorldProps {

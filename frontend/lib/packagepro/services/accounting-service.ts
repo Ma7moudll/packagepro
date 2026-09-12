@@ -7,7 +7,9 @@
 import { logger } from "../utils/logger"
 import { createAuditLog } from "../audit/order-audit"
 
-const prisma = null as any
+const prisma = {
+  $queryRawUnsafe: async <T = any>(strings: TemplateStringsArray | string, ...values: any[]): Promise<T> => [] as T,
+}
 
 export interface PayoutData {
   supplierId: string
@@ -116,7 +118,7 @@ export async function exportInvoicesCSV(startDate: Date, endDate: Date): Promise
 
   // Generate CSV
   const headers = ["Order Number", "Customer Email", "Supplier", "Amount", "Date"]
-  const rows = invoices.map((inv) => [
+  const rows = invoices.map((inv: any) => [
     inv.orderNumber,
     inv.customer_email,
     inv.supplier_name || "N/A",
@@ -124,7 +126,7 @@ export async function exportInvoicesCSV(startDate: Date, endDate: Date): Promise
     inv.createdAt,
   ])
 
-  const csv = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n")
+  const csv = [headers.join(","), ...rows.map((row: string[]) => row.join(","))].join("\n")
 
   return csv
 }

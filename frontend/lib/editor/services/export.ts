@@ -1,13 +1,13 @@
 "use client"
 
 import { useDesignStore } from "@/lib/editor/state/store"
-import { Layer, Face } from "@/lib/editor/state/types"
+import { Layer, ModelState } from "@/lib/editor/state/types"
 import { generateTextureFromLayers } from "./texture-generator"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 
 export interface ExportOptions {
-  format: "pdf" | "png" | "jpg" | "svg"
+  format: "pdf" | "png" | "jpg" | "svg" | "ai" | "eps"
   resolution: 72 | 150 | 300 | 600 // DPI
   colorMode: "rgb" | "cmyk"
   includeBleed: boolean
@@ -32,12 +32,12 @@ export async function exportDesign(options: Partial<ExportOptions> = {}): Promis
   const opts = { ...defaultExportOptions, ...options }
   const state = useDesignStore.getState()
   const layers = state.layers.filter((l) => l.visible)
-  const faces = state.model.faces
+  const model = state.model
 
   if (opts.format === "pdf") {
-    return await exportPDF(layers, faces, state.model.dimensions, opts)
+    return await exportPDF(layers, model, opts)
   } else if (opts.format === "png" || opts.format === "jpg") {
-    return await exportImage(layers, faces, state.model.dimensions, opts)
+    return await exportImage(layers, model, opts)
   }
 
   return null
@@ -45,8 +45,7 @@ export async function exportDesign(options: Partial<ExportOptions> = {}): Promis
 
 async function exportPDF(
   layers: Layer[],
-  faces: Face[],
-  dimensions: { length: number; width: number; height: number },
+  model: ModelState,
   options: ExportOptions
 ): Promise<Blob> {
   const pdf = new jsPDF({
@@ -66,20 +65,20 @@ async function exportPDF(
   })
 
   // Generate textures for each face
-  const textures = generateTextureFromLayers(layers, faces, {
+  const textures = await generateTextureFromLayers(layers, model, {
     width: (options.resolution / 72) * 800, // Scale based on DPI
     height: (options.resolution / 72) * 600,
   })
 
   // Export each face
-  for (let i = 0; i < faces.length; i++) {
-    const face = faces[i]
+  for (let i = 0; i < model.faces.length; i++) {
+    const face = model.faces[i]
     const textureDataUrl = textures[face.id]
 
     if (textureDataUrl) {
       // Calculate dimensions with bleed
-      const faceWidth = face.id === "front" || face.id === "back" ? dimensions.length : dimensions.width
-      const faceHeight = dimensions.height
+      const faceWidth = face.id === "front" || face.id === "back" ? model.dimensions.length : model.dimensions.width
+      const faceHeight = model.dimensions.height
       const bleed = options.includeBleed ? options.bleedSize : 0
       const totalWidth = faceWidth + bleed * 2
       const totalHeight = faceHeight + bleed * 2
@@ -116,7 +115,7 @@ async function exportPDF(
     }
 
     // New page for next face (except last)
-    if (i < faces.length - 1) {
+    if (i < model.faces.length - 1) {
       pdf.addPage()
     }
   }
@@ -126,18 +125,17 @@ async function exportPDF(
 
 async function exportImage(
   layers: Layer[],
-  faces: Face[],
-  dimensions: { length: number; width: number; height: number },
+  model: ModelState,
   options: ExportOptions
 ): Promise<Blob> {
   // For now, export the first face as image
   // In a full implementation, you'd export all faces or create a composite
-  const textures = generateTextureFromLayers(layers, faces, {
+  const textures = await generateTextureFromLayers(layers, model, {
     width: (options.resolution / 72) * 800,
     height: (options.resolution / 72) * 600,
   })
 
-  const firstFace = faces[0]
+  const firstFace = model.faces[0]
   const textureDataUrl = textures[firstFace.id]
 
   if (!textureDataUrl) {

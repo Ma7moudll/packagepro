@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Package, Mail, Phone, MapPin, Facebook, Instagram, Twitter } from "lucide-react"
+import { Package, Mail, Phone, MapPin, MessageCircle, Camera, MessageSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -20,13 +20,13 @@ export function Footer() {
             </p>
             <div className="flex space-x-4">
               <Button variant="ghost" size="sm" className="text-slate-300 hover:text-white">
-                <Facebook className="h-5 w-5" />
+                <MessageCircle className="h-5 w-5" />
               </Button>
               <Button variant="ghost" size="sm" className="text-slate-300 hover:text-white">
-                <Instagram className="h-5 w-5" />
+                <Camera className="h-5 w-5" />
               </Button>
               <Button variant="ghost" size="sm" className="text-slate-300 hover:text-white">
-                <Twitter className="h-5 w-5" />
+                <MessageSquare className="h-5 w-5" />
               </Button>
             </div>
           </div>

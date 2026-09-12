@@ -41,6 +41,16 @@ export class VendorController {
             },
           },
         },
+        productions: {
+          include: {
+            purchaseOrder: {
+              select: {
+                id: true,
+                poNumber: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -122,6 +132,17 @@ export class VendorController {
               items: true,
             },
           },
+          handshake: {
+            select: {
+              id: true,
+              status: true,
+              expiresAt: true,
+              acceptedAt: true,
+              rejectedAt: true,
+              rejectionReason: true,
+            },
+          },
+          production: true,
         },
       }),
       prisma.purchaseOrder.count({ where }),

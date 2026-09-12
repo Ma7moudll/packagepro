@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/session"
+import { getSessionUser } from "@/lib/auth/server-session"
 import { nanoid } from "nanoid"
 
 // Mock database
@@ -8,9 +8,9 @@ const orders: any[] = []
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth()
+    const session = await getSessionUser(request)
 
-    if (!session?.user) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -62,9 +62,9 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth()
+    const session = await getSessionUser(request)
 
-    if (!session?.user) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Return all labels for user's orders
-    const userOrders = orders.filter((o) => o.userId === (session.user as any).id)
+    const userOrders = orders.filter((o) => o.userId === session.id)
     const userLabels = shippingLabels.filter((l) =>
       userOrders.some((o) => o.id === l.orderId)
     )

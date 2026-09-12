@@ -43,9 +43,10 @@ export function EditorBottomBar() {
 
   const selectedLayers = layers.filter((l) => selectedIds.includes(l.id) && l.faceId === selectedFace)
 
+  const canvasWidth = useDesignStore((s) => s.canvas.width)
+
   const handleAlign = (align: "left" | "center" | "right") => {
     if (selectedLayers.length === 0) return
-    const canvasWidth = 800
     selectedLayers.forEach((layer) => {
       let newX = layer.position.x
       if (align === "left") newX = 50

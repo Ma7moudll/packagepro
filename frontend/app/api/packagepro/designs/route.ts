@@ -1,62 +1,47 @@
 import { NextRequest, NextResponse } from "next/server"
 
-export async function POST(request: NextRequest) {
-  try {
-    // TODO: Add proper authentication
-    // const session = await getSession()
-    // if (!session?.user) {
-    //   return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    // }
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
 
-    const body = await request.json()
-    const { id, name, state } = body
+async function proxy(request: NextRequest, path: string, init: RequestInit) {
+  const accessToken =
+    request.headers.get("authorization") ||
+    (request.cookies.get("accessToken")?.value ?? undefined)
 
-    if (!id || !name || !state) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-    }
-
-    // In a real implementation, save to database
-    // For now, return success
-    return NextResponse.json({
-      success: true,
-      id,
-      name,
-      savedAt: new Date().toISOString(),
-    })
-  } catch (error) {
-    console.error("Error saving design:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
   }
+  if (accessToken) {
+    headers["Authorization"] = accessToken
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: { ...headers, ...((init.headers as Record<string, string>) ?? {}) },
+  })
+
+  const json = await res.json().catch(() => null)
+  if (!res.ok) {
+    return NextResponse.json(
+      json ?? { error: `Backend request failed with status ${res.status}` },
+      { status: res.status }
+    )
+  }
+  return NextResponse.json(json, { status: res.status })
+}
+
+export async function POST(request: NextRequest) {
+  const body = await request.json()
+  return proxy(request, "/api/designs/session", {
+    method: "POST",
+    body: JSON.stringify({ name: body?.name, description: body?.description }),
+  })
 }
 
 export async function GET(request: NextRequest) {
-  try {
-    // TODO: Add proper authentication
-    // const session = await getSession()
-    // if (!session?.user) {
-    //   return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    // }
-
-    const { searchParams } = new URL(request.url)
-    const designId = searchParams.get("id")
-
-    if (designId) {
-      // Get single design
-      // In a real implementation, fetch from database
-      return NextResponse.json({
-        id: designId,
-        name: "Design",
-        state: null, // Would fetch actual state from DB
-      })
-    } else {
-      // List all designs for user
-      // In a real implementation, fetch from database
-      return NextResponse.json({
-        designs: [],
-      })
-    }
-  } catch (error) {
-    console.error("Error loading designs:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  const { searchParams } = new URL(request.url)
+  const id = searchParams.get("id")
+  if (id) {
+    return proxy(request, `/api/designs/session/${id}`, { method: "GET" })
   }
+  return proxy(request, "/api/designs", { method: "GET" })
 }

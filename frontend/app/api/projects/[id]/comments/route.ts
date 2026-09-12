@@ -8,8 +8,9 @@ const comments: any[] = []
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -17,7 +18,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const project = projects.find((p) => p.id === params.id)
+    const project = projects.find((p) => p.id === id)
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
@@ -46,7 +47,7 @@ export async function POST(
 
     const comment = {
       id: `comment-${nanoid()}`,
-      projectId: params.id,
+      projectId: id,
       userId,
       userName,
       userAvatar,
@@ -72,8 +73,9 @@ export async function POST(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -81,7 +83,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const projectComments = comments.filter((c) => c.projectId === params.id)
+    const projectComments = comments.filter((c) => c.projectId === id)
 
     return NextResponse.json(projectComments)
   } catch (error) {

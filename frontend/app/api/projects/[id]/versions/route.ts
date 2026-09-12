@@ -8,8 +8,9 @@ const versions: any[] = []
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -17,7 +18,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const projectVersions = versions.filter((v) => v.projectId === params.id)
+    const projectVersions = versions.filter((v) => v.projectId === id)
 
     return NextResponse.json(projectVersions)
   } catch (error) {
@@ -28,8 +29,9 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -37,7 +39,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const project = projects.find((p) => p.id === params.id)
+    const project = projects.find((p) => p.id === id)
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
@@ -57,7 +59,7 @@ export async function POST(
 
     // Mark previous version as not current
     const previousVersions = versions.filter(
-      (v) => v.projectId === params.id && v.isCurrent
+      (v) => v.projectId === id && v.isCurrent
     )
     previousVersions.forEach((v) => {
       v.isCurrent = false
@@ -65,7 +67,7 @@ export async function POST(
 
     const newVersion = {
       id: `version-${nanoid()}`,
-      projectId: params.id,
+      projectId: id,
       version: project.version + 1,
       name,
       description,

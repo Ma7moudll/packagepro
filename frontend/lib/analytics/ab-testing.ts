@@ -1,6 +1,7 @@
 "use client"
 
 import { ABTest, ABTestVariant, ABTestAssignment } from "./types"
+import { analyticsService, storageGet, storageSet } from "./analytics-service"
 import { nanoid } from "nanoid"
 
 class ABTestingService {
@@ -18,18 +19,18 @@ class ABTestingService {
   private getOrCreateSessionId(): string {
     if (typeof window === "undefined") return nanoid()
 
-    const stored = sessionStorage.getItem("ab_test_session_id")
+    const stored = storageGet("session", "ab_test_session_id")
     if (stored) return stored
 
     const newId = nanoid()
-    sessionStorage.setItem("ab_test_session_id", newId)
+    storageSet("session", "ab_test_session_id", newId)
     return newId
   }
 
   private loadUserId(): void {
     if (typeof window === "undefined") return
 
-    const stored = localStorage.getItem("analytics_user_id")
+    const stored = storageGet("local", "analytics_user_id")
     if (stored) {
       this.userId = stored
     }
@@ -38,28 +39,24 @@ class ABTestingService {
   private loadAssignments(): void {
     if (typeof window === "undefined") return
 
+    const stored = storageGet("local", "ab_test_assignments")
+    if (!stored) return
+
     try {
-      const stored = localStorage.getItem("ab_test_assignments")
-      if (stored) {
-        const assignments: ABTestAssignment[] = JSON.parse(stored)
-        assignments.forEach((assignment) => {
-          this.assignments.set(assignment.testId, assignment)
-        })
-      }
-    } catch (error) {
-      console.error("Failed to load AB test assignments:", error)
+      const assignments: ABTestAssignment[] = JSON.parse(stored)
+      assignments.forEach((assignment) => {
+        this.assignments.set(assignment.testId, assignment)
+      })
+    } catch {
+      // Corrupt assignments — start fresh
     }
   }
 
   private saveAssignments(): void {
     if (typeof window === "undefined") return
 
-    try {
-      const assignments = Array.from(this.assignments.values())
-      localStorage.setItem("ab_test_assignments", JSON.stringify(assignments))
-    } catch (error) {
-      console.error("Failed to save AB test assignments:", error)
-    }
+    const assignments = Array.from(this.assignments.values())
+    storageSet("local", "ab_test_assignments", JSON.stringify(assignments))
   }
 
   /**
@@ -145,8 +142,6 @@ class ABTestingService {
   private trackAssignment(testId: string, variantId: string): void {
     if (typeof window === "undefined") return
 
-    // Send to analytics
-    const { analyticsService } = require("./analytics-service")
     analyticsService.track("ab_test_assigned", {
       testId,
       variantId,
@@ -160,7 +155,6 @@ class ABTestingService {
     const assignment = this.assignments.get(testId)
     if (!assignment) return
 
-    const { analyticsService } = require("./analytics-service")
     analyticsService.track("ab_test_conversion", {
       testId,
       variantId: assignment.variantId,

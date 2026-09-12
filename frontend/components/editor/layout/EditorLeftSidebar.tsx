@@ -4,7 +4,9 @@ import { useState } from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { LayersPanel } from "@/components/editor/panels/LayersPanel"
 import { UploadPanel } from "@/components/editor/panels/UploadPanel"
+import { LogoUploadPanel } from "@/components/editor/panels/LogoUploadPanel"
 import { AIToolsPanel } from "@/components/editor/panels/AIToolsPanel"
+import { BrandKitPanel } from "@/components/editor/panels/BrandKitPanel"
 import { useLanguage } from "@/providers/language-provider"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -18,11 +20,13 @@ import {
   Wand2,
   LayoutTemplate,
   Sparkles,
+  Palette,
 } from "lucide-react"
 import { PatternsPanel } from "@/components/editor/panels/PatternsPanel"
 import { CodeGenerators } from "@/components/editor/panels/CodeGenerators"
 import { IconLibrary } from "@/components/editor/panels/IconLibrary"
 import { TemplateLibrary } from "@/components/editor/panels/TemplateLibrary"
+import { TemplateCreator } from "@/components/editor/panels/TemplateCreator"
 import { StockImagesPanel } from "@/components/editor/panels/StockImagesPanel"
 import { ElementsLibraryPanel } from "@/components/editor/panels/ElementsLibraryPanel"
 import { TextTemplatesPanel } from "@/components/editor/panels/TextTemplatesPanel"
@@ -40,13 +44,14 @@ const MAIN_SECTIONS = [
   { id: "add", icon: Upload, label: { en: "Add", ar: "إضافة" } },
   { id: "assets", icon: ImageIcon, label: { en: "Assets", ar: "مصادر" } },
   { id: "tools", icon: Wand2, label: { en: "Tools", ar: "أدوات" } },
+  { id: "brand", icon: Palette, label: { en: "Brand", ar: "العلامة" } },
   { id: "layers", icon: Layers, label: { en: "Layers", ar: "طبقات" } },
 ] as const
 
 type MainSection = (typeof MAIN_SECTIONS)[number]["id"]
 
 export function EditorLeftSidebar() {
-  const { language } = useLanguage()
+  const { language, isRTL } = useLanguage()
   const addLayer = useDesignStore((s) => s.addLayer)
   const [activeSection, setActiveSection] = useState<MainSection>("add")
 
@@ -172,7 +177,7 @@ export function EditorLeftSidebar() {
 
   // Add Section Content
   const renderAddSection = () => (
-    <ScrollArea className="flex-1">
+    <ScrollArea className="flex-1 min-h-0">
       <div className="p-3 space-y-1">
         <Accordion type="multiple" defaultValue={["upload", "text"]} className="space-y-1">
           {/* Upload */}
@@ -185,6 +190,19 @@ export function EditorLeftSidebar() {
             </AccordionTrigger>
             <AccordionContent className="pb-3">
               <UploadPanel />
+            </AccordionContent>
+          </AccordionItem>
+
+          {/* Logo Upload */}
+          <AccordionItem value="logo" className="border rounded-lg px-3">
+            <AccordionTrigger className="text-xs font-semibold py-2 hover:no-underline">
+              <span className="flex items-center gap-2">
+                <ImageIcon className="h-4 w-4" />
+                {language === "ar" ? "شعار" : "Logo"}
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pb-3">
+              <LogoUploadPanel />
             </AccordionContent>
           </AccordionItem>
 
@@ -256,7 +274,7 @@ export function EditorLeftSidebar() {
 
   // Assets Section Content
   const renderAssetsSection = () => (
-    <ScrollArea className="flex-1">
+    <ScrollArea className="flex-1 min-h-0">
       <div className="p-3 space-y-1">
         <Accordion type="multiple" defaultValue={["patterns"]} className="space-y-1">
           {/* Patterns */}
@@ -304,7 +322,7 @@ export function EditorLeftSidebar() {
 
   // Tools Section Content
   const renderToolsSection = () => (
-    <ScrollArea className="flex-1">
+    <ScrollArea className="flex-1 min-h-0">
       <div className="p-3 space-y-1">
         <Accordion type="multiple" defaultValue={["codes"]} className="space-y-1">
           {/* QR/Barcode */}
@@ -332,14 +350,28 @@ export function EditorLeftSidebar() {
               <AIToolsPanel />
             </AccordionContent>
           </AccordionItem>
+
+          {/* Save as Template */}
+          <AccordionItem value="save-template" className="border rounded-lg px-3">
+            <AccordionContent className="pt-3 pb-3">
+              <TemplateCreator />
+            </AccordionContent>
+          </AccordionItem>
         </Accordion>
       </div>
     </ScrollArea>
   )
 
+  // Brand Kit Section Content
+  const renderBrandSection = () => (
+    <ScrollArea className="flex-1 min-h-0">
+      <BrandKitPanel />
+    </ScrollArea>
+  )
+
   // Layers Section Content
   const renderLayersSection = () => (
-    <ScrollArea className="flex-1">
+    <ScrollArea className="flex-1 min-h-0">
       <div className="p-3">
         <LayersPanel />
       </div>
@@ -352,30 +384,33 @@ export function EditorLeftSidebar() {
       case "add": return renderAddSection()
       case "assets": return renderAssetsSection()
       case "tools": return renderToolsSection()
+      case "brand": return renderBrandSection()
       case "layers": return renderLayersSection()
       default: return null
     }
   }
 
   return (
-    <aside className="w-72 bg-white border-r border-slate-200 flex flex-col h-full">
+    <aside className={`w-full bg-white ${isRTL ? "border-l" : "border-r"} border-slate-200 flex flex-col h-full min-h-0`}>
       {/* Tab Navigation */}
-      <div className="flex border-b border-slate-100 bg-slate-50/50">
+      <div className="flex border-b border-slate-100 bg-slate-50/50 overflow-x-auto" role="tablist">
         {MAIN_SECTIONS.map((section) => {
           const Icon = section.icon
           const isActive = activeSection === section.id
           return (
             <button
               key={section.id}
+              role="tab"
+              aria-selected={isActive}
               onClick={() => setActiveSection(section.id)}
               className={cn(
-                "flex-1 py-2.5 flex flex-col items-center gap-1 transition-all text-xs border-b-2",
+                "flex-1 py-2.5 flex flex-col items-center gap-1 transition-all text-xs border-b-2 min-w-0",
                 isActive
                   ? "text-slate-900 bg-white border-slate-900"
-                  : "text-slate-400 hover:text-slate-600 border-transparent"
+                  : "text-slate-400 hover:text-slate-600 hover:bg-slate-100 border-transparent"
               )}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-4 w-4" aria-hidden="true" />
               <span className="text-[10px] font-medium">
                 {language === "ar" ? section.label.ar : section.label.en}
               </span>

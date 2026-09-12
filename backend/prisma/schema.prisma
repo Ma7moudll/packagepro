@@ -92,28 +92,121 @@ enum NotificationType {
   settlement_completed
 }
 
+enum DesignLifecycleStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  IN_PRODUCTION
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  REGISTER
+  EMAIL_VERIFIED
+  PASSWORD_RESET
+  PASSWORD_CHANGED
+  MFA_ENABLED
+  MFA_DISABLED
+  TOKEN_REFRESH
+  TOKEN_REVOKED
+  PERMISSION_CHANGED
+}
+
+// Catalog / product-catalog enums (Packhelp-style domain)
+enum ProductCustomisation {
+  custom
+  plain
+  pre_printed
+}
+
+enum PrintMode {
+  none
+  mono
+  full_color
+}
+
+enum PrintSides {
+  outside_only
+  inside_outside
+  single
+  double
+}
+
 // ============================================
 // CORE MODELS
 // ============================================
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
+  id            String    @id @default(cuid())
+  email         String    @unique
   passwordHash  String
-  role          UserRole @default(CUSTOMER)
+  role          UserRole  @default(CUSTOMER)
   firstName     String?
   lastName      String?
   phone         String?
-  emailVerified Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  emailVerified Boolean   @default(false)
+  lastLoginAt   DateTime? // Track last successful login for audit
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // Relations
-  customer     Customer?
-  vendor       Vendor?
+  customer      Customer?
+  vendor        Vendor?
+  designs       Design[]
   notifications Notification[]
+  auditLogs     AuditLog[]
 
   @@map("users")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime? // Null until verified
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime? // Null until password reset
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model AuditLog {
+  id           String      @id @default(cuid())
+  userId       String
+  action       AuditAction
+  resource     String // e.g., "user:123", "order:456"
+  details      Json? // Flexible additional context
+  ipAddress    String?
+  userAgent    String?
+  success      Boolean     @default(true)
+  errorMessage String?
+  createdAt    DateTime    @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, action])
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
 }
 
 model Customer {
@@ -123,35 +216,36 @@ model Customer {
   updatedAt DateTime @updatedAt
 
   // Relations
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  orders Order[]
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders  Order[]
   reviews Review[]
+  cart    Cart?
 
   @@map("customers")
 }
 
 model Vendor {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  companyName     String
-  taxId           String?
-  address         String
-  city            String
-  country         String
-  postalCode      String?
-  latitude        Float?
-  longitude       Float?
-  phone           String?
-  email           String?
-  isActive        Boolean  @default(true)
-  qualityRating   Float    @default(0)
-  averageLeadTime Int?     // in days
-  minOrderQuantity Int?    // MOQ
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  companyName      String
+  taxId            String?
+  address          String
+  city             String
+  country          String
+  postalCode       String?
+  latitude         Float?
+  longitude        Float?
+  phone            String?
+  email            String?
+  isActive         Boolean  @default(true)
+  qualityRating    Float    @default(0)
+  averageLeadTime  Int? // in days
+  minOrderQuantity Int? // MOQ
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   // Relations
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   purchaseOrders PurchaseOrder[]
   handshakes     Handshake[]
   productions    Production[]
@@ -161,43 +255,43 @@ model Vendor {
 }
 
 model Order {
-  id                String      @id @default(cuid())
-  customerId        String
-  orderNumber       String      @unique
-  status            OrderStatus @default(pending_review)
-  
+  id          String      @id @default(cuid())
+  customerId  String
+  orderNumber String      @unique
+  status      OrderStatus @default(pending_review)
+
   // Pricing
-  subtotal          Decimal     @db.Decimal(10, 2)
-  tax               Decimal     @db.Decimal(10, 2)
-  shippingCost      Decimal     @db.Decimal(10, 2)
-  total             Decimal     @db.Decimal(10, 2)
-  
+  subtotal     Decimal @db.Decimal(10, 2)
+  tax          Decimal @db.Decimal(10, 2)
+  shippingCost Decimal @db.Decimal(10, 2)
+  total        Decimal @db.Decimal(10, 2)
+
   // Shipping
-  shippingAddress   Json        // Full address object
-  shippingName      String
-  shippingPhone     String
-  shippingEmail     String?
-  
+  shippingAddress Json // Full address object
+  shippingName    String
+  shippingPhone   String
+  shippingEmail   String?
+
   // Metadata
-  notes             String?     @db.Text
-  metadata          Json?       // Additional flexible data
-  
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  approvedAt        DateTime?
-  shippedAt         DateTime?
-  deliveredAt       DateTime?
-  completedAt       DateTime?
+  notes    String? @db.Text
+  metadata Json? // Additional flexible data
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  approvedAt  DateTime?
+  shippedAt   DateTime?
+  deliveredAt DateTime?
+  completedAt DateTime?
 
   // Relations
-  customer       Customer        @relation(fields: [customerId], references: [id])
-  items          OrderItem[]
-  design         Design?
-  purchaseOrder  PurchaseOrder?
-  shipment       Shipment?
-  payment        Payment?
-  settlement     Settlement?
-  reviews        Review[]
+  customer      Customer       @relation(fields: [customerId], references: [id])
+  items         OrderItem[]
+  design        Design?
+  purchaseOrder PurchaseOrder?
+  shipment      Shipment?
+  payment       Payment?
+  settlement    Settlement?
+  reviews       Review[]
 
   @@map("orders")
 }
@@ -205,53 +299,123 @@ model Order {
 model OrderItem {
   id          String   @id @default(cuid())
   orderId     String
-  productType String   // e.g., "box", "bag", "label"
+  productType String // e.g., "box", "bag", "label"
   quantity    Int
-  dimensions  Json     // {length, width, height, unit}
+  dimensions  Json // {length, width, height, unit}
   material    String?
   color       String?
   finish      String?
+  productId   String? // Catalog Product this line was configured from
+  variantId   String? // Specific ProductVariant (SKU)
+  sku         String? // Denormalized SKU for orders
+  config      Json? // Selected options snapshot at order time
+  designId    String? // Editor Design this line was configured from (M7-E traceability)
   unitPrice   Decimal  @db.Decimal(10, 2)
   totalPrice  Decimal  @db.Decimal(10, 2)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product?        @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
+  design  Design?         @relation(fields: [designId], references: [id], onDelete: SetNull)
 
+  @@index([designId])
   @@map("order_items")
 }
 
-model Design {
-  id              String   @id @default(cuid())
-  orderId         String   @unique
-  sessionId       String?  @unique
-  name            String?
-  description     String?
-  designData      Json?    // Editor state/JSON
-  status          String   @default("draft")
-  approvedAt      DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+// ============================================
+// CART (server-authoritative, one per customer)
+// ============================================
+
+model Cart {
+  id         String   @id @default(cuid())
+  customerId String   @unique
+  currency   String   @default("USD")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   // Relations
-  order     Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  files     DesignFile[]
-  prepressCheck PrePressCheck?
+  customer Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items    CartItem[]
 
+  @@map("carts")
+}
+
+model CartItem {
+  id           String   @id @default(cuid())
+  cartId       String
+  productType  String // "box", "bag", "label"
+  quantity     Int
+  dimensions   Json // {length, width, height, unit}
+  materialCode String?
+  color        String?
+  finish       String?
+  templateId   String? // Catalog template the item was configured from
+  sessionId    String? // Editor design-session reference (custom designs, no FK)
+  productId    String? // Catalog Product the item was configured from
+  variantId    String? // Specific ProductVariant (SKU) selected
+  sku          String? // Denormalized SKU for carts/orders
+  config       Json? // Selected options: {printColors, sides, finish, material, dimensions, ...}
+  designId     String? // Editor Design the item was configured from (M7-E traceability)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  cart     Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  template Template?       @relation(fields: [templateId], references: [id])
+  product  Product?        @relation(fields: [productId], references: [id])
+  variant  ProductVariant? @relation(fields: [variantId], references: [id])
+  design   Design?         @relation(fields: [designId], references: [id], onDelete: SetNull)
+
+  @@index([designId])
+  @@map("cart_items")
+}
+
+model Design {
+  id              String                @id @default(cuid())
+  orderId         String?               @unique
+  ownerId         String?
+  sessionId       String?               @unique
+  name            String?
+  description     String?
+  designData      Json? // Editor state/JSON
+  status          String                @default("draft")
+  lifecycleStatus DesignLifecycleStatus @default(DRAFT)
+  approvedAt      DateTime?
+  // M7: Product identity for catalog-driven designs
+  productId       String?
+  variantId       String?
+  sku             String?
+  designConfig    Json?  // Selected options at design time: {printCoverage, finish, ...}
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  // Relations
+  order         Order?         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  owner         User?          @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  files         DesignFile[]
+  prepressCheck PrePressCheck?
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
+
+  @@index([ownerId])
+  @@index([sessionId])
+  @@index([productId])
   @@map("designs")
 }
 
 model DesignFile {
-  id          String   @id @default(cuid())
-  designId    String
-  fileType    String   // "logo", "preview", "print_file", "dieline", "proof"
-  fileName    String
-  fileUrl     String   // S3/R2 URL
-  fileSize    Int?     // in bytes
-  mimeType    String?
-  metadata    Json?    // {width, height, dpi, colorMode, etc.}
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  designId  String
+  fileType  String // "logo", "preview", "print_file", "dieline", "proof"
+  fileName  String
+  fileUrl   String // S3/R2 URL
+  fileSize  Int? // in bytes
+  mimeType  String?
+  metadata  Json? // {width, height, dpi, colorMode, etc.}
+  createdAt DateTime @default(now())
 
   // Relations
   design Design @relation(fields: [designId], references: [id], onDelete: Cascade)
@@ -260,18 +424,18 @@ model DesignFile {
 }
 
 model PrePressCheck {
-  id              String   @id @default(cuid())
-  designId        String   @unique
-  resolutionOk    Boolean  @default(false)
-  colorModeOk     Boolean  @default(false)
-  bleedMarginsOk  Boolean  @default(false)
-  safeZoneOk      Boolean  @default(false)
-  fontsEmbedded   Boolean  @default(false)
-  passed          Boolean  @default(false)
-  issues          Json?    // Array of issue objects
+  id                 String   @id @default(cuid())
+  designId           String   @unique
+  resolutionOk       Boolean  @default(false)
+  colorModeOk        Boolean  @default(false)
+  bleedMarginsOk     Boolean  @default(false)
+  safeZoneOk         Boolean  @default(false)
+  fontsEmbedded      Boolean  @default(false)
+  passed             Boolean  @default(false)
+  issues             Json? // Array of issue objects
   fixedAutomatically Json? // Auto-fixes applied
-  checkedAt       DateTime @default(now())
-  checkedBy       String?  // System or admin ID
+  checkedAt          DateTime @default(now())
+  checkedBy          String? // System or admin ID
 
   // Relations
   design Design @relation(fields: [designId], references: [id], onDelete: Cascade)
@@ -280,72 +444,72 @@ model PrePressCheck {
 }
 
 model PurchaseOrder {
-  id              String   @id @default(cuid())
-  orderId         String   @unique
-  vendorId        String
-  poNumber        String   @unique
-  status          String   @default("pending")
-  
+  id       String @id @default(cuid())
+  orderId  String @unique
+  vendorId String
+  poNumber String @unique
+  status   String @default("pending")
+
   // Pricing
-  vendorCost      Decimal  @db.Decimal(10, 2)
-  currency        String   @default("USD")
-  
+  vendorCost Decimal @db.Decimal(10, 2)
+  currency   String  @default("USD")
+
   // Files
-  poDocumentUrl   String?  // PDF URL
-  printFileUrl    String?
-  dielineFileUrl  String?
-  specsFileUrl    String?
-  
+  poDocumentUrl  String? // PDF URL
+  printFileUrl   String?
+  dielineFileUrl String?
+  specsFileUrl   String?
+
   // Dates
   requestedDeliveryDate DateTime?
-  confirmedAt          DateTime?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  confirmedAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   // Relations
-  order       Order       @relation(fields: [orderId], references: [id])
-  vendor      Vendor      @relation(fields: [vendorId], references: [id])
-  handshake   Handshake?
-  production  Production?
+  order      Order       @relation(fields: [orderId], references: [id])
+  vendor     Vendor      @relation(fields: [vendorId], references: [id])
+  handshake  Handshake?
+  production Production?
 
   @@map("purchase_orders")
 }
 
 model Handshake {
-  id          String          @id @default(cuid())
-  poId        String          @unique
-  vendorId    String
-  status      HandshakeStatus @default(pending)
-  expiresAt   DateTime
-  acceptedAt  DateTime?
-  rejectedAt  DateTime?
-  rejectionReason String?     @db.Text
-  reminderSentAt2h  DateTime?
-  reminderSentAt3h  DateTime?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id               String          @id @default(cuid())
+  poId             String          @unique
+  vendorId         String
+  status           HandshakeStatus @default(pending)
+  expiresAt        DateTime
+  acceptedAt       DateTime?
+  rejectedAt       DateTime?
+  rejectionReason  String?         @db.Text
+  reminderSentAt2h DateTime?
+  reminderSentAt3h DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   // Relations
   purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
   vendor        Vendor        @relation(fields: [vendorId], references: [id])
 
-  @@map("handshakes")
   @@index([vendorId, status])
   @@index([expiresAt])
+  @@map("handshakes")
 }
 
 model Production {
-  id              String          @id @default(cuid())
-  poId            String          @unique
-  vendorId        String
-  status          ProductionStatus @default(not_started)
-  progressPercent Int             @default(0)
-  startedAt       DateTime?
-  completedAt     DateTime?
+  id                      String           @id @default(cuid())
+  poId                    String           @unique
+  vendorId                String
+  status                  ProductionStatus @default(not_started)
+  progressPercent         Int              @default(0)
+  startedAt               DateTime?
+  completedAt             DateTime?
   estimatedCompletionDate DateTime?
-  notes           String?         @db.Text
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  notes                   String?          @db.Text
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
 
   // Relations
   purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id])
@@ -356,16 +520,16 @@ model Production {
 }
 
 model Sample {
-  id          String       @id @default(cuid())
-  productionId String
-  status      SampleStatus @default(pending)
-  photoUrls   String[]     // Array of S3/R2 URLs
-  notes       String?      @db.Text
-  reviewedBy  String?      // Admin/QA user ID
-  reviewedAt  DateTime?
-  revisionNotes String?    @db.Text
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id            String       @id @default(cuid())
+  productionId  String
+  status        SampleStatus @default(pending)
+  photoUrls     String[] // Array of S3/R2 URLs
+  notes         String?      @db.Text
+  reviewedBy    String? // Admin/QA user ID
+  reviewedAt    DateTime?
+  revisionNotes String?      @db.Text
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   // Relations
   production Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
@@ -374,100 +538,100 @@ model Sample {
 }
 
 model Shipment {
-  id              String        @id @default(cuid())
-  orderId         String        @unique
-  dhlTrackingNumber String?     @unique
-  status          ShipmentStatus @default(created)
-  labelUrl        String?       // Shipping label PDF URL
-  weight          Decimal?      @db.Decimal(10, 2)
-  dimensions      Json?         // {length, width, height}
-  shippingMethod  String?       // "express", "standard"
+  id                    String         @id @default(cuid())
+  orderId               String         @unique
+  dhlTrackingNumber     String?        @unique
+  status                ShipmentStatus @default(created)
+  labelUrl              String? // Shipping label PDF URL
+  weight                Decimal?       @db.Decimal(10, 2)
+  dimensions            Json? // {length, width, height}
+  shippingMethod        String? // "express", "standard"
   estimatedDeliveryDate DateTime?
-  actualDeliveryDate DateTime?
-  trackingEvents  Json?         // Array of tracking events
-  podSignature    String?       // Proof of delivery
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  actualDeliveryDate    DateTime?
+  trackingEvents        Json? // Array of tracking events
+  podSignature          String? // Proof of delivery
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 
   // Relations
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  @@map("shipments")
   @@index([dhlTrackingNumber])
   @@index([status])
+  @@map("shipments")
 }
 
 model Payment {
-  id                String        @id @default(cuid())
-  orderId           String        @unique
-  stripePaymentIntentId String?   @unique
-  amount            Decimal       @db.Decimal(10, 2)
-  currency          String        @default("USD")
-  status            PaymentStatus @default(pending)
-  capturedAt        DateTime?
-  refundedAt        DateTime?
-  refundAmount      Decimal?      @db.Decimal(10, 2)
-  metadata          Json?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id                    String        @id @default(cuid())
+  orderId               String        @unique
+  stripePaymentIntentId String?       @unique
+  amount                Decimal       @db.Decimal(10, 2)
+  currency              String        @default("USD")
+  status                PaymentStatus @default(pending)
+  capturedAt            DateTime?
+  refundedAt            DateTime?
+  refundAmount          Decimal?      @db.Decimal(10, 2)
+  metadata              Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
   // Relations
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  @@map("payments")
   @@index([stripePaymentIntentId])
+  @@map("payments")
 }
 
 model Settlement {
-  id              String          @id @default(cuid())
-  orderId         String          @unique
-  vendorId        String
-  amount          Decimal         @db.Decimal(10, 2)
-  currency        String          @default("USD")
-  convertedAmount Decimal?        @db.Decimal(10, 2) // EGP amount
-  exchangeRate    Decimal?        @db.Decimal(10, 4)
-  status          SettlementStatus @default(pending)
+  id                       String           @id @default(cuid())
+  orderId                  String           @unique
+  vendorId                 String
+  amount                   Decimal          @db.Decimal(10, 2)
+  currency                 String           @default("USD")
+  convertedAmount          Decimal?         @db.Decimal(10, 2) // EGP amount
+  exchangeRate             Decimal?         @db.Decimal(10, 4)
+  status                   SettlementStatus @default(pending)
   verificationPeriodEndsAt DateTime
-  processedAt     DateTime?
-  bankTransferId  String?
-  receiptUrl      String?         // PDF receipt URL
-  notes           String?         @db.Text
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  processedAt              DateTime?
+  bankTransferId           String?
+  receiptUrl               String? // PDF receipt URL
+  notes                    String?          @db.Text
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
 
   // Relations
   order Order @relation(fields: [orderId], references: [id])
 
-  @@map("settlements")
   @@index([vendorId, status])
   @@index([verificationPeriodEndsAt])
+  @@map("settlements")
 }
 
 model Review {
-  id          String   @id @default(cuid())
-  orderId     String   @unique
-  customerId  String
-  vendorId    String
-  rating      Int      // 1-5 overall
-  qualityRating    Int // 1-5
-  speedRating      Int // 1-5
-  designRating     Int // 1-5
-  serviceRating    Int // 1-5
-  valueRating      Int // 1-5
-  comment     String?  @db.Text
-  photoUrls   String[] // Array of review photos
-  isPublic    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  orderId       String   @unique
+  customerId    String
+  vendorId      String
+  rating        Int // 1-5 overall
+  qualityRating Int // 1-5
+  speedRating   Int // 1-5
+  designRating  Int // 1-5
+  serviceRating Int // 1-5
+  valueRating   Int // 1-5
+  comment       String?  @db.Text
+  photoUrls     String[] // Array of review photos
+  isPublic      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Relations
   order    Order    @relation(fields: [orderId], references: [id])
   customer Customer @relation(fields: [customerId], references: [id])
   vendor   Vendor   @relation(fields: [vendorId], references: [id])
 
-  @@map("reviews")
   @@index([vendorId])
   @@index([rating])
+  @@map("reviews")
 }
 
 model Notification {
@@ -476,7 +640,7 @@ model Notification {
   type      NotificationType
   title     String
   message   String           @db.Text
-  link      String?          // URL to relevant page
+  link      String? // URL to relevant page
   read      Boolean          @default(false)
   metadata  Json?
   createdAt DateTime         @default(now())
@@ -485,9 +649,9 @@ model Notification {
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("notifications")
   @@index([userId, read])
   @@index([createdAt])
+  @@map("notifications")
 }
 
 // ============================================
@@ -498,50 +662,210 @@ model Material {
   id          String   @id @default(cuid())
   name        String   @unique
   code        String   @unique
-  unitPrice   Decimal  @db.Decimal(10, 4) // Price per square unit
+  unitPrice   Decimal  @db.Decimal(10, 6) // Price per square unit
   currency    String   @default("USD")
   isActive    Boolean  @default(true)
   lastUpdated DateTime @default(now()) @updatedAt
-  metadata    Json?    // Additional material properties
+  metadata    Json? // Additional material properties
 
   @@map("materials")
 }
 
 model PricingRule {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   productType String
-  ruleType    String   // "margin", "fixed", "formula"
-  value       Decimal  @db.Decimal(10, 4)
+  ruleType    String // "margin", "fixed", "formula"
+  value       Decimal   @db.Decimal(10, 4)
   minQuantity Int?
   maxQuantity Int?
-  isActive    Boolean  @default(true)
-  validFrom   DateTime @default(now())
+  isActive    Boolean   @default(true)
+  validFrom   DateTime  @default(now())
   validUntil  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  // Scope: where the rule applies. "productType" (legacy global rule) is the
+  // default; "product" and "variant" narrow the rule to a single catalog
+  // Product / ProductVariant via scopeId.
+  scope       String    @default("productType") // productType | product | variant
+  scopeId     String? // Product or ProductVariant id when scope != productType
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  @@map("pricing_rules")
   @@index([productType, isActive])
+  @@index([scope, scopeId])
+  @@map("pricing_rules")
 }
 
 model Template {
   id          String   @id @default(cuid())
   name        String
   description String?  @db.Text
-  category    String   // "business", "event", "celebration", "industry-specific"
-  thumbnail   String   // URL to thumbnail image
-  designData  Json     // Template design data (Fabric.js JSON)
+  category    String // "business", "event", "celebration", "industry-specific"
+  thumbnail   String // URL to thumbnail image
+  designData  Json // Template design data (Fabric.js JSON)
   productType String   @default("box") // "box", "bag", "cup", "tube"
-  boxType     String?  // "mailer-box", "gift-box", etc.
+  boxType     String? // "mailer-box", "gift-box", etc.
   isPublic    Boolean  @default(true)
-  createdBy   String?  // User ID who created (null for system templates)
+  createdBy   String? // User ID who created (null for system templates)
   usageCount  Int      @default(0)
   tags        String[] // Array of tags for search/filtering
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@map("templates")
+  // Relations
+  cartItems CartItem[]
+
   @@index([category])
   @@index([isPublic])
   @@index([productType])
+  @@map("templates")
+}
+
+// ============================================
+// PRODUCT CATALOG (Packhelp-style: category -> subcategory -> product -> variant/options)
+// ============================================
+
+model ProductCategory {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  description  String?  @db.Text
+  image        String?
+  sortOrder    Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  subcategories ProductSubcategory[]
+
+  @@index([isActive, sortOrder])
+  @@map("product_categories")
+}
+
+model ProductSubcategory {
+  id          String   @id @default(cuid())
+  categoryId  String
+  slug        String   @unique
+  name        String
+  description String?  @db.Text
+  image       String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  category ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@index([categoryId, isActive])
+  @@map("product_subcategories")
+}
+
+model Product {
+  id              String    @id @default(cuid())
+  subcategoryId   String
+  slug            String    @unique
+  name            String
+  shortDescription String?  @db.Text
+  description     String?   @db.Text
+  customisation   ProductCustomisation @default(custom)
+  productType     String    @default("box") // "box" | "bag" | "label" — drives pricing engine
+  boxType         String? // "mailer-box", "folding-carton", "rigid-box", "paper-bag", "poly-mailer", "label", ...
+  moq             Int       @default(30)
+  sizeUnit        String    @default("cm") // "cm" | "mm" | "inch"
+  baseSizes       Json? // [{ code, name, length, width, height }] in sizeUnit — null => fully custom
+  minDimensions   Json? // { length, width, height } floor for custom sizing
+  maxDimensions   Json? // { length, width, height } ceiling for custom sizing
+  priceFrom       Decimal?  @db.Decimal(10, 2) // catalog anchor price (lowest tier)
+  thumbnail       String?
+  gallery         String[]
+  ecoFlags        Json? // { ecoChoice, fsc, recycled, biodegradable, reusable, recycledContent }
+  filters         Json? // industry / use-case / size / colour tags for catalog filtering
+  editorDefaults  Json? // { faces, material, color, print, finish, glueType } used by editor
+  isActive        Boolean   @default(true)
+  isBestseller    Boolean   @default(false)
+  isNew           Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  subcategory ProductSubcategory  @relation(fields: [subcategoryId], references: [id])
+  variants    ProductVariant[]
+  options     ProductOption[]
+  optionValues ProductOptionValue[]
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+
+  @@index([subcategoryId, isActive])
+  @@index([productType, isActive])
+  @@index([customisation])
+  @@map("products")
+}
+
+model ProductVariant {
+  id           String    @id @default(cuid())
+  productId    String
+  sku          String    @unique // family--model--size--colour--print--finish
+  sizeCode     String? // from product.baseSizes (null => custom size)
+  materialCode String? // fixed material when the variant is material-specific
+  color        String? // kraft / white / black / grey / clear / natural
+  printMode    PrintMode @default(none)
+  printSides   PrintSides @default(outside_only)
+  finish       String?   @default("none") // none | foil-gold | foil-silver | spot-uv | gloss-lam | matte-lam
+  dimensions   Json // resolved { length, width, height, unit }
+  isActive     Boolean   @default(true)
+  isDefault    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  product   Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems CartItem[]
+  orderItems OrderItem[]
+
+  @@index([productId, isActive])
+  @@index([materialCode])
+  @@map("product_variants")
+}
+
+model ProductOption {
+  id        String  @id @default(cuid())
+  productId String
+  key       String // "printColors" | "sides" | "finish" | "material" | "handle" | "closure" | "insert"
+  label     String
+  control   String  @default("select") // "select" | "radio" | "checkbox" | "toggle"
+  required  Boolean @default(false)
+  sortOrder Int     @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  product Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  values  ProductOptionValue[]
+
+  @@index([productId, sortOrder])
+  @@map("product_options")
+}
+
+model ProductOptionValue {
+  id         String   @id @default(cuid())
+  optionId   String
+  productId  String // denormalized for pricing lookups
+  label      String
+  value      String
+  priceDelta Decimal? @db.Decimal(10, 4)
+  priceType  String   @default("per_unit") // "per_unit" | "fixed" | "percent"
+  appliesTo  Json? // optional { materials: ["kraft"], printModes: ["full_color"], sizes: [...] }
+  isDefault  Boolean  @default(false)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  option  ProductOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  product Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([optionId, sortOrder])
+  @@index([productId])
+  @@map("product_option_values")
 }

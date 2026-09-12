@@ -8,8 +8,9 @@ const workflows: any[] = []
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -17,7 +18,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const workflow = workflows.find((w) => w.projectId === params.id)
+    const workflow = workflows.find((w) => w.projectId === id)
 
     if (!workflow) {
       return NextResponse.json({ error: "Workflow not found" }, { status: 404 })
@@ -32,8 +33,9 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -41,7 +43,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const project = projects.find((p) => p.id === params.id)
+    const project = projects.find((p) => p.id === id)
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
@@ -57,7 +59,7 @@ export async function POST(
 
     const workflow = {
       id: `workflow-${nanoid()}`,
-      projectId: params.id,
+      projectId: id,
       name: name || "Approval Workflow",
       steps: steps.map((step: any, index: number) => ({
         ...step,

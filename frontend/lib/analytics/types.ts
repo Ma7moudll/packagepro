@@ -14,6 +14,8 @@ export type EventType =
   | "file_uploaded"
   | "error_occurred"
   | "performance_metric"
+  | "ab_test_assigned"
+  | "ab_test_conversion"
 
 export interface AnalyticsEvent {
   id: string

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { useLanguage } from "@/providers/language-provider"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { ColorPicker } from "@/components/editor/panels/ColorPicker"
 import {
   Select,
   SelectContent,
@@ -27,9 +28,9 @@ import {
   Type,
   Palette,
   Sparkles,
+  ArrowUpDown,
 } from "lucide-react"
 
-// Google Fonts list (popular fonts for packaging)
 const FONT_FAMILIES = [
   { name: "Inter", category: "sans-serif" },
   { name: "Roboto", category: "sans-serif" },
@@ -51,7 +52,6 @@ const FONT_FAMILIES = [
   { name: "Great Vibes", category: "handwriting" },
   { name: "Lobster", category: "display" },
   { name: "Anton", category: "sans-serif" },
-  // Arabic fonts
   { name: "Cairo", category: "arabic" },
   { name: "Tajawal", category: "arabic" },
   { name: "Almarai", category: "arabic" },
@@ -59,7 +59,6 @@ const FONT_FAMILIES = [
   { name: "Noto Sans Arabic", category: "arabic" },
 ]
 
-// Text presets
 const TEXT_PRESETS = [
   {
     id: "heading-bold",
@@ -91,7 +90,6 @@ const TEXT_PRESETS = [
       fontWeight: 500,
       letterSpacing: 4,
       lineHeight: 1.4,
-      textTransform: "uppercase",
     },
   },
   {
@@ -118,20 +116,6 @@ const TEXT_PRESETS = [
   },
 ]
 
-interface TextShadow {
-  enabled: boolean
-  offsetX: number
-  offsetY: number
-  blur: number
-  color: string
-}
-
-interface TextOutline {
-  enabled: boolean
-  width: number
-  color: string
-}
-
 export function TextStylesPanel() {
   const { language } = useLanguage()
   const layers = useDesignStore((s) => s.layers)
@@ -142,24 +126,6 @@ export function TextStylesPanel() {
     (l) => selectedIds.includes(l.id) && l.type === "text"
   )
 
-  const [shadow, setShadow] = useState<TextShadow>({
-    enabled: false,
-    offsetX: 2,
-    offsetY: 2,
-    blur: 4,
-    color: "#000000",
-  })
-
-  const [outline, setOutline] = useState<TextOutline>({
-    enabled: false,
-    width: 1,
-    color: "#000000",
-  })
-
-  const [gradientEnabled, setGradientEnabled] = useState(false)
-  const [gradientColors, setGradientColors] = useState(["#000000", "#666666"])
-
-  // Update text properties helper
   const updateTextProp = (key: string, value: any) => {
     if (!selectedLayer) return
     updateLayer(selectedLayer.id, (l) => ({
@@ -171,7 +137,78 @@ export function TextStylesPanel() {
     }))
   }
 
-  // Apply preset
+  const updateShadow = (key: string, value: any) => {
+    if (!selectedLayer) return
+    const current = selectedLayer.textProperties?.shadow ?? {
+      offsetX: 2,
+      offsetY: 2,
+      blur: 4,
+      color: "#000000",
+    }
+    updateLayer(selectedLayer.id, (l) => ({
+      ...l,
+      textProperties: {
+        ...l.textProperties!,
+        shadow: { ...current, [key]: value },
+      },
+    }))
+  }
+
+  const toggleShadow = () => {
+    if (!selectedLayer) return
+    const tp = selectedLayer.textProperties!
+    if (tp.shadow) {
+      const { shadow, ...rest } = tp
+      updateLayer(selectedLayer.id, (l) => ({
+        ...l,
+        textProperties: rest,
+      }))
+    } else {
+      updateLayer(selectedLayer.id, (l) => ({
+        ...l,
+        textProperties: {
+          ...l.textProperties!,
+          shadow: { offsetX: 2, offsetY: 2, blur: 4, color: "#000000" },
+        },
+      }))
+    }
+  }
+
+  const updateStroke = (key: string, value: any) => {
+    if (!selectedLayer) return
+    const current = selectedLayer.textProperties?.stroke ?? {
+      width: 1,
+      color: "#000000",
+    }
+    updateLayer(selectedLayer.id, (l) => ({
+      ...l,
+      textProperties: {
+        ...l.textProperties!,
+        stroke: { ...current, [key]: value },
+      },
+    }))
+  }
+
+  const toggleStroke = () => {
+    if (!selectedLayer) return
+    const tp = selectedLayer.textProperties!
+    if (tp.stroke) {
+      const { stroke, ...rest } = tp
+      updateLayer(selectedLayer.id, (l) => ({
+        ...l,
+        textProperties: rest,
+      }))
+    } else {
+      updateLayer(selectedLayer.id, (l) => ({
+        ...l,
+        textProperties: {
+          ...l.textProperties!,
+          stroke: { width: 1, color: "#000000" },
+        },
+      }))
+    }
+  }
+
   const applyPreset = (preset: (typeof TEXT_PRESETS)[0]) => {
     if (!selectedLayer) return
     updateLayer(selectedLayer.id, (l) => ({
@@ -192,7 +229,10 @@ export function TextStylesPanel() {
     )
   }
 
-  const { textProperties } = selectedLayer
+  const tp = selectedLayer.textProperties
+  const shadow = tp.shadow
+  const stroke = tp.stroke
+  const curveRadius = tp.curveRadius ?? 0
 
   return (
     <ScrollArea className="h-full">
@@ -201,7 +241,7 @@ export function TextStylesPanel() {
         <div className="space-y-2">
           <Label className="text-xs font-bold">{language === "ar" ? "الخط" : "Font Family"}</Label>
           <Select
-            value={textProperties.fontFamily}
+            value={tp.fontFamily}
             onValueChange={(v) => updateTextProp("fontFamily", v)}
           >
             <SelectTrigger className="h-9">
@@ -223,7 +263,7 @@ export function TextStylesPanel() {
             <Label className="text-xs font-bold">{language === "ar" ? "الحجم" : "Size"}</Label>
             <Input
               type="number"
-              value={textProperties.fontSize}
+              value={tp.fontSize}
               onChange={(e) => updateTextProp("fontSize", parseInt(e.target.value) || 16)}
               className="h-9"
             />
@@ -231,7 +271,7 @@ export function TextStylesPanel() {
           <div className="space-y-2">
             <Label className="text-xs font-bold">{language === "ar" ? "الوزن" : "Weight"}</Label>
             <Select
-              value={textProperties.fontWeight.toString()}
+              value={tp.fontWeight.toString()}
               onValueChange={(v) => updateTextProp("fontWeight", parseInt(v))}
             >
               <SelectTrigger className="h-9">
@@ -257,10 +297,10 @@ export function TextStylesPanel() {
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <Label className="text-xs font-bold">{language === "ar" ? "ارتفاع السطر" : "Line Height"}</Label>
-              <span className="text-[10px] font-mono text-slate-500">{textProperties.lineHeight.toFixed(1)}</span>
+              <span className="text-[10px] font-mono text-slate-500">{tp.lineHeight.toFixed(1)}</span>
             </div>
             <Slider
-              value={[textProperties.lineHeight * 10]}
+              value={[tp.lineHeight * 10]}
               onValueChange={([v]) => updateTextProp("lineHeight", v / 10)}
               min={8}
               max={30}
@@ -271,10 +311,10 @@ export function TextStylesPanel() {
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <Label className="text-xs font-bold">{language === "ar" ? "تباعد الحروف" : "Letter Spacing"}</Label>
-              <span className="text-[10px] font-mono text-slate-500">{textProperties.letterSpacing}px</span>
+              <span className="text-[10px] font-mono text-slate-500">{tp.letterSpacing}px</span>
             </div>
             <Slider
-              value={[textProperties.letterSpacing + 10]}
+              value={[tp.letterSpacing + 10]}
               onValueChange={([v]) => updateTextProp("letterSpacing", v - 10)}
               min={0}
               max={30}
@@ -295,7 +335,7 @@ export function TextStylesPanel() {
             ].map(({ value, icon: Icon }) => (
               <Button
                 key={value}
-                variant={textProperties.align === value ? "secondary" : "ghost"}
+                variant={tp.align === value ? "secondary" : "ghost"}
                 size="sm"
                 className="flex-1 h-8"
                 onClick={() => updateTextProp("align", value)}
@@ -309,19 +349,52 @@ export function TextStylesPanel() {
         {/* Text Color */}
         <div className="space-y-2">
           <Label className="text-xs font-bold">{language === "ar" ? "اللون" : "Color"}</Label>
-          <div className="flex gap-2">
-            <input
-              type="color"
-              value={textProperties.color}
-              onChange={(e) => updateTextProp("color", e.target.value)}
-              className="w-10 h-9 rounded cursor-pointer"
-            />
+          <div className="flex items-center gap-2">
+            <ColorPicker value={tp.color} onChange={(c) => updateTextProp("color", c)} size="md" />
             <Input
-              value={textProperties.color}
+              value={tp.color}
               onChange={(e) => updateTextProp("color", e.target.value)}
               className="h-9 font-mono text-xs flex-1"
             />
           </div>
+        </div>
+
+        {/* Curve Text */}
+        <div className="space-y-3 p-3 bg-slate-50 rounded-lg">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-bold flex items-center gap-1.5">
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              {language === "ar" ? "نص منحني" : "Curved Text"}
+            </Label>
+            <Button
+              variant={curveRadius !== 0 ? "secondary" : "outline"}
+              size="sm"
+              className="h-6 text-[10px]"
+              onClick={() => updateTextProp("curveRadius", curveRadius !== 0 ? 0 : 150)}
+            >
+              {curveRadius !== 0 ? (language === "ar" ? "مفعّل" : "On") : (language === "ar" ? "معطّل" : "Off")}
+            </Button>
+          </div>
+          {curveRadius !== 0 && (
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <Label className="text-[10px]">{language === "ar" ? "نصف القطر" : "Radius"}</Label>
+                <span className="text-[10px] font-mono text-slate-500">{curveRadius}px</span>
+              </div>
+              <Slider
+                value={[curveRadius]}
+                onValueChange={([v]) => updateTextProp("curveRadius", v)}
+                min={30}
+                max={500}
+                step={10}
+              />
+              <p className="text-[9px] text-slate-400">
+                {language === "ar"
+                  ? "نصف قطر أصغر = انحناء أكبر"
+                  : "Smaller radius = tighter curve"}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Text Shadow */}
@@ -329,15 +402,15 @@ export function TextStylesPanel() {
           <div className="flex items-center justify-between">
             <Label className="text-xs font-bold">{language === "ar" ? "الظل" : "Text Shadow"}</Label>
             <Button
-              variant={shadow.enabled ? "secondary" : "outline"}
+              variant={shadow ? "secondary" : "outline"}
               size="sm"
               className="h-6 text-[10px]"
-              onClick={() => setShadow({ ...shadow, enabled: !shadow.enabled })}
+              onClick={toggleShadow}
             >
-              {shadow.enabled ? (language === "ar" ? "مفعّل" : "On") : (language === "ar" ? "معطّل" : "Off")}
+              {shadow ? (language === "ar" ? "مفعّل" : "On") : (language === "ar" ? "معطّل" : "Off")}
             </Button>
           </div>
-          {shadow.enabled && (
+          {shadow && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -345,7 +418,7 @@ export function TextStylesPanel() {
                   <Input
                     type="number"
                     value={shadow.offsetX}
-                    onChange={(e) => setShadow({ ...shadow, offsetX: parseInt(e.target.value) || 0 })}
+                    onChange={(e) => updateShadow("offsetX", parseInt(e.target.value) || 0)}
                     className="h-7 text-xs"
                   />
                 </div>
@@ -354,7 +427,7 @@ export function TextStylesPanel() {
                   <Input
                     type="number"
                     value={shadow.offsetY}
-                    onChange={(e) => setShadow({ ...shadow, offsetY: parseInt(e.target.value) || 0 })}
+                    onChange={(e) => updateShadow("offsetY", parseInt(e.target.value) || 0)}
                     className="h-7 text-xs"
                   />
                 </div>
@@ -363,21 +436,16 @@ export function TextStylesPanel() {
                 <Label className="text-[10px]">{language === "ar" ? "تمويه" : "Blur"}</Label>
                 <Slider
                   value={[shadow.blur]}
-                  onValueChange={([v]) => setShadow({ ...shadow, blur: v })}
+                  onValueChange={([v]) => updateShadow("blur", v)}
                   min={0}
                   max={20}
                 />
               </div>
-              <div className="flex gap-2">
-                <input
-                  type="color"
-                  value={shadow.color}
-                  onChange={(e) => setShadow({ ...shadow, color: e.target.value })}
-                  className="w-8 h-7 rounded cursor-pointer"
-                />
+              <div className="flex items-center gap-2">
+                <ColorPicker value={shadow.color} onChange={(c) => updateShadow("color", c)} size="sm" />
                 <Input
                   value={shadow.color}
-                  onChange={(e) => setShadow({ ...shadow, color: e.target.value })}
+                  onChange={(e) => updateShadow("color", e.target.value)}
                   className="h-7 text-[10px] font-mono flex-1"
                 />
               </div>
@@ -390,35 +458,30 @@ export function TextStylesPanel() {
           <div className="flex items-center justify-between">
             <Label className="text-xs font-bold">{language === "ar" ? "الإطار" : "Outline"}</Label>
             <Button
-              variant={outline.enabled ? "secondary" : "outline"}
+              variant={stroke ? "secondary" : "outline"}
               size="sm"
               className="h-6 text-[10px]"
-              onClick={() => setOutline({ ...outline, enabled: !outline.enabled })}
+              onClick={toggleStroke}
             >
-              {outline.enabled ? (language === "ar" ? "مفعّل" : "On") : (language === "ar" ? "معطّل" : "Off")}
+              {stroke ? (language === "ar" ? "مفعّل" : "On") : (language === "ar" ? "معطّل" : "Off")}
             </Button>
           </div>
-          {outline.enabled && (
+          {stroke && (
             <div className="space-y-3">
               <div>
                 <Label className="text-[10px]">{language === "ar" ? "السماكة" : "Width"}</Label>
                 <Slider
-                  value={[outline.width]}
-                  onValueChange={([v]) => setOutline({ ...outline, width: v })}
+                  value={[stroke.width]}
+                  onValueChange={([v]) => updateStroke("width", v)}
                   min={1}
                   max={10}
                 />
               </div>
-              <div className="flex gap-2">
-                <input
-                  type="color"
-                  value={outline.color}
-                  onChange={(e) => setOutline({ ...outline, color: e.target.value })}
-                  className="w-8 h-7 rounded cursor-pointer"
-                />
+              <div className="flex items-center gap-2">
+                <ColorPicker value={stroke.color} onChange={(c) => updateStroke("color", c)} size="sm" />
                 <Input
-                  value={outline.color}
-                  onChange={(e) => setOutline({ ...outline, color: e.target.value })}
+                  value={stroke.color}
+                  onChange={(e) => updateStroke("color", e.target.value)}
                   className="h-7 text-[10px] font-mono flex-1"
                 />
               </div>
@@ -452,21 +515,26 @@ export function TextStylesPanel() {
           <p className="text-[10px] text-slate-400 mb-2">{language === "ar" ? "معاينة" : "Preview"}</p>
           <p
             style={{
-              fontFamily: textProperties.fontFamily,
-              fontSize: Math.min(textProperties.fontSize, 32),
-              fontWeight: textProperties.fontWeight,
-              letterSpacing: textProperties.letterSpacing,
-              lineHeight: textProperties.lineHeight,
-              color: textProperties.color,
-              textAlign: textProperties.align as any,
-              textShadow: shadow.enabled
+              fontFamily: tp.fontFamily,
+              fontSize: Math.min(tp.fontSize, 32),
+              fontWeight: tp.fontWeight,
+              letterSpacing: tp.letterSpacing,
+              lineHeight: tp.lineHeight,
+              color: tp.color,
+              textAlign: tp.align as any,
+              textShadow: shadow
                 ? `${shadow.offsetX}px ${shadow.offsetY}px ${shadow.blur}px ${shadow.color}`
                 : "none",
-              WebkitTextStroke: outline.enabled ? `${outline.width}px ${outline.color}` : "none",
+              WebkitTextStroke: stroke ? `${stroke.width}px ${stroke.color}` : "none",
             }}
           >
-            {textProperties.content.slice(0, 50) || "Sample Text"}
+            {tp.content.slice(0, 50) || "Sample Text"}
           </p>
+          {curveRadius !== 0 && (
+            <p className="text-[9px] text-blue-500 mt-1">
+              {language === "ar" ? "سيتم عرض النص على شكل منحني" : "Text will appear curved on canvas"}
+            </p>
+          )}
         </div>
       </div>
     </ScrollArea>

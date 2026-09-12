@@ -9,9 +9,9 @@ import { Download, ZoomIn, ZoomOut, Move } from "lucide-react"
 
 export function DielineCanvas() {
   const { language } = useLanguage()
-  const model = useDesignStore((s) => s.history.present.model)
-  const canvas = useDesignStore((s) => s.history.present.canvas)
-  const selectedFace = useDesignStore((s) => s.history.present.ui.selectedFace)
+  const model = useDesignStore((s) => s.model)
+  const canvas = useDesignStore((s) => s.canvas)
+  const selectedFace = useDesignStore((s) => s.ui.selectedFace)
   const setSelectedFace = useDesignStore((s) => s.setSelectedFace)
 
   const containerRef = useRef<HTMLDivElement>(null)

@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma';
 import { NotFoundError, ValidationError } from '../../utils/errors';
 import { OrderStatus } from '../../types';
 import { pricingService } from '../../services/pricing-engine/pricing.service';
+import { notificationService } from '../notifications/notifications.service';
 import { randomUUID } from 'crypto';
 
 export interface CreateOrderData {
@@ -18,6 +19,14 @@ export interface CreateOrderData {
     materialCode?: string;
     color?: string;
     finish?: string;
+    // M7: Catalog traceability
+    productId?: string;
+    variantId?: string;
+    sku?: string;
+    config?: Record<string, unknown>;
+    designId?: string;
+    templateId?: string;
+    sessionId?: string;
   }>;
   shippingAddress: {
     name: string;
@@ -59,15 +68,31 @@ export class OrderService {
       throw new NotFoundError('Customer');
     }
 
-    // Calculate pricing for each item
+    // Calculate pricing for each item. Catalog lines (productId + variantId)
+    // follow the authoritative quoteCatalog path exactly like the cart; bare
+    // productType lines fall back to the legacy heuristic.
     const orderItems = await Promise.all(
       data.items.map(async (item) => {
-        const pricing = await pricingService.calculatePrice({
-          productType: item.productType,
-          quantity: item.quantity,
-          dimensions: item.dimensions,
-          materialCode: item.materialCode,
-        });
+        const isCatalog = Boolean(item.variantId) && Boolean(item.productId);
+        const pricing = isCatalog
+          ? await pricingService.quoteCatalog({
+              productId: item.productId!,
+              variantId: item.variantId!,
+              quantity: item.quantity,
+              dimensions: item.dimensions,
+              config: (item.config as Record<string, string>) ?? undefined,
+            })
+          : await pricingService.calculatePrice({
+              productType: item.productType,
+              quantity: item.quantity,
+              dimensions: item.dimensions,
+              materialCode: item.materialCode,
+            });
+
+        // Line total EXCLUDES shipping; shipping is aggregated separately so
+        // it is not double-counted in the order total.
+        const lineTotal =
+          pricing.breakdown.subtotal + pricing.breakdown.tax;
 
         return {
           productType: item.productType,
@@ -76,20 +101,28 @@ export class OrderService {
           material: item.materialCode,
           color: item.color,
           finish: item.finish,
-          unitPrice: pricing.totalPrice / item.quantity,
-          totalPrice: pricing.totalPrice,
+          unitPrice: lineTotal / item.quantity,
+          totalPrice: lineTotal,
+          tax: pricing.breakdown.tax,
+          shippingEstimate: pricing.breakdown.shippingEstimate,
           pricing,
+          // M7/M7-E: Catalog + design traceability passthrough
+          productId: item.productId,
+          variantId: item.variantId,
+          sku: item.sku,
+          config: item.config,
+          designId: item.designId,
         };
       })
     );
 
     // Calculate totals
     const subtotal = orderItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    const tax = orderItems.reduce((sum, item) => sum + item.tax, 0);
     const shippingCost = orderItems.reduce(
-      (sum, item) => sum + item.pricing.breakdown.shippingEstimate,
+      (sum, item) => sum + item.shippingEstimate,
       0
     );
-    const tax = 0; // Calculate tax based on location
     const total = subtotal + tax + shippingCost;
 
     // Create order
@@ -117,6 +150,12 @@ export class OrderService {
             finish: item.finish,
             unitPrice: item.unitPrice,
             totalPrice: item.totalPrice,
+            // M7/M7-E: Catalog + design traceability
+            ...(item.productId && { productId: item.productId }),
+            ...(item.variantId && { variantId: item.variantId }),
+            ...(item.sku && { sku: item.sku }),
+            ...(item.config && { config: item.config as any }),
+            ...(item.designId && { designId: item.designId }),
           })),
         },
       },
@@ -126,6 +165,7 @@ export class OrderService {
           include: {
             user: {
               select: {
+                id: true,
                 email: true,
                 firstName: true,
                 lastName: true,
@@ -135,6 +175,19 @@ export class OrderService {
         },
       },
     });
+
+    if (order.customer.user.id) {
+      await notificationService.createIfUnseen(
+        order.customer.user.id,
+        { entityType: 'order', entityId: order.id },
+        {
+          type: 'order_created',
+          title: `Order ${order.orderNumber} created`,
+          message: `Your order ${order.orderNumber} was received and is pending review.`,
+          link: `/orders/${order.id}`,
+        }
+      );
+    }
 
     // Link design if session ID provided
     if (data.designSessionId) {
@@ -277,7 +330,45 @@ export class OrderService {
         ...(status === 'delivered' && { deliveredAt: new Date() }),
         ...(status === 'completed' && { completedAt: new Date() }),
       },
+      include: {
+        customer: {
+          include: {
+            user: {
+              select: { id: true },
+            },
+          },
+        },
+      },
     });
+
+    const customerUserId = updatedOrder.customer?.user?.id;
+    if (customerUserId) {
+      if (status === 'delivered') {
+        await notificationService.createIfUnseen(
+          customerUserId,
+          { entityType: 'order', entityId: orderId },
+          {
+            type: 'delivery_confirmed',
+            title: `Order ${updatedOrder.orderNumber} delivered`,
+            message: `Your order ${updatedOrder.orderNumber} has been delivered.`,
+            link: `/orders/${orderId}`,
+          }
+        );
+      }
+
+      if (status === 'completed') {
+        await notificationService.createIfUnseen(
+          customerUserId,
+          { entityType: 'order', entityId: orderId },
+          {
+            type: 'review_requested',
+            title: `Share your feedback on ${updatedOrder.orderNumber}`,
+            message: `Your order ${updatedOrder.orderNumber} is complete. We'd love your review.`,
+            link: `/reviews`,
+          }
+        );
+      }
+    }
 
     return updatedOrder;
   }

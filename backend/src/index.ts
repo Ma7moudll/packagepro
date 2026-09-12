@@ -2,7 +2,7 @@ import 'dotenv/config';
 import Fastify, { FastifyError, FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
-import { connectRedis } from './lib/redis';
+import { connectRedis, isRedisEnabled, getRedisClient } from './lib/redis';
 import { logger } from './utils/logger';
 import { AppError } from './utils/errors';
 
@@ -12,6 +12,10 @@ const server = Fastify({
   logger: process.env.NODE_ENV === 'development',
   requestIdLogLabel: 'reqId',
   genReqId: () => crypto.randomUUID(),
+  // Only trust X-Forwarded-For when explicitly behind a reverse proxy.
+  // Keeps request.ip equal to the socket address in direct deployments,
+  // preventing header spoofing from bypassing per-IP rate limits.
+  trustProxy: process.env.TRUST_PROXY === 'true',
 });
 
 // Register plugins
@@ -41,13 +45,35 @@ async function registerPlugins() {
     credentials: true,
   });
 
-  // Rate limiting
+  // Rate limiting — per-IP (per-user when authenticated), Redis-backed when available.
+  // With Redis the bucket is shared across all server instances; without it the
+  // in-memory store is used (graceful degradation).
+  const redis = isRedisEnabled() ? getRedisClient() : null;
   await server.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
-    keyGenerator: (_request) => {
-      // Simple IP-based rate limiting (in production use Redis/user ID)
-      return 'global'; // For dev
+    redis,
+    keyGenerator: (request: FastifyRequest) => {
+      // Normalize IPv4-mapped IPv6 (::ffff:127.0.0.1 -> 127.0.0.1)
+      const ip = (request.ip || request.socket.remoteAddress || 'unknown').replace(/^::ffff:/, '');
+
+      // Account-level throttling for authenticated requests so one shared-IP
+      // user cannot drain the IP bucket (and vice versa).
+      const auth = request.headers.authorization;
+      if (auth?.startsWith('Bearer ')) {
+        try {
+          const payload = JSON.parse(
+            Buffer.from(auth.slice(7).split('.')[1] ?? '', 'base64url').toString('utf8')
+          );
+          if (typeof payload.sub === 'string') {
+            return `${ip}:${payload.sub}`;
+          }
+        } catch {
+          // Malformed token — fall back to IP-only key
+        }
+      }
+
+      return ip;
     },
   });
 }
@@ -136,6 +162,9 @@ server.get('/', async () => {
       vendors: '/api/vendors',
       analytics: '/api/analytics',
       templates: '/api/templates',
+      notifications: '/api/notifications',
+      cart: '/api/cart',
+      checkout: '/api/checkout',
     },
   };
 });
@@ -199,6 +228,11 @@ async function registerRoutes() {
   const { vendorRoutes } = await import('./modules/vendors/vendor.routes');
   const { analyticsRoutes } = await import('./modules/analytics/analytics.routes');
   const { templateRoutes } = await import('./modules/templates/template.routes');
+  const { notificationRoutes } = await import('./modules/notifications/notifications.routes');
+  const { cartRoutes } = await import('./modules/cart/cart.routes');
+  const { catalogRoutes } = await import('./modules/catalog/catalog.routes');
+  const { checkoutRoutes } = await import('./modules/checkout/checkout.routes');
+  const { publicRoutes } = await import('./modules/public/public.routes');
 
   await server.register(authRoutes, { prefix: '/api' });
   await server.register(pricingRoutes, { prefix: '/api' });
@@ -218,6 +252,11 @@ async function registerRoutes() {
   await server.register(vendorRoutes, { prefix: '/api' });
   await server.register(analyticsRoutes, { prefix: '/api' });
   await server.register(templateRoutes, { prefix: '/api' });
+  await server.register(notificationRoutes, { prefix: '/api' });
+  await server.register(cartRoutes, { prefix: '/api' });
+  await server.register(catalogRoutes, { prefix: '/api' });
+  await server.register(checkoutRoutes, { prefix: '/api' });
+  await server.register(publicRoutes, { prefix: '/api' });
 
   logger.info('Routes registered');
 }
@@ -225,10 +264,11 @@ async function registerRoutes() {
 // Start server
 async function start() {
   try {
-    // Connect to Redis (optional)
+    // Connect to Redis (optional) BEFORE registering plugins so the rate
+    // limiter and export queues get a live client when available.
     try {
       await connectRedis();
-      if (require('./lib/redis').isRedisEnabled()) {
+      if (isRedisEnabled()) {
         logger.info('Redis connected');
       } else {
         logger.info('Running without Redis (optional service)');

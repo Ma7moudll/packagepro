@@ -1,83 +1,70 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useCallback } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { useLanguage } from "@/providers/language-provider"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ImageFilterConfig, DEFAULT_IMAGE_FILTERS } from "@/lib/editor/state/types"
 import {
   Image as ImageIcon,
   FlipHorizontal,
   FlipVertical,
   RotateCw,
   RotateCcw,
-  Crop,
   Sun,
   Contrast,
   Droplets,
   Palette,
   RefreshCw,
-  Check,
-  X,
 } from "lucide-react"
 
-interface ImageFilters {
-  brightness: number
-  contrast: number
-  saturation: number
-  blur: number
-  grayscale: number
-  sepia: number
-  hueRotate: number
-  invert: number
-}
-
-const DEFAULT_FILTERS: ImageFilters = {
-  brightness: 100,
-  contrast: 100,
-  saturation: 100,
-  blur: 0,
-  grayscale: 0,
-  sepia: 0,
-  hueRotate: 0,
-  invert: 0,
-}
-
-// Filter presets
 const FILTER_PRESETS = [
-  { name: { en: "Original", ar: "أصلي" }, filters: DEFAULT_FILTERS },
+  { name: { en: "Original", ar: "أصلي" }, filters: DEFAULT_IMAGE_FILTERS },
   {
     name: { en: "Vivid", ar: "زاهي" },
-    filters: { ...DEFAULT_FILTERS, saturation: 130, contrast: 110 },
+    filters: { ...DEFAULT_IMAGE_FILTERS, saturation: 130, contrast: 110 },
   },
   {
     name: { en: "Warm", ar: "دافئ" },
-    filters: { ...DEFAULT_FILTERS, sepia: 30, saturation: 110 },
+    filters: { ...DEFAULT_IMAGE_FILTERS, sepia: 30, saturation: 110 },
   },
   {
     name: { en: "Cool", ar: "بارد" },
-    filters: { ...DEFAULT_FILTERS, hueRotate: 180, saturation: 80 },
+    filters: { ...DEFAULT_IMAGE_FILTERS, hueRotate: 180, saturation: 80 },
   },
   {
     name: { en: "B&W", ar: "أبيض وأسود" },
-    filters: { ...DEFAULT_FILTERS, grayscale: 100 },
+    filters: { ...DEFAULT_IMAGE_FILTERS, grayscale: 100 },
   },
   {
     name: { en: "Vintage", ar: "عتيق" },
-    filters: { ...DEFAULT_FILTERS, sepia: 50, contrast: 90, brightness: 90 },
+    filters: { ...DEFAULT_IMAGE_FILTERS, sepia: 50, contrast: 90, brightness: 90 },
   },
   {
     name: { en: "High Contrast", ar: "تباين عالي" },
-    filters: { ...DEFAULT_FILTERS, contrast: 150, brightness: 105 },
+    filters: { ...DEFAULT_IMAGE_FILTERS, contrast: 150, brightness: 105 },
   },
   {
     name: { en: "Soft", ar: "ناعم" },
-    filters: { ...DEFAULT_FILTERS, brightness: 105, contrast: 90, blur: 1 },
+    filters: { ...DEFAULT_IMAGE_FILTERS, brightness: 105, contrast: 90, blur: 1 },
   },
 ]
+
+function getFilterString(f: ImageFilterConfig) {
+  return `
+    brightness(${f.brightness}%)
+    contrast(${f.contrast}%)
+    saturate(${f.saturation}%)
+    blur(${f.blur}px)
+    grayscale(${f.grayscale}%)
+    sepia(${f.sepia}%)
+    hue-rotate(${f.hueRotate}deg)
+    invert(${f.invert}%)
+  `.trim()
+}
 
 export function ImageEditPanel() {
   const { language } = useLanguage()
@@ -89,29 +76,50 @@ export function ImageEditPanel() {
     (l) => selectedIds.includes(l.id) && l.type === "image"
   )
 
-  const [filters, setFilters] = useState<ImageFilters>(DEFAULT_FILTERS)
-  const [cropMode, setCropMode] = useState(false)
+  const filters = selectedLayer?.imageProperties?.filters ?? DEFAULT_IMAGE_FILTERS
 
-  // Reset filters when selection changes
-  useEffect(() => {
-    setFilters(DEFAULT_FILTERS)
-  }, [selectedLayer?.id])
+  const updateFilter = useCallback(
+    (key: keyof ImageFilterConfig, value: number) => {
+      if (!selectedLayer) return
+      updateLayer(selectedLayer.id, (l) => ({
+        ...l,
+        imageProperties: {
+          ...l.imageProperties!,
+          filters: {
+            ...(l.imageProperties?.filters ?? DEFAULT_IMAGE_FILTERS),
+            [key]: value,
+          },
+        },
+      }))
+    },
+    [selectedLayer, updateLayer]
+  )
 
-  // Apply CSS filter string
-  const getFilterString = useCallback((f: ImageFilters) => {
-    return `
-      brightness(${f.brightness}%)
-      contrast(${f.contrast}%)
-      saturate(${f.saturation}%)
-      blur(${f.blur}px)
-      grayscale(${f.grayscale}%)
-      sepia(${f.sepia}%)
-      hue-rotate(${f.hueRotate}deg)
-      invert(${f.invert}%)
-    `.trim()
-  }, [])
+  const applyPreset = useCallback(
+    (preset: (typeof FILTER_PRESETS)[0]) => {
+      if (!selectedLayer) return
+      updateLayer(selectedLayer.id, (l) => ({
+        ...l,
+        imageProperties: {
+          ...l.imageProperties!,
+          filters: { ...preset.filters },
+        },
+      }))
+    },
+    [selectedLayer, updateLayer]
+  )
 
-  // Flip horizontal
+  const resetFilters = useCallback(() => {
+    if (!selectedLayer) return
+    updateLayer(selectedLayer.id, (l) => ({
+      ...l,
+      imageProperties: {
+        ...l.imageProperties!,
+        filters: undefined,
+      },
+    }))
+  }, [selectedLayer, updateLayer])
+
   const handleFlipHorizontal = useCallback(() => {
     if (!selectedLayer) return
     updateLayer(selectedLayer.id, (l) => ({
@@ -120,7 +128,6 @@ export function ImageEditPanel() {
     }))
   }, [selectedLayer, updateLayer])
 
-  // Flip vertical
   const handleFlipVertical = useCallback(() => {
     if (!selectedLayer) return
     updateLayer(selectedLayer.id, (l) => ({
@@ -129,7 +136,6 @@ export function ImageEditPanel() {
     }))
   }, [selectedLayer, updateLayer])
 
-  // Rotate
   const handleRotate = useCallback(
     (degrees: number) => {
       if (!selectedLayer) return
@@ -140,16 +146,6 @@ export function ImageEditPanel() {
     },
     [selectedLayer, updateLayer]
   )
-
-  // Apply filter preset
-  const applyPreset = useCallback((preset: (typeof FILTER_PRESETS)[0]) => {
-    setFilters(preset.filters)
-  }, [])
-
-  // Reset all filters
-  const resetFilters = useCallback(() => {
-    setFilters(DEFAULT_FILTERS)
-  }, [])
 
   if (!selectedLayer || !selectedLayer.imageProperties) {
     return (
@@ -267,7 +263,6 @@ export function ImageEditPanel() {
             </Button>
           </div>
 
-          {/* Brightness */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <Label className="text-[10px] flex items-center gap-1">
@@ -278,14 +273,13 @@ export function ImageEditPanel() {
             </div>
             <Slider
               value={[filters.brightness]}
-              onValueChange={([v]) => setFilters({ ...filters, brightness: v })}
+              onValueChange={([v]) => updateFilter("brightness", v)}
               min={0}
               max={200}
               step={1}
             />
           </div>
 
-          {/* Contrast */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <Label className="text-[10px] flex items-center gap-1">
@@ -296,14 +290,13 @@ export function ImageEditPanel() {
             </div>
             <Slider
               value={[filters.contrast]}
-              onValueChange={([v]) => setFilters({ ...filters, contrast: v })}
+              onValueChange={([v]) => updateFilter("contrast", v)}
               min={0}
               max={200}
               step={1}
             />
           </div>
 
-          {/* Saturation */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <Label className="text-[10px] flex items-center gap-1">
@@ -314,14 +307,13 @@ export function ImageEditPanel() {
             </div>
             <Slider
               value={[filters.saturation]}
-              onValueChange={([v]) => setFilters({ ...filters, saturation: v })}
+              onValueChange={([v]) => updateFilter("saturation", v)}
               min={0}
               max={200}
               step={1}
             />
           </div>
 
-          {/* Blur */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <Label className="text-[10px]">{language === "ar" ? "التمويه" : "Blur"}</Label>
@@ -329,14 +321,13 @@ export function ImageEditPanel() {
             </div>
             <Slider
               value={[filters.blur]}
-              onValueChange={([v]) => setFilters({ ...filters, blur: v })}
+              onValueChange={([v]) => updateFilter("blur", v)}
               min={0}
               max={20}
               step={0.5}
             />
           </div>
 
-          {/* Grayscale */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <Label className="text-[10px]">{language === "ar" ? "تدرج رمادي" : "Grayscale"}</Label>
@@ -344,14 +335,13 @@ export function ImageEditPanel() {
             </div>
             <Slider
               value={[filters.grayscale]}
-              onValueChange={([v]) => setFilters({ ...filters, grayscale: v })}
+              onValueChange={([v]) => updateFilter("grayscale", v)}
               min={0}
               max={100}
               step={1}
             />
           </div>
 
-          {/* Sepia */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <Label className="text-[10px]">{language === "ar" ? "بني داكن" : "Sepia"}</Label>
@@ -359,14 +349,13 @@ export function ImageEditPanel() {
             </div>
             <Slider
               value={[filters.sepia]}
-              onValueChange={([v]) => setFilters({ ...filters, sepia: v })}
+              onValueChange={([v]) => updateFilter("sepia", v)}
               min={0}
               max={100}
               step={1}
             />
           </div>
 
-          {/* Hue Rotate */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <Label className="text-[10px]">{language === "ar" ? "تدوير الألوان" : "Hue Rotate"}</Label>
@@ -374,21 +363,12 @@ export function ImageEditPanel() {
             </div>
             <Slider
               value={[filters.hueRotate]}
-              onValueChange={([v]) => setFilters({ ...filters, hueRotate: v })}
+              onValueChange={([v]) => updateFilter("hueRotate", v)}
               min={0}
               max={360}
               step={1}
             />
           </div>
-        </div>
-
-        {/* Apply Filters Note */}
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-          <p className="text-[10px] text-amber-800">
-            {language === "ar"
-              ? "ملاحظة: الفلاتر تُعرض للمعاينة فقط حالياً. سيتم تطبيقها عند التصدير."
-              : "Note: Filters are preview-only. They will be applied on export."}
-          </p>
         </div>
       </div>
     </ScrollArea>

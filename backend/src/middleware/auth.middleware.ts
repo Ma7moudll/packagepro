@@ -1,7 +1,8 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { authService } from '../modules/auth/auth.service';
+import { jwtService } from '../modules/auth/services/jwt.service';
 import { AuthenticationError, AuthorizationError } from '../utils/errors';
 import { UserRole, AuthenticatedRequest } from '../types';
+import { prisma } from '../lib/prisma';
 
 export { AuthenticatedRequest };
 
@@ -17,7 +18,7 @@ export async function authenticate(
     }
 
     const token = authHeader.substring(7);
-    const payload = authService.verifyAccessToken(token);
+    const payload = jwtService.verifyAccessToken(token);
 
     // Attach user to request
     (request as AuthenticatedRequest).user = payload;
@@ -49,10 +50,56 @@ export function optionalAuth(request: FastifyRequest): void {
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      const payload = authService.verifyAccessToken(token);
+      const payload = jwtService.verifyAccessToken(token);
       (request as AuthenticatedRequest).user = payload;
     }
   } catch (error) {
     // Ignore errors for optional auth
   }
+}
+
+/**
+ * Helper: Check if the authenticated user is the owner of a design
+ * Used for read/write access control during design lifecycle
+ */
+export async function isDesignOwner(
+  userId: string,
+  designId: string
+): Promise<boolean> {
+  const design = await prisma.design.findUnique({
+    where: { id: designId },
+    select: { order: { select: { customerId: true } } },
+  });
+
+  if (!design) {
+    return false;
+  }
+
+  return design.order ? design.order.customerId === userId : false;
+}
+
+/**
+ * Helper: Check if user can view a design based on role and lifecycle
+ * - Customers: Can view their own designs
+ * - Designers/Admins: Can view all designs (for review workflow)
+ */
+export function canViewDesign(userRole: UserRole): boolean {
+  return ['CUSTOMER', 'ADMIN', 'DESIGNER'].includes(userRole);
+}
+
+/**
+ * Helper: Check if user can edit a design
+ * - Only design owners in DRAFT status can edit
+ */
+export function canEditDesign(userRole: UserRole, isOwner: boolean, designLifecycleStatus: string): boolean {
+  // Only customers (owners) in DRAFT status can edit
+  return userRole === 'CUSTOMER' && isOwner && designLifecycleStatus === 'DRAFT';
+}
+
+/**
+ * Helper: Check if user can review a design
+ * - Only designers and admins can review designs not in DRAFT status
+ */
+export function canReviewDesign(userRole: UserRole, designLifecycleStatus: string): boolean {
+  return ['DESIGNER', 'ADMIN'].includes(userRole) && designLifecycleStatus !== 'DRAFT';
 }

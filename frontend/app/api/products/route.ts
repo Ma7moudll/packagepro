@@ -13,7 +13,7 @@ const MOCK_PRODUCTS = [
     images: [
       "https://images.unsplash.com/photo-1587293852726-70cdb56c2866?w=800&h=600&fit=crop",
       "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800&h=600&fit=crop",
-      "https://images.unsplash.com/photo-1604069295768-7f9e8019f14c?w=800&h=600&fit=crop",
+      "https://images.unsplash.com/photo-1617093727343-374698b1b08d?w=800&h=600&fit=crop",
     ],
     category: "food-packaging",
     subcategory: "boxes",
@@ -65,7 +65,7 @@ const MOCK_PRODUCTS = [
     images: [
       "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&h=600&fit=crop",
       "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?w=800&h=600&fit=crop",
-      "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=800&h=600&fit=crop",
+      "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=600&fit=crop",
     ],
     category: "bags-packaging",
     subcategory: "bags",
@@ -194,8 +194,8 @@ const MOCK_PRODUCTS = [
     image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop",
     images: [
       "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop",
-      "https://images.unsplash.com/photo-1571045736765-c9fb1bb22920?w=800&h=600&fit=crop",
-      "https://images.unsplash.com/photo-1594736797933-d0c7c6e72dd3?w=800&h=600&fit=crop",
+      "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=800&h=600&fit=crop",
+      "https://images.unsplash.com/photo-1605497788044-5a32c7078486?w=800&h=600&fit=crop",
     ],
     category: "delivery-supplies",
     subcategory: "bags",

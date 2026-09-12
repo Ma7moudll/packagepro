@@ -6,8 +6,9 @@ const jobs: any[] = []
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -15,7 +16,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const job = jobs.find((j) => j.id === params.id)
+    const job = jobs.find((j) => j.id === id)
 
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 })

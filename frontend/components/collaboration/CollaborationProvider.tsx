@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, ReactNode } from "react"
-import { useSession } from "next-auth/react"
 import { useSearchParams } from "next/navigation"
+import { useAuth } from "@/providers/auth-provider"
 import { useCollaborationStore } from "@/lib/collaboration/collaboration-store"
 import { LiveCursors } from "./LiveCursors"
 import { PresenceIndicator } from "./PresenceIndicator"
@@ -21,7 +21,7 @@ export function CollaborationProvider({
   canvasRef,
   faceId = "front",
 }: CollaborationProviderProps) {
-  const { data: session } = useSession()
+  const { user } = useAuth()
   const searchParams = useSearchParams()
   const roomId = searchParams.get("roomId")
   const connect = useCollaborationStore((s) => s.connect)
@@ -30,34 +30,35 @@ export function CollaborationProvider({
   const isConnected = useCollaborationStore((s) => s.isConnected)
 
   useEffect(() => {
-    if (!session?.user || !roomId) return
+    if (!user || !roomId) return
 
     connect(
       roomId,
-      session.user.id || "",
-      session.user.name || "User",
-      session.user.email || ""
+      user.id,
+      user.name || "User",
+      user.email || ""
     )
 
     return () => {
       disconnect()
     }
-  }, [session, roomId, connect, disconnect])
+  }, [user, roomId, connect, disconnect])
 
   // Track cursor movement
   useEffect(() => {
     if (!isConnected || !canvasRef?.current) return
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMouseMove = (e: Event) => {
+      const mouseEvent = e as MouseEvent
       const canvas = canvasRef.current
       if (!canvas) return
 
       const rect = canvas.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
+      const x = mouseEvent.clientX - rect.left
+      const y = mouseEvent.clientY - rect.top
 
       updatePresence({
-        userId: session?.user?.id || "",
+        userId: user?.id || "",
         cursor: { x, y, faceId },
       })
     }
@@ -68,7 +69,7 @@ export function CollaborationProvider({
     return () => {
       canvas.removeEventListener("mousemove", handleMouseMove)
     }
-  }, [isConnected, canvasRef, faceId, session, updatePresence])
+  }, [isConnected, canvasRef, faceId, user, updatePresence])
 
   if (!roomId) {
     return <>{children}</>

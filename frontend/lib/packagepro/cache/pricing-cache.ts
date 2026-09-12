@@ -21,7 +21,7 @@ async function getRedisClient(): Promise<RedisClientType> {
       database: config.redis.db,
     })
 
-    redisClient.on("error", (err) => {
+    redisClient.on("error", (err: any) => {
       logger.error("Redis client error", { error: err })
     })
 
@@ -130,11 +130,11 @@ export async function invalidateProductCache(productId: string): Promise<void> {
     // Redis SCAN to find all matching keys
     let cursor = 0
     do {
-      const result = await client.scan(cursor, {
+      const result = await client.scan(String(cursor), {
         MATCH: pattern,
         COUNT: 100,
       })
-      cursor = result.cursor
+      cursor = Number(result.cursor)
 
       if (result.keys.length > 0) {
         await client.del(result.keys)
@@ -156,11 +156,11 @@ export async function clearPricingCache(): Promise<void> {
 
     let cursor = 0
     do {
-      const result = await client.scan(cursor, {
+      const result = await client.scan(String(cursor), {
         MATCH: pattern,
         COUNT: 100,
       })
-      cursor = result.cursor
+      cursor = Number(result.cursor)
 
       if (result.keys.length > 0) {
         await client.del(result.keys)

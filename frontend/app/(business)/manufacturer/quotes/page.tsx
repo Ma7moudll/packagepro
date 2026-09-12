@@ -1,126 +1,113 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAuth } from "@/providers/auth-provider"
 import { useLanguage } from "@/providers/language-provider"
-import { FileText, Send, X } from "lucide-react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { vendorsApi } from "@/lib/api/vendors"
+import { FileText, Check, X, Loader2, AlertCircle } from "lucide-react"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
+
+interface PendingHandshake {
+  id: string
+  status: string
+  createdAt?: string
+  vendorId?: string
+  purchaseOrder?: {
+    id: string
+    poNumber: string
+    orderId?: string
+    order?: { orderNumber?: string }
+  } | null
+}
 
 export default function ManufacturerQuotesPage() {
   const { user } = useAuth()
   const router = useRouter()
   const { language } = useLanguage()
   const { toast } = useToast()
-  interface Quote {
-    id: string
-    customer: string
-    customerEn: string
-    product: string
-    productEn: string
-    status: string
-    date: string
-    specifications: string
-  }
-  const [quotes, setQuotes] = useState<Quote[]>([])
+
+  const [handshakes, setHandshakes] = useState<PendingHandshake[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null)
-  const [quoteDialogOpen, setQuoteDialogOpen] = useState(false)
-  const [quoteForm, setQuoteForm] = useState({
-    price: "",
-    deliveryTime: "",
-    notes: "",
-  })
+  const [error, setError] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [rejectTarget, setRejectTarget] = useState<PendingHandshake | null>(null)
+  const [rejectReason, setRejectReason] = useState("")
+
+  const loadPending = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const res = await vendorsApi.getDashboard()
+      if (res.success) {
+        setHandshakes((res.data?.pendingHandshakes as PendingHandshake[]) || [])
+      }
+    } catch (err: any) {
+      console.error("Error fetching handshakes:", err)
+      setError(err.message || "Failed to fetch quote requests")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     if (!user || (user.role !== "MANUFACTURER" && user.role !== "ADMIN")) {
       router.push("/login")
       return
     }
+    loadPending()
+  }, [user, router, loadPending])
 
-    // Fetch quote requests
-    const fetchQuotes = async () => {
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 500))
-        setQuotes([
-          {
-            id: "RFQ-1001",
-            customer: "شركة الأهرام",
-            customerEn: "Al-Ahram Company",
-            product: "علب كرتون مموج - 1000 قطعة",
-            productEn: "Corrugated Boxes - 1000 pieces",
-            status: "pending",
-            date: "2024-01-15",
-            specifications: "علب بقياس 30x30x20 سم، طباعة مخصصة",
-          },
-          {
-            id: "RFQ-1002",
-            customer: "مطعم النيل",
-            customerEn: "Nile Restaurant",
-            product: "أكياس ورق كرافت - 5000 قطعة",
-            productEn: "Kraft Paper Bags - 5000 pieces",
-            status: "pending",
-            date: "2024-01-14",
-            specifications: "أكياس بيد قوية مع مقابض، حجم كبير",
-          },
-        ])
-      } catch (error) {
-        console.error("Error fetching quotes:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchQuotes()
-  }, [user, router])
-
-  const handleSubmitQuote = async () => {
-    if (!quoteForm.price || !quoteForm.deliveryTime) {
-      toast({
-        title: language === "ar" ? "خطأ" : "Error",
-        description: language === "ar" ? "يرجى إدخال السعر ووقت التسليم" : "Please enter price and delivery time",
-        variant: "destructive",
-      })
-      return
-    }
-
+  const handleAccept = async (handshake: PendingHandshake) => {
     try {
-      // Submit quote logic
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      // Update quote status
-      setQuotes((prev) =>
-        prev.map((q) => (q.id === selectedQuote?.id ? { ...q, status: "responded" } : q))
-      )
-      setQuoteDialogOpen(false)
-      setQuoteForm({ price: "", deliveryTime: "", notes: "" })
-      setSelectedQuote(null)
+      setActionLoading(handshake.id)
+      await vendorsApi.acceptHandshake(handshake.id)
       toast({
-        title: language === "ar" ? "تم الإرسال" : "Sent",
-        description: language === "ar" ? "تم إرسال عرض السعر بنجاح" : "Quote sent successfully",
+        title: language === "ar" ? "تم القبول" : "Accepted",
+        description: language === "ar" ? "تم قبول أمر الشراء" : "Purchase order accepted",
       })
-    } catch (error) {
-      console.error("Error submitting quote:", error)
+      await loadPending()
+    } catch (err: any) {
+      console.error("Error accepting handshake:", err)
       toast({
         title: language === "ar" ? "خطأ" : "Error",
-        description: language === "ar" ? "حدث خطأ في إرسال العرض" : "Error sending quote",
+        description: err.message || "Failed to accept",
         variant: "destructive",
       })
+    } finally {
+      setActionLoading(null)
     }
   }
 
-  const handleRejectQuote = (quoteId: string) => {
-    setQuotes((prev) => prev.filter((q) => q.id !== quoteId))
-    toast({
-      title: language === "ar" ? "تم الرفض" : "Rejected",
-      description: language === "ar" ? "تم رفض طلب عرض السعر" : "Quote request rejected",
-    })
+  const handleReject = async () => {
+    if (!rejectTarget) return
+    try {
+      setActionLoading(rejectTarget.id)
+      await vendorsApi.rejectHandshake(rejectTarget.id, rejectReason || undefined)
+      setRejectTarget(null)
+      setRejectReason("")
+      toast({
+        title: language === "ar" ? "تم الرفض" : "Rejected",
+        description: language === "ar" ? "تم رفض أمر الشراء" : "Purchase order rejected",
+      })
+      await loadPending()
+    } catch (err: any) {
+      console.error("Error rejecting handshake:", err)
+      toast({
+        title: language === "ar" ? "خطأ" : "Error",
+        description: err.message || "Failed to reject",
+        variant: "destructive",
+      })
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   if (!user || (user.role !== "MANUFACTURER" && user.role !== "ADMIN")) {
@@ -135,119 +122,115 @@ export default function ManufacturerQuotesPage() {
           {language === "ar" ? "عروض الأسعار" : "Quote Requests"}
         </h1>
         <p className="text-slate-600">
-          {language === "ar" ? "إدارة طلبات عروض الأسعار من العملاء" : "Manage quote requests from customers"}
+          {language === "ar" ? "طلبات أوامر الشراء بانتظار قبولك" : "Purchase order requests awaiting your response"}
         </p>
       </div>
 
-      {/* Quotes List */}
-      <div className="space-y-4">
-        {quotes.map((quote) => (
-          <Card key={quote.id}>
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-4 mb-2">
-                    <h3 className="text-lg font-semibold">{quote.id}</h3>
-                    <Badge variant={quote.status === "pending" ? "secondary" : "default"}>
-                      {quote.status === "pending"
-                        ? language === "ar"
-                          ? "قيد الانتظار"
-                          : "Pending"
-                        : language === "ar"
-                          ? "تم الرد"
-                          : "Responded"}
-                    </Badge>
-                  </div>
-                  <p className="text-slate-600 mb-2">
-                    {language === "ar" ? quote.customer : quote.customerEn}
-                  </p>
-                  <p className="font-medium mb-2">
-                    {language === "ar" ? quote.product : quote.productEn}
-                  </p>
-                  <p className="text-sm text-slate-500 mb-2">{quote.specifications}</p>
-                  <p className="text-xs text-slate-400">{quote.date}</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => {
-                      setSelectedQuote(quote)
-                      setQuoteDialogOpen(true)
-                    }}
-                  >
-                    <Send className="h-4 w-4 mr-2" />
-                    {language === "ar" ? "إرسال عرض" : "Submit Quote"}
-                  </Button>
-                  <Button variant="outline" onClick={() => handleRejectQuote(quote.id)}>
-                    <X className="h-4 w-4 mr-2" />
-                    {language === "ar" ? "رفض" : "Reject"}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {quotes.length === 0 && !loading && (
-        <div className="text-center py-12">
-          <FileText className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-          <p className="text-slate-600">
-            {language === "ar" ? "لا توجد طلبات عروض أسعار" : "No quote requests found"}
-          </p>
-        </div>
+      {error && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
-      {/* Quote Dialog */}
-      <Dialog open={quoteDialogOpen} onOpenChange={setQuoteDialogOpen}>
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        </div>
+      ) : (
+        <>
+          {/* Handshakes List */}
+          <div className="space-y-4">
+            {handshakes.map((hs) => (
+              <Card key={hs.id}>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-4 mb-2">
+                        <h3 className="text-lg font-semibold">#{hs.purchaseOrder?.poNumber || hs.id}</h3>
+                        <Badge variant="secondary">
+                          {language === "ar" ? "قيد الانتظار" : "Pending"}
+                        </Badge>
+                      </div>
+                      <p className="text-slate-600 mb-2">
+                        {hs.purchaseOrder?.order?.orderNumber
+                          ? `${language === "ar" ? "الطلب" : "Order"} #${hs.purchaseOrder.order.orderNumber}`
+                          : language === "ar" ? "لم يتم تحديد رقم الطلب" : "No order number"}
+                      </p>
+                      {hs.createdAt ? (
+                        <p className="text-xs text-slate-400">
+                          {new Date(hs.createdAt).toLocaleDateString()}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        disabled={actionLoading === hs.id}
+                        onClick={() => handleAccept(hs)}
+                      >
+                        {actionLoading === hs.id ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Check className="h-4 w-4 mr-2" />
+                        )}
+                        {language === "ar" ? "قبول" : "Accept"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={actionLoading === hs.id}
+                        onClick={() => {
+                          setRejectTarget(hs)
+                          setRejectReason("")
+                        }}
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        {language === "ar" ? "رفض" : "Reject"}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {handshakes.length === 0 && !loading && (
+            <div className="text-center py-12">
+              <FileText className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+              <p className="text-slate-600">
+                {language === "ar" ? "لا توجد طلبات عروض أسعار" : "No quote requests found"}
+              </p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Reject Dialog */}
+      <Dialog open={!!rejectTarget} onOpenChange={(open) => { if (!open) setRejectTarget(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {language === "ar" ? "إرسال عرض سعر" : "Submit Quote"}
-            </DialogTitle>
+            <DialogTitle>{language === "ar" ? "رفض أمر الشراء" : "Reject Purchase Order"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>{language === "ar" ? "السعر (جنيه)" : "Price (EGP)"}</Label>
-              <Input
-                type="number"
-                value={quoteForm.price}
-                onChange={(e) => setQuoteForm({ ...quoteForm, price: e.target.value })}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <Label>
-                {language === "ar" ? "وقت التسليم (أيام)" : "Delivery Time (days)"}
-              </Label>
-              <Input
-                type="number"
-                value={quoteForm.deliveryTime}
-                onChange={(e) => setQuoteForm({ ...quoteForm, deliveryTime: e.target.value })}
-                placeholder="7"
-              />
-            </div>
-            <div>
-              <Label>{language === "ar" ? "ملاحظات" : "Notes"}</Label>
+              <Label>{language === "ar" ? "السبب (اختياري)" : "Reason (optional)"}</Label>
               <Textarea
-                value={quoteForm.notes}
-                onChange={(e) => setQuoteForm({ ...quoteForm, notes: e.target.value })}
-                placeholder={language === "ar" ? "ملاحظات إضافية..." : "Additional notes..."}
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder={language === "ar" ? "لماذا ترفض هذا الطلب؟" : "Why are you rejecting this?"}
                 rows={4}
               />
             </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setQuoteDialogOpen(false)}>
-                {language === "ar" ? "إلغاء" : "Cancel"}
-              </Button>
-              <Button onClick={handleSubmitQuote}>
-                <Send className="h-4 w-4 mr-2" />
-                {language === "ar" ? "إرسال" : "Submit"}
-              </Button>
-            </div>
           </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectTarget(null)}>
+              {language === "ar" ? "إلغاء" : "Cancel"}
+            </Button>
+            <Button variant="destructive" onClick={handleReject}>
+              {language === "ar" ? "تأكيد الرفض" : "Confirm Reject"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   )
 }
-

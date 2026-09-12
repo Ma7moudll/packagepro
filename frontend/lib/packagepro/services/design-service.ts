@@ -8,7 +8,10 @@ import { uploadFile, generateDesignKey, getPresignedUrl, fileExists } from "../s
 import { enqueueJob } from "../queue/queue-client"
 import { logger } from "../utils/logger"
 
-const prisma = null as any
+const prisma = {
+  $queryRawUnsafe: async <T = any>(strings: TemplateStringsArray | string, ...values: any[]): Promise<T> => [] as T,
+  $executeRawUnsafe: async (strings: TemplateStringsArray | string, ...values: any[]) => {},
+}
 
 export interface DesignUploadData {
   userId: string

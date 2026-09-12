@@ -196,17 +196,23 @@ export function UploadPanel() {
       <div className="pt-4 border-t border-slate-200">
         <BulkUpload
           onUploadComplete={(files) => {
-            // Handle uploaded files - add them to the design
             files.forEach(async (file) => {
               if (file.url) {
-                // Add as image layer
                 addLayer({
-                  type: "image",
-                  name: file.name,
-                  content: file.url,
+                  type: "image" as any,
+                  name: file.name || "Image",
+                  visible: true,
+                  locked: false,
+                  opacity: 1,
+                  blendMode: "normal",
                   position: { x: 100, y: 100 },
-                  size: { width: 200, height: 200 },
-                });
+                  scale: { x: 1, y: 1 },
+                  rotation: 0,
+                  faceId: "front",
+                  imageProperties: {
+                    src: file.url,
+                  },
+                } as any);
               }
             });
           }}

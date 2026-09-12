@@ -5,10 +5,11 @@ const templates: any[] = []
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { slug: string } }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
+  const { slug } = await params
   try {
-    const template = templates.find((t) => t.slug === params.slug)
+    const template = templates.find((t) => t.slug === slug)
 
     if (!template) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 })

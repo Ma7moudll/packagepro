@@ -8,28 +8,21 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/providers/auth-provider"
 import { useLanguage } from "@/providers/language-provider"
-import { Package, Plus, Search, Edit, Trash2, Eye } from "lucide-react"
+import { productsApi } from "@/lib/api/products"
+import { Package, Plus, Search, Edit, Trash2, Eye, Loader2 } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { useToast } from "@/hooks/use-toast"
+import type { VendorProduct } from "@/lib/api/products"
 
 export default function ManufacturerProductsPage() {
   const { user } = useAuth()
   const router = useRouter()
   const { language } = useLanguage()
   const { toast } = useToast()
-  interface Product {
-    id: number
-    name: string
-    nameEn: string
-    price: number
-    stock: number
-    image: string
-    status: string
-    sales: number
-  }
-  const [products, setProducts] = useState<Product[]>([])
+  const [products, setProducts] = useState<VendorProduct[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
@@ -38,77 +31,26 @@ export default function ManufacturerProductsPage() {
       return
     }
 
-    // Fetch manufacturer products
     const fetchProducts = async () => {
       try {
         setLoading(true)
-        const token = localStorage.getItem("token")
-
-        const response = await fetch("/api/manufacturer/products", {
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        })
-
-        const data = await response.json()
-
-        if (data.success && data.products) {
-          // Add sales count (mock for now - can be calculated from orders)
-          const productsWithSales = data.products.map((p: Product) => ({
-            ...p,
-            sales: Math.floor(Math.random() * 5000), // Mock sales data
-          }))
-          setProducts(productsWithSales)
-        } else {
-          // Fallback to mock data
-          setProducts([
-            {
-              id: 1,
-              name: "علب كرتون مموج",
-              nameEn: "Corrugated Boxes",
-              price: 2.5,
-              stock: 5000,
-              image: "https://images.unsplash.com/photo-1587293852726-70cdb56c2866?w=800&h=600&fit=crop",
-              status: "active",
-              sales: 1250,
-            },
-            {
-              id: 2,
-              name: "أكياس ورق كرافت",
-              nameEn: "Kraft Paper Bags",
-              price: 0.25,
-              stock: 10000,
-              image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&h=600&fit=crop",
-              status: "active",
-              sales: 875,
-            },
-            {
-              id: 3,
-              name: "أكواب ورقية ساخنة",
-              nameEn: "Hot Paper Cups",
-              price: 0.15,
-              stock: 50000,
-              image: "https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=800&h=600&fit=crop",
-              status: "active",
-              sales: 3200,
-            },
-          ])
+        setLoadError(null)
+        const res = await productsApi.list()
+        if (res.success && res.data) {
+          setProducts(res.data)
+          setLoading(false)
+          return
         }
-      } catch (error) {
-        console.error("Error fetching products:", error)
-        toast({
-          title: language === "ar" ? "خطأ" : "Error",
-          description: language === "ar" ? "فشل تحميل المنتجات" : "Failed to load products",
-          variant: "destructive",
-        })
-      } finally {
-        setLoading(false)
+      } catch (err: any) {
+        console.error("Error fetching products:", err)
+        setLoadError(err.message || "Failed to fetch products")
       }
+      setProducts([])
+      setLoading(false)
     }
 
     fetchProducts()
-  }, [user, router, language, toast])
+  }, [user, router])
 
   if (!user || (user.role !== "MANUFACTURER" && user.role !== "ADMIN")) {
     return null
@@ -120,46 +62,42 @@ export default function ManufacturerProductsPage() {
       p.nameEn.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const handleDeleteProduct = async (productId: number) => {
+  const handleDeleteProduct = async (productId: string) => {
     if (!confirm(language === "ar" ? "هل أنت متأكد من حذف هذا المنتج؟" : "Are you sure you want to delete this product?")) {
       return
     }
 
     try {
-      const token = localStorage.getItem("token")
-      const response = await fetch(`/api/products/${productId}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.success) {
+      const res = await productsApi.delete(productId)
+      if (res.success) {
         setProducts((prev) => prev.filter((p) => p.id !== productId))
         toast({
           title: language === "ar" ? "تم الحذف" : "Deleted",
           description: language === "ar" ? "تم حذف المنتج بنجاح" : "Product deleted successfully",
         })
-      } else {
-        throw new Error(data.error || "Delete failed")
       }
-    } catch (error) {
-      console.error("Error deleting product:", error)
-      // Remove from UI anyway for demo
-      setProducts((prev) => prev.filter((p) => p.id !== productId))
+    } catch (err: any) {
+      console.error("Error deleting product:", err)
       toast({
-        title: language === "ar" ? "تم الحذف" : "Deleted",
-        description: language === "ar" ? "تم حذف المنتج (وضع تجريبي)" : "Product deleted (demo mode)",
+        title: language === "ar" ? "خطأ" : "Error",
+        description: err.message || "Failed to delete product",
+        variant: "destructive",
       })
     }
   }
 
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 mb-2">
@@ -177,7 +115,6 @@ export default function ManufacturerProductsPage() {
         </Button>
       </div>
 
-      {/* Search */}
       <div className="mb-6">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -190,13 +127,12 @@ export default function ManufacturerProductsPage() {
         </div>
       </div>
 
-      {/* Products Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredProducts.map((product) => (
           <Card key={product.id}>
             <div className="relative aspect-video w-full overflow-hidden rounded-t-lg">
               <Image
-                src={product.image}
+                src={product.image || "/placeholder.svg"}
                 alt={language === "ar" ? product.name : product.nameEn}
                 fill
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
@@ -215,28 +151,20 @@ export default function ManufacturerProductsPage() {
                 </div>
                 <Badge variant={product.status === "active" ? "default" : "secondary"}>
                   {product.status === "active"
-                    ? language === "ar"
-                      ? "نشط"
-                      : "Active"
-                    : language === "ar"
-                      ? "غير نشط"
-                      : "Inactive"}
+                    ? language === "ar" ? "نشط" : "Active"
+                    : language === "ar" ? "غير نشط" : "Inactive"}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-slate-500">
-                    {language === "ar" ? "المخزون:" : "Stock:"}
-                  </span>
+                  <span className="text-slate-500">{language === "ar" ? "المخزون:" : "Stock:"}</span>
                   <p className="font-medium">{product.stock.toLocaleString()}</p>
                 </div>
                 <div>
-                  <span className="text-slate-500">
-                    {language === "ar" ? "المبيعات:" : "Sales:"}
-                  </span>
-                  <p className="font-medium">{product.sales.toLocaleString()}</p>
+                  <span className="text-slate-500">{language === "ar" ? "المبيعات:" : "Sales:"}</span>
+                  <p className="font-medium">{product.sales?.toLocaleString() || "0"}</p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -265,11 +193,16 @@ export default function ManufacturerProductsPage() {
         <div className="text-center py-12">
           <Package className="h-12 w-12 text-slate-400 mx-auto mb-4" />
           <p className="text-slate-600">
-            {language === "ar" ? "لا توجد منتجات" : "No products found"}
+            {language === "ar"
+              ? loadError
+                ? "تعذر تحميل المنتجات"
+                : "لا توجد منتجات في كتالوجك بعد"
+              : loadError
+                ? "Failed to load products"
+                : "No products in your catalog yet"}
           </p>
         </div>
       )}
     </div>
   )
 }
-

@@ -1,28 +1,29 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/session"
+import { getSessionUser } from "@/lib/auth/server-session"
 
 // Mock database
 const orders: any[] = []
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
-    const session = await auth()
+    const session = await getSessionUser(request)
 
-    if (!session?.user) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const order = orders.find((o) => o.id === params.id)
+    const order = orders.find((o) => o.id === id)
 
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 })
     }
 
     // Check if user owns the order
-    if (order.userId !== (session.user as any).id) {
+    if (order.userId !== session.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -35,23 +36,24 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
-    const session = await auth()
+    const session = await getSessionUser(request)
 
-    if (!session?.user) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const order = orders.find((o) => o.id === params.id)
+    const order = orders.find((o) => o.id === id)
 
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 })
     }
 
     // Only owner or admin can update
-    if (order.userId !== (session.user as any).id) {
+    if (order.userId !== session.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 

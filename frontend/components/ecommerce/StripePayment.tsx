@@ -1,10 +1,11 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { loadStripe } from "@stripe/stripe-js"
 import {
   Elements,
-  CardElement,
+  PaymentElement,
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js"
@@ -12,21 +13,33 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, AlertCircle } from "lucide-react"
 import { useLanguage } from "@/providers/language-provider"
+import { checkoutApi } from "@/lib/api/checkout"
+import { useCartStore } from "@/lib/ecommerce/cart-store"
+import type { CheckoutAddress } from "@/lib/ecommerce/types"
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "")
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ""
+)
 
 interface StripePaymentProps {
-  amount: number
-  onSuccess: (paymentMethod: any) => void
-  onError: (error: string) => void
+  shippingAddress: CheckoutAddress
+  notes?: string
+  designSessionId?: string
 }
 
-function StripePaymentForm({ amount, onSuccess, onError }: StripePaymentProps) {
+function StripePaymentForm({
+  shippingAddress,
+  notes,
+  designSessionId,
+}: StripePaymentProps) {
   const { language } = useLanguage()
+  const router = useRouter()
   const stripe = useStripe()
   const elements = useElements()
+  const refresh = useCartStore((s) => s.refresh)
+
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -36,53 +49,58 @@ function StripePaymentForm({ amount, onSuccess, onError }: StripePaymentProps) {
     }
 
     setLoading(true)
-    setError("")
+    setError(null)
 
     try {
-      // Create payment intent
-      const response = await fetch("/api/ecommerce/create-payment-intent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount }),
+      // Order-first checkout: the backend creates the `pending_review` order,
+      // a Stripe PaymentIntent against it, and clears the server cart.
+      const res = await checkoutApi.checkout({
+        shippingAddress: {
+          name: shippingAddress.name,
+          phone: shippingAddress.phone,
+          email: shippingAddress.email,
+          street: shippingAddress.street,
+          city: shippingAddress.city,
+          state: shippingAddress.state,
+          postalCode: shippingAddress.postalCode,
+          country: shippingAddress.country,
+        },
+        notes,
+        designSessionId,
       })
 
-      const { clientSecret } = await response.json()
-
-      if (!clientSecret) {
-        throw new Error("Failed to create payment intent")
+      if (!res.success || !res.data?.clientSecret) {
+        throw new Error(
+          (res as { message?: string }).message ||
+            "Failed to create order"
+        )
       }
 
-      // Confirm payment
-      const cardElement = elements.getElement(CardElement)
-      if (!cardElement) {
-        throw new Error("Card element not found")
-      }
+      const { clientSecret, orderId, orderNumber } = res.data
 
-      const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
+      const result = await stripe.confirmPayment({
+        elements,
         clientSecret,
-        {
-          payment_method: {
-            card: cardElement,
-          },
-        }
-      )
+        confirmParams: {
+          return_url: `${window.location.origin}/orders/${orderId}`,
+        },
+        redirect: "if_required",
+      })
 
-      if (confirmError) {
-        setError(confirmError.message || "Payment failed")
-        onError(confirmError.message || "Payment failed")
-        return
+      if (result.error) {
+        throw new Error(result.error.message || "Payment failed")
       }
 
-      if (paymentIntent?.status === "succeeded") {
-        onSuccess({
-          stripePaymentMethodId: paymentIntent.payment_method,
-          paymentIntentId: paymentIntent.id,
-        })
-      }
+      // Payment succeeded (or already succeeded client-side). The webhook
+      // moves the order to `awaiting_approval`; navigate to the order page.
+      await refresh()
+      router.push(`/orders/${orderId}`)
+      router.refresh()
     } catch (err: any) {
-      const errorMessage = err.message || (language === "ar" ? "حدث خطأ" : "An error occurred")
-      setError(errorMessage)
-      onError(errorMessage)
+      const message =
+        err.message ||
+        (language === "ar" ? "حدث خطأ في الدفع" : "Payment failed. Please try again.")
+      setError(message)
     } finally {
       setLoading(false)
     }
@@ -97,33 +115,16 @@ function StripePaymentForm({ amount, onSuccess, onError }: StripePaymentProps) {
         </Alert>
       )}
 
-      <div className="p-4 border border-slate-200 rounded-lg">
-        <CardElement
-          options={{
-            style: {
-              base: {
-                fontSize: "16px",
-                color: "#424770",
-                "::placeholder": {
-                  color: "#aab7c4",
-                },
-              },
-              invalid: {
-                color: "#9e2146",
-              },
-            },
-          }}
-        />
-      </div>
+      <PaymentElement />
 
-      <Button type="submit" className="w-full" disabled={!stripe || loading}>
+      <Button type="submit" className="w-full" disabled={!stripe || !elements || loading} size="lg">
         {loading ? (
           <>
             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             {language === "ar" ? "جارٍ المعالجة..." : "Processing..."}
           </>
         ) : (
-          language === "ar" ? "دفع" : "Pay"
+          language === "ar" ? "تأكيد الدفع" : "Pay"
         )}
       </Button>
     </form>
@@ -133,7 +134,7 @@ function StripePaymentForm({ amount, onSuccess, onError }: StripePaymentProps) {
 export function StripePayment(props: StripePaymentProps) {
   if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
     return (
-      <Alert>
+      <Alert className="mb-4">
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
           Stripe is not configured. Please set NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
@@ -148,4 +149,3 @@ export function StripePayment(props: StripePaymentProps) {
     </Elements>
   )
 }
-

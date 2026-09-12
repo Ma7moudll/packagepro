@@ -75,14 +75,24 @@ export default function WishlistPage() {
     })
   }
 
-  const addToCart = (item: WishlistItem) => {
-    addItem({
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      quantity: 1,
-      image: item.image,
-    })
+  const addToCart = async (item: WishlistItem) => {
+    try {
+      await addItem({
+        productType: "box",
+        name: item.name,
+        quantity: 1,
+        dimensions: { length: 100, width: 100, height: 50, unit: "mm" },
+        materialCode: "kraft",
+        image: item.image,
+      })
+    } catch {
+      toast({
+        title: language === "ar" ? "تسجيل الدخول مطلوب" : "Sign in required",
+        description: language === "ar" ? "يرجى تسجيل الدخول لإضافة المنتجات إلى السلة" : "Please sign in to add items to your cart.",
+        variant: "destructive",
+      })
+      return
+    }
     toast({
       title: language === "ar" ? "تم الإضافة" : "Added to cart",
       description:

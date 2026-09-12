@@ -11,7 +11,8 @@ import { logger } from "../utils/logger"
 
 // Mock prisma - frontend should use backend API
 const prisma = {
-  $queryRawUnsafe: async () => [],
+  $queryRawUnsafe: async <T = any>(strings: TemplateStringsArray | string, ...values: any[]) => [] as T,
+  $executeRawUnsafe: async (strings: TemplateStringsArray | string, ...values: any[]) => {},
   order: {
     create: async () => ({ id: 'mock' }),
     findUnique: async () => null,

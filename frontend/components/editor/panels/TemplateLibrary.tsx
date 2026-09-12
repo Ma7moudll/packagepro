@@ -21,7 +21,7 @@ import {
   Check,
   LayoutTemplate,
 } from "lucide-react"
-import { TEMPLATES, TEMPLATE_CATEGORIES, getTemplatesByCategory, searchTemplates, Template } from "@/lib/editor/data/templates-data"
+import { TEMPLATES, TEMPLATE_CATEGORIES, getTemplatesByCategory, searchTemplates, RawTemplate } from "@/lib/editor/data/templates"
 
 // Map categories for the UI
 const CATEGORIES = TEMPLATE_CATEGORIES
@@ -272,7 +272,7 @@ export function TemplateLibrary() {
   const [search, setSearch] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [applyingId, setApplyingId] = useState<string | null>(null)
-  const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null)
+  const [previewTemplate, setPreviewTemplate] = useState<RawTemplate | null>(null)
 
   const addLayer = useDesignStore((s) => s.addLayer)
   const selectedFace = useDesignStore((s) => s.ui.selectedFace)
@@ -287,7 +287,7 @@ export function TemplateLibrary() {
     return getTemplatesByCategory(selectedCategory)
   }, [search, selectedCategory])
 
-  const applyTemplate = async (template: Template) => {
+  const applyTemplate = async (template: RawTemplate) => {
     setApplyingId(template.id)
 
     // Clear existing layers for current face and add template layers
@@ -299,7 +299,7 @@ export function TemplateLibrary() {
       const newLayers = template.layers.map((layer, idx) => ({
         id: `template-${template.id}-${idx}-${Date.now()}`,
         type: layer.type as any,
-        name: layer.name,
+        name: layer.name || '',
         visible: true,
         locked: false,
         opacity: 1,

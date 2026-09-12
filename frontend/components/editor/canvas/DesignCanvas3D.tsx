@@ -1,13 +1,13 @@
 "use client"
 
-import { Canvas } from "@react-three/fiber"
-import { useState, useEffect, Suspense } from "react"
+import { Canvas, useThree, useFrame } from "@react-three/fiber"
+import { useState, useEffect, useCallback, useRef, Suspense } from "react"
 import { getBoxModel } from "@/components/design-editor/models/BoxModels"
-import { SceneSetup } from "@/components/design-editor/3D/SceneSetup"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { generateTextureFromLayers } from "@/lib/editor/services/texture-generator"
 import { Stage, Environment, ContactShadows, OrbitControls } from "@react-three/drei"
 import * as THREE from "three"
+import type { FaceId } from "@/lib/editor/state/types"
 
 interface DesignCanvas3DProps {
   productType?: string
@@ -23,15 +23,229 @@ function LoadingBox() {
   )
 }
 
+/**
+ * M7-D: resolves a raycast intersection to a stable Face ID via the explicit
+ * `mesh.userData.faceId` metadata attached to every printable surface in
+ * BoxModels. The id must come from the ProductStructure face list (model.faces);
+ * anything else (decorative meshes, ground, shadows) is ignored.
+ */
+function useFaceValidity() {
+  return useCallback((faceId: string): boolean => {
+    const faces = useDesignStore.getState().model.faces
+    if (faces.some((f) => f.id === faceId)) return true
+    // `inside_*` faces map to their outer ProductStructure sibling.
+    return faces.some((f) => f.id === faceId.replace("inside_", ""))
+  }, [])
+}
+
+/**
+ * M7-D: selection highlight — dims every printable mesh belonging to the
+ * currently selected face by swapping in a cloned (emissive) material. The
+ * clone is reverted when the selection changes or the component/effect re-runs,
+ * so shared fallback materials are never mutated across faces.
+ */
+function FaceHighlight({ selectedFace }: { selectedFace: FaceId }) {
+  const { scene } = useThree()
+  const model = useDesignStore((s) => s.model)
+  const layers = useDesignStore((s) => s.layers)
+
+  useEffect(() => {
+    const restores: Array<() => void> = []
+    scene.traverse((o) => {
+      const mesh = o as THREE.Mesh
+      if (!mesh.isMesh) return
+      const fid = (mesh.userData as any)?.faceId
+      if (!fid || fid !== selectedFace) return
+      const base = mesh.material as THREE.Material
+      if (!base || (base as any).__m7dHighlightClone) return
+      const clone = base.clone()
+      ;(clone as THREE.MeshStandardMaterial).emissive = new THREE.Color("#ffb300")
+      ;(clone as THREE.MeshStandardMaterial).emissiveIntensity = 0.45
+      ;(clone as any).__m7dHighlightClone = true
+      mesh.material = clone
+      restores.push(() => {
+        if (mesh.material === clone) mesh.material = base
+      })
+    })
+    return () => {
+      restores.forEach((r) => r())
+    }
+  }, [scene, selectedFace, model, layers])
+
+  return null
+}
+
+/**
+ * M7-D: gentle continuous rotation of the physical model (standard packaging
+ * preview behaviour). Exposes a small harness (`__editorSpinBox`) so E2E tests
+ * can pin the box to a fixed azimuth; picking itself always uses the real
+ * raycaster — this only turns the model like a user turntable.
+ */
+const spinConfig = {
+  active: true,
+  speed: 0.5,
+  yOverride: null as number | null,
+}
+
+function SpinBox({ children }: { children: React.ReactNode }) {
+  const groupRef = useRef<THREE.Group>(null)
+  useFrame((_, delta) => {
+    const g = groupRef.current
+    if (!g) return
+    if (spinConfig.yOverride !== null) {
+      g.rotation.y = spinConfig.yOverride
+    } else if (spinConfig.active) {
+      g.rotation.y += delta * spinConfig.speed
+    }
+  })
+  useEffect(() => {
+    ;(window as any).__editorSpinBox = spinConfig
+    return () => {
+      delete (window as any).__editorSpinBox
+    }
+  }, [])
+  return <group ref={groupRef}>{children}</group>
+}
+
+/**
+ * M7-D E2E harness: drives the REAL raycaster against the REAL scene and camera
+ * (no fake picking) and applies the same selection path used by pointer clicks.
+ *   - __editorPickFace(clientX, clientY[, {apply}]) -> NDC via live canvas rect,
+ *     raycast, pick first hit carrying userData.faceId, return faceId (or null).
+ *   - __editorPickFaceAt(ndcX, ndcY[, {apply}]) -> same, with explicit NDC.
+ *   - __editorPickScan({step}) -> grid-scan NDC with the SAME raycast path and
+ *     returns every distinct faceId currently visible + a hit ndc for each.
+ *   - __editor3DFaces() -> per tagged mesh {faceId, position, ndc, visible}
+ *     for projecting / aiming deterministic probes.
+ */
+function PickBridge() {
+  const { scene, camera, gl } = useThree()
+  const isValidFace = useFaceValidity()
+
+  useEffect(() => {
+    const pickAtNdc = (ndcX: number, ndcY: number, opts?: { apply?: boolean }) => {
+      const mouse = new THREE.Vector2(ndcX, ndcY)
+      const raycaster = new THREE.Raycaster()
+      raycaster.setFromCamera(mouse, camera)
+      const hits = raycaster.intersectObject(scene, true)
+      for (const hit of hits) {
+        const fid = (hit.object?.userData as any)?.faceId as string | undefined
+        if (fid && isValidFace(fid)) {
+          if (opts?.apply !== false) {
+            useDesignStore.getState().setSelectedFace(fid as FaceId)
+          }
+          return fid
+        }
+      }
+      return null
+    }
+
+    const pickAtClient = (clientX: number, clientY: number, opts?: { apply?: boolean }) => {
+      const rect = gl.domElement.getBoundingClientRect()
+      const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1
+      const ndcY = -(((clientY - rect.top) / rect.height) * 2 - 1)
+      return pickAtNdc(ndcX, ndcY, opts)
+    }
+
+    const faces3D = () => {
+      const out: Array<{
+        faceId: string
+        position: [number, number, number]
+        ndc: [number, number, number]
+        visible: boolean
+      }> = []
+      scene.traverse((o) => {
+        const mesh = o as THREE.Mesh
+        const fid = (mesh.userData as any)?.faceId as string | undefined
+        if (!fid || !mesh.isMesh) return
+        const pos = new THREE.Vector3()
+        mesh.getWorldPosition(pos)
+        const ndc = pos.clone().project(camera)
+        const v =
+          ndc.x >= -1 && ndc.x <= 1 && ndc.y >= -1 && ndc.y <= 1 && ndc.z >= -1 && ndc.z <= 1
+        out.push({
+          faceId: fid,
+          position: [pos.x, pos.y, pos.z],
+          ndc: [ndc.x, ndc.y, ndc.z],
+          visible: v,
+        })
+      })
+      return out
+    }
+
+    const pickScan = (opts?: { step?: number }) => {
+      const step = opts?.step ?? 0.05
+      const seen = new Map<string, { ndc: [number, number] }>()
+      for (let y = -1; y <= 1; y += step) {
+        for (let x = -1; x <= 1; x += step) {
+          const fid = pickAtNdc(x, y, { apply: false })
+          if (fid && !seen.has(fid)) {
+            seen.set(fid, { ndc: [x, y] })
+          }
+        }
+      }
+      return Array.from(seen.entries()).map(([faceId, p]) => ({ faceId, ndc: p.ndc }))
+    }
+
+    ;(window as any).__editorPickFace = pickAtClient
+    ;(window as any).__editorPickFaceAt = pickAtNdc
+    ;(window as any).__editorPickScan = pickScan
+    ;(window as any).__editor3DFaces = faces3D
+    ;(window as any).__r3fGetter = () => {
+      const s: any = (useThree as any).getState?.()
+      return s
+        ? {
+            pointer: { x: s.pointer.x, y: s.pointer.y },
+            size: { width: s.size.width, height: s.size.height },
+          }
+        : null
+    }
+    return () => {
+      delete (window as any).__editorPickFace
+      delete (window as any).__editorPickFaceAt
+      delete (window as any).__editorPickScan
+      delete (window as any).__editor3DFaces
+      delete (window as any).__r3fGetter
+    }
+  }, [scene, camera, gl, isValidFace])
+
+  return null
+}
+
 export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   const model = useDesignStore((s) => s.model)
   const layers = useDesignStore((s) => s.layers)
   const canvas = useDesignStore((s) => s.canvas)
   const boxOpenState = useDesignStore((s) => s.ui.boxOpenState)
+  const selectedFace = useDesignStore((s) => s.ui.selectedFace)
+  const setSelectedFace = useDesignStore((s) => s.setSelectedFace)
+  const isValidFace = useFaceValidity()
+
+  // M7-D: physical-surface pick. The primary (and only) face resolution path is
+  // the explicit mesh.userData.faceId, validated against ProductStructure faces.
+  // No normal-based guessing, array indices or hard-coded coordinates.
+  const handleFaceSelect = (e: any) => {
+    if (!e?.intersections?.length) return
+    // Preserve orbit interaction: dragging the view must never select a face.
+    if (typeof e.delta === "number" && e.delta > 6) return
+    // R3F forwards the handler once per intersected descendant mesh (in
+    // distance order). Resolve the physical surface under the cursor as the
+    // NEAREST tagged hit rather than trusting the single e.object (which would
+    // be last-write-wins and favor the farthest face).
+    const nearestTagged = (e.intersections as any[])
+      .map((h: any) => ({
+        faceId: (h?.object?.userData as any)?.faceId as string | undefined,
+        distance: h?.distance,
+      }))
+      .find((h: any) => h.faceId && isValidFace(h.faceId))
+    if (!nearestTagged) return
+    setSelectedFace(nearestTagged.faceId as FaceId)
+  }
 
   const [faceTextures, setFaceTextures] = useState<Record<string, string>>({})
 
-  // Generate textures for each face
+  // Generate textures for each face — keyed by the SAME stable Face IDs used on
+  // the 3D meshes, so 2D artwork maps deterministically onto picked faces.
   useEffect(() => {
     let active = true
     const updateTextures = async () => {
@@ -73,6 +287,9 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
       >
         {/* خلفية رمادية فاتحة */}
         <color attach="background" args={["#f8f8f8"]} />
+
+        <PickBridge />
+        <FaceHighlight selectedFace={selectedFace} />
 
         {/* إضاءة واقعية للكرتون */}
         <ambientLight intensity={0.5} />
@@ -125,17 +342,22 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
 
         {/* نموذج الصندوق */}
         <Suspense fallback={<LoadingBox />}>
-          <group position={[0, 0, 0]}>
-            <BoxModel
-              dimensions={model.dimensions}
-              type={type}
-              material={model.material}
-              printCoverage={model.printCoverage}
-              textures={faceTextures}
-              backgroundColor={canvas.backgroundColor}
-              openState={boxOpenState}
-            />
-          </group>
+          <SpinBox>
+            <group
+              position={[0, 0, 0]}
+              onClick={handleFaceSelect}
+            >
+              <BoxModel
+                dimensions={model.dimensions}
+                type={type}
+                material={model.material}
+                printCoverage={model.printCoverage}
+                textures={faceTextures}
+                backgroundColor={canvas.backgroundColor}
+                openState={boxOpenState}
+              />
+            </group>
+          </SpinBox>
         </Suspense>
 
         {/* تحكم الكاميرا */}

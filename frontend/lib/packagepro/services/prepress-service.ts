@@ -7,7 +7,10 @@
 import { uploadFile, generateDesignKey } from "../storage/s3-client"
 import { logger } from "../utils/logger"
 
-const prisma = null as any
+const prisma = {
+  $queryRawUnsafe: async <T = any>(strings: TemplateStringsArray | string, ...values: any[]): Promise<T> => [] as T,
+  $executeRawUnsafe: async (strings: TemplateStringsArray | string, ...values: any[]) => {},
+}
 
 export interface PrepressValidationResult {
   isValid: boolean

@@ -5,7 +5,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, email, password } = body
+    const { name, email, password, role } = body
 
     if (!email || !password) {
       return NextResponse.json(
@@ -13,6 +13,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const backendRole = role === "MANUFACTURER" || role === "VENDOR" ? "VENDOR" : "CUSTOMER"
 
     // Proxy the request to the backend API
     const backendResponse = await fetch(`${BACKEND_URL}/api/auth/register`, {
@@ -23,8 +25,8 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         email,
         password,
-        firstName: name?.split(' ')[0] || '',
-        lastName: name?.split(' ').slice(1).join(' ') || '',
+        name: name || '',
+        role: backendRole,
       }),
     })
 
@@ -37,15 +39,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const userData = data.data
     return NextResponse.json(
       {
+        success: true,
         message: "User created successfully",
         user: {
-          id: data.data.user.id,
-          email: data.data.user.email,
-          name: `${data.data.user.firstName || ''} ${data.data.user.lastName || ''}`.trim(),
+          id: userData.userId || userData.id,
+          email: userData.email,
+          name: name || userData.email.split('@')[0],
+          role: backendRole === "VENDOR" ? "MANUFACTURER" : "TRADER",
         },
-        tokens: data.data.tokens,
+        tokens: userData.tokens,
       },
       { status: 201 }
     )

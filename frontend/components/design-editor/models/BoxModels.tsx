@@ -38,6 +38,44 @@ function getCachedMaterial(key: string, factory: () => THREE.Material): THREE.Ma
 }
 
 // ============================================
+// PER-FACE TEXTURED MATERIAL RESOLVER
+// Maps a faceId to a MeshStandardMaterial carrying the face's generated
+// 2D texture (data URL). Faces without a texture resolve to the base
+// (cardboard) material passed in as a fallback.
+// ============================================
+const faceTextureCache = new Map<string, THREE.MeshStandardMaterial>()
+
+function resolveFaceMaterial(
+  fallback: THREE.MeshStandardMaterial,
+  textures: Record<string, string> | undefined,
+  faceId: string
+): THREE.MeshStandardMaterial {
+  if (!textures) return fallback
+  const dataUrl = textures[faceId] ?? textures[faceId.replace("inside_", "")]
+  if (!dataUrl) return fallback
+
+  let mat = faceTextureCache.get(dataUrl)
+  if (!mat) {
+    const img = new Image()
+    img.src = dataUrl
+    const texture = new THREE.Texture(img)
+    img.onload = () => {
+      texture.needsUpdate = true
+    }
+    texture.colorSpace = THREE.SRGBColorSpace
+    mat = new THREE.MeshStandardMaterial({
+      map: texture,
+      transparent: true,
+      roughness: 0.8,
+      metalness: 0,
+      side: THREE.FrontSide,
+    })
+    faceTextureCache.set(dataUrl, mat)
+  }
+  return mat
+}
+
+// ============================================
 // TEXTURE GENERATORS
 // ============================================
 
@@ -394,7 +432,7 @@ function easeOutQuad(t: number): number {
 // ============================================
 // SLOW ROTATION HOOK
 // ============================================
-function useRotation(ref: React.RefObject<THREE.Group>, speed = 0.002) {
+function useRotation(ref: React.RefObject<THREE.Group | null>, speed = 0.002) {
   useFrame(() => {
     if (ref.current) {
       ref.current.rotation.y += speed
@@ -494,46 +532,54 @@ export function MailerBox({
   const smoothT = easeInOutCubic(t)
   const wall = 0.006
 
+  // Per-face art binding — the meat of deterministic 2D→3D mapping.
+  const frontMat = resolveFaceMaterial(outsideMaterial, textures, "front")
+  const backMat = resolveFaceMaterial(outsideMaterial, textures, "back")
+  const leftMat = resolveFaceMaterial(outsideMaterial, textures, "left")
+  const rightMat = resolveFaceMaterial(outsideMaterial, textures, "right")
+  const topMat = resolveFaceMaterial(outsideMaterial, textures, "top")
+  const bottomMat = resolveFaceMaterial(insideMaterial, textures, "bottom")
+
   return (
     <group ref={groupRef}>
       {/* ===== BOX BODY (بسيط - 4 جدران + قاع) ===== */}
       {/* Front wall */}
-      <mesh position={[0, h / 2, w / 2]} castShadow>
+      <mesh position={[0, h / 2, w / 2]} castShadow userData={{ faceId: "front" }}>
         <boxGeometry args={[l, h, wall]} />
-        <primitive object={outsideMaterial} attach="material" />
+        <primitive object={frontMat} attach="material" />
       </mesh>
 
       {/* Back wall */}
-      <mesh position={[0, h / 2, -w / 2]} castShadow>
+      <mesh position={[0, h / 2, -w / 2]} castShadow userData={{ faceId: "back" }}>
         <boxGeometry args={[l, h, wall]} />
-        <primitive object={outsideMaterial} attach="material" />
+        <primitive object={backMat} attach="material" />
       </mesh>
 
       {/* Left wall */}
-      <mesh position={[-l / 2, h / 2, 0]} castShadow>
+      <mesh position={[-l / 2, h / 2, 0]} castShadow userData={{ faceId: "left" }}>
         <boxGeometry args={[wall, h, w]} />
-        <primitive object={outsideMaterial} attach="material" />
+        <primitive object={leftMat} attach="material" />
       </mesh>
 
       {/* Right wall */}
-      <mesh position={[l / 2, h / 2, 0]} castShadow>
+      <mesh position={[l / 2, h / 2, 0]} castShadow userData={{ faceId: "right" }}>
         <boxGeometry args={[wall, h, w]} />
-        <primitive object={outsideMaterial} attach="material" />
+        <primitive object={rightMat} attach="material" />
       </mesh>
 
       {/* Bottom */}
-      <mesh position={[0, wall / 2, 0]} receiveShadow>
+      <mesh position={[0, wall / 2, 0]} receiveShadow userData={{ faceId: "bottom" }}>
         <boxGeometry args={[l, wall, w]} />
-        <primitive object={insideMaterial} attach="material" />
+        <primitive object={bottomMat} attach="material" />
       </mesh>
 
       {/* ===== TOP FLAPS ===== */}
       {/* Front major flap */}
       <group position={[0, h, w / 2]}>
         <group rotation={[-smoothT * Math.PI * 0.4, 0, 0]}>
-          <mesh position={[0, wall / 2, -w / 4]} castShadow>
+          <mesh position={[0, wall / 2, -w / 4]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[l, wall, w / 2]} />
-            <primitive object={outsideMaterial} attach="material" />
+            <primitive object={topMat} attach="material" />
           </mesh>
         </group>
       </group>
@@ -541,9 +587,9 @@ export function MailerBox({
       {/* Back major flap */}
       <group position={[0, h, -w / 2]}>
         <group rotation={[smoothT * Math.PI * 0.4, 0, 0]}>
-          <mesh position={[0, wall / 2, w / 4]} castShadow>
+          <mesh position={[0, wall / 2, w / 4]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[l, wall, w / 2]} />
-            <primitive object={outsideMaterial} attach="material" />
+            <primitive object={topMat} attach="material" />
           </mesh>
         </group>
       </group>
@@ -551,7 +597,7 @@ export function MailerBox({
       {/* Left side flap - ممتد للخارج (مفتوح جزئياً) */}
       <group position={[-l / 2, h, 0]}>
         <group rotation={[0, 0, -Math.PI * 0.3 - smoothT * Math.PI * 0.2]}>
-          <mesh position={[-w / 3, wall / 2, 0]} castShadow>
+          <mesh position={[-w / 3, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[w / 2, wall, w * 0.85]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
@@ -561,7 +607,7 @@ export function MailerBox({
       {/* Right side flap - ممتد للخارج (مفتوح جزئياً) */}
       <group position={[l / 2, h, 0]}>
         <group rotation={[0, 0, Math.PI * 0.3 + smoothT * Math.PI * 0.2]}>
-          <mesh position={[w / 3, wall / 2, 0]} castShadow>
+          <mesh position={[w / 3, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[w / 2, wall, w * 0.85]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
@@ -624,31 +670,31 @@ export function ShippingBox({
     <group ref={groupRef}>
       {/* ===== BOX BODY (بسيط) ===== */}
       {/* Front wall */}
-      <mesh position={[0, h / 2, w / 2]} castShadow>
+      <mesh position={[0, h / 2, w / 2]} castShadow userData={{ faceId: "front" }}>
         <boxGeometry args={[l, h, wall]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
 
       {/* Back wall */}
-      <mesh position={[0, h / 2, -w / 2]} castShadow>
+      <mesh position={[0, h / 2, -w / 2]} castShadow userData={{ faceId: "back" }}>
         <boxGeometry args={[l, h, wall]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
 
       {/* Left wall */}
-      <mesh position={[-l / 2, h / 2, 0]} castShadow>
+      <mesh position={[-l / 2, h / 2, 0]} castShadow userData={{ faceId: "left" }}>
         <boxGeometry args={[wall, h, w]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
 
       {/* Right wall */}
-      <mesh position={[l / 2, h / 2, 0]} castShadow>
+      <mesh position={[l / 2, h / 2, 0]} castShadow userData={{ faceId: "right" }}>
         <boxGeometry args={[wall, h, w]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
 
       {/* Bottom */}
-      <mesh position={[0, wall / 2, 0]} receiveShadow>
+      <mesh position={[0, wall / 2, 0]} receiveShadow userData={{ faceId: "bottom" }}>
         <boxGeometry args={[l, wall, w]} />
         <primitive object={insideMaterial} attach="material" />
       </mesh>
@@ -657,7 +703,7 @@ export function ShippingBox({
       {/* Front major flap */}
       <group position={[0, h, w / 2]}>
         <group rotation={[-majorAngle, 0, 0]}>
-          <mesh position={[0, wall / 2, -majorFlapDepth / 2]} castShadow>
+          <mesh position={[0, wall / 2, -majorFlapDepth / 2]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[l, wall, majorFlapDepth]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
@@ -667,7 +713,7 @@ export function ShippingBox({
       {/* Back major flap */}
       <group position={[0, h, -w / 2]}>
         <group rotation={[majorAngle, 0, 0]}>
-          <mesh position={[0, wall / 2, majorFlapDepth / 2]} castShadow>
+          <mesh position={[0, wall / 2, majorFlapDepth / 2]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[l, wall, majorFlapDepth]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
@@ -677,7 +723,7 @@ export function ShippingBox({
       {/* Right side flap */}
       <group position={[l / 2, h, 0]}>
         <group rotation={[0, 0, sideAngle]}>
-          <mesh position={[minorFlapDepth / 2, wall / 2, 0]} castShadow>
+          <mesh position={[minorFlapDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[minorFlapDepth, wall, w]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
@@ -687,7 +733,7 @@ export function ShippingBox({
       {/* Left side flap */}
       <group position={[-l / 2, h, 0]}>
         <group rotation={[0, 0, -sideAngle]}>
-          <mesh position={[-minorFlapDepth / 2, wall / 2, 0]} castShadow>
+          <mesh position={[-minorFlapDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[minorFlapDepth, wall, w]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
@@ -746,24 +792,24 @@ export function RigidBox({
     <group ref={groupRef}>
       {/* ===== BASE (hollow) ===== */}
       {/* 4 walls */}
-      <mesh position={[0, baseHeight / 2, w / 2 - wall / 2]} castShadow>
+      <mesh position={[0, baseHeight / 2, w / 2 - wall / 2]} castShadow userData={{ faceId: "front" }}>
         <boxGeometry args={[l, baseHeight, wall]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
-      <mesh position={[0, baseHeight / 2, -w / 2 + wall / 2]} castShadow>
+      <mesh position={[0, baseHeight / 2, -w / 2 + wall / 2]} castShadow userData={{ faceId: "back" }}>
         <boxGeometry args={[l, baseHeight, wall]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
-      <mesh position={[-l / 2 + wall / 2, baseHeight / 2, 0]} castShadow>
+      <mesh position={[-l / 2 + wall / 2, baseHeight / 2, 0]} castShadow userData={{ faceId: "left" }}>
         <boxGeometry args={[wall, baseHeight, w]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
-      <mesh position={[l / 2 - wall / 2, baseHeight / 2, 0]} castShadow>
+      <mesh position={[l / 2 - wall / 2, baseHeight / 2, 0]} castShadow userData={{ faceId: "right" }}>
         <boxGeometry args={[wall, baseHeight, w]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
       {/* Bottom */}
-      <mesh position={[0, wall / 2, 0]} receiveShadow>
+      <mesh position={[0, wall / 2, 0]} receiveShadow userData={{ faceId: "bottom" }}>
         <boxGeometry args={[l - wall * 2, wall, w - wall * 2]} />
         <primitive object={insideMaterial} attach="material" />
       </mesh>
@@ -771,29 +817,29 @@ export function RigidBox({
       {/* ===== LID (hollow, slightly larger) ===== */}
       <group position={[0, baseHeight + lidLift, -t * w * 0.1]} rotation={[lidTilt, 0, 0]}>
         {/* 4 walls */}
-        <mesh position={[0, lidHeight / 2, (w + 0.02) / 2 - wall / 2]} castShadow>
+        <mesh position={[0, lidHeight / 2, (w + 0.02) / 2 - wall / 2]} castShadow userData={{ faceId: "top" }}>
           <boxGeometry args={[l + 0.02, lidHeight, wall]} />
           <primitive object={outsideMaterial} attach="material" />
         </mesh>
-        <mesh position={[0, lidHeight / 2, -(w + 0.02) / 2 + wall / 2]} castShadow>
+        <mesh position={[0, lidHeight / 2, -(w + 0.02) / 2 + wall / 2]} castShadow userData={{ faceId: "top" }}>
           <boxGeometry args={[l + 0.02, lidHeight, wall]} />
           <primitive object={outsideMaterial} attach="material" />
         </mesh>
-        <mesh position={[-(l + 0.02) / 2 + wall / 2, lidHeight / 2, 0]} castShadow>
+        <mesh position={[-(l + 0.02) / 2 + wall / 2, lidHeight / 2, 0]} castShadow userData={{ faceId: "top" }}>
           <boxGeometry args={[wall, lidHeight, w + 0.02]} />
           <primitive object={outsideMaterial} attach="material" />
         </mesh>
-        <mesh position={[(l + 0.02) / 2 - wall / 2, lidHeight / 2, 0]} castShadow>
+        <mesh position={[(l + 0.02) / 2 - wall / 2, lidHeight / 2, 0]} castShadow userData={{ faceId: "top" }}>
           <boxGeometry args={[wall, lidHeight, w + 0.02]} />
           <primitive object={outsideMaterial} attach="material" />
         </mesh>
         {/* Top */}
-        <mesh position={[0, lidHeight - wall / 2, 0]} castShadow>
+        <mesh position={[0, lidHeight - wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
           <boxGeometry args={[l + 0.02 - wall * 2, wall, w + 0.02 - wall * 2]} />
           <primitive object={outsideMaterial} attach="material" />
         </mesh>
         {/* Inside bottom */}
-        <mesh position={[0, wall / 2, 0]}>
+        <mesh position={[0, wall / 2, 0]} userData={{ faceId: "top" }}>
           <boxGeometry args={[l - wall * 2, wall, w - wall * 2]} />
           <primitive object={insideMaterial} attach="material" />
         </mesh>
@@ -854,23 +900,23 @@ export function FoldingCarton({
   return (
     <group ref={groupRef}>
       {/* ===== HOLLOW BOX ===== */}
-      <mesh position={[0, h / 2, w / 2 - wall / 2]} castShadow>
+      <mesh position={[0, h / 2, w / 2 - wall / 2]} castShadow userData={{ faceId: "front" }}>
         <boxGeometry args={[l, h, wall]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
-      <mesh position={[0, h / 2, -w / 2 + wall / 2]} castShadow>
+      <mesh position={[0, h / 2, -w / 2 + wall / 2]} castShadow userData={{ faceId: "back" }}>
         <boxGeometry args={[l, h, wall]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
-      <mesh position={[-l / 2 + wall / 2, h / 2, 0]} castShadow>
+      <mesh position={[-l / 2 + wall / 2, h / 2, 0]} castShadow userData={{ faceId: "left" }}>
         <boxGeometry args={[wall, h, w]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
-      <mesh position={[l / 2 - wall / 2, h / 2, 0]} castShadow>
+      <mesh position={[l / 2 - wall / 2, h / 2, 0]} castShadow userData={{ faceId: "right" }}>
         <boxGeometry args={[wall, h, w]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
-      <mesh position={[0, wall / 2, 0]} receiveShadow>
+      <mesh position={[0, wall / 2, 0]} receiveShadow userData={{ faceId: "bottom" }}>
         <boxGeometry args={[l - wall * 2, wall, w - wall * 2]} />
         <primitive object={insideMaterial} attach="material" />
       </mesh>
@@ -879,7 +925,7 @@ export function FoldingCarton({
       {/* Side dust flaps */}
       <group position={[-l / 2, h, 0]}>
         <group rotation={[0, 0, -smoothT * Math.PI / 2]}>
-          <mesh position={[-sideFlapDepth / 2, wall / 2, 0]} castShadow>
+          <mesh position={[-sideFlapDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[sideFlapDepth, wall, w * 0.85]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
@@ -887,7 +933,7 @@ export function FoldingCarton({
       </group>
       <group position={[l / 2, h, 0]}>
         <group rotation={[0, 0, smoothT * Math.PI / 2]}>
-          <mesh position={[sideFlapDepth / 2, wall / 2, 0]} castShadow>
+          <mesh position={[sideFlapDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[sideFlapDepth, wall, w * 0.85]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
@@ -897,7 +943,7 @@ export function FoldingCarton({
       {/* Front tuck flap */}
       <group position={[0, h, w / 2]}>
         <group rotation={[-smoothT * Math.PI / 2, 0, 0]}>
-          <mesh position={[0, wall / 2, -tuckDepth / 2]} castShadow>
+          <mesh position={[0, wall / 2, -tuckDepth / 2]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[l * 0.9, wall, tuckDepth]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
@@ -905,7 +951,7 @@ export function FoldingCarton({
       </group>
 
       {/* Back panel */}
-      <mesh position={[0, h + wall / 2, -w / 2 + tuckDepth / 2]} castShadow>
+      <mesh position={[0, h + wall / 2, -w / 2 + tuckDepth / 2]} castShadow userData={{ faceId: "top" }}>
         <boxGeometry args={[l * 0.9, wall, tuckDepth]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
@@ -957,24 +1003,24 @@ export function PizzaBox({
     <group ref={groupRef}>
       {/* ===== BASE (hollow) ===== */}
       {/* 4 walls */}
-      <mesh position={[0, baseHeight / 2, size / 2 - wall / 2]} castShadow>
+      <mesh position={[0, baseHeight / 2, size / 2 - wall / 2]} castShadow userData={{ faceId: "front" }}>
         <boxGeometry args={[size, baseHeight, wall]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
-      <mesh position={[0, baseHeight / 2, -size / 2 + wall / 2]} castShadow>
+      <mesh position={[0, baseHeight / 2, -size / 2 + wall / 2]} castShadow userData={{ faceId: "back" }}>
         <boxGeometry args={[size, baseHeight, wall]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
-      <mesh position={[-size / 2 + wall / 2, baseHeight / 2, 0]} castShadow>
+      <mesh position={[-size / 2 + wall / 2, baseHeight / 2, 0]} castShadow userData={{ faceId: "left" }}>
         <boxGeometry args={[wall, baseHeight, size]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
-      <mesh position={[size / 2 - wall / 2, baseHeight / 2, 0]} castShadow>
+      <mesh position={[size / 2 - wall / 2, baseHeight / 2, 0]} castShadow userData={{ faceId: "right" }}>
         <boxGeometry args={[wall, baseHeight, size]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
       {/* Bottom */}
-      <mesh position={[0, wall / 2, 0]} receiveShadow>
+      <mesh position={[0, wall / 2, 0]} receiveShadow userData={{ faceId: "bottom" }}>
         <boxGeometry args={[size - wall * 2, wall, size - wall * 2]} />
         <primitive object={insideMaterial} attach="material" />
       </mesh>
@@ -983,29 +1029,29 @@ export function PizzaBox({
       <group position={[0, baseHeight, -size / 2]}>
         <group rotation={[lidAngle, 0, 0]}>
           {/* 4 walls */}
-          <mesh position={[0, lidHeight / 2, size - wall / 2]} castShadow>
+          <mesh position={[0, lidHeight / 2, size - wall / 2]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[size, lidHeight, wall]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
-          <mesh position={[0, lidHeight / 2, wall / 2]} castShadow>
+          <mesh position={[0, lidHeight / 2, wall / 2]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[size, lidHeight, wall]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
-          <mesh position={[-size / 2 + wall / 2, lidHeight / 2, size / 2]} castShadow>
+          <mesh position={[-size / 2 + wall / 2, lidHeight / 2, size / 2]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[wall, lidHeight, size]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
-          <mesh position={[size / 2 - wall / 2, lidHeight / 2, size / 2]} castShadow>
+          <mesh position={[size / 2 - wall / 2, lidHeight / 2, size / 2]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[wall, lidHeight, size]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
           {/* Top */}
-          <mesh position={[0, lidHeight - wall / 2, size / 2]} castShadow>
+          <mesh position={[0, lidHeight - wall / 2, size / 2]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[size - wall * 2, wall, size - wall * 2]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
           {/* Inside */}
-          <mesh position={[0, wall / 2, size / 2]}>
+          <mesh position={[0, wall / 2, size / 2]} userData={{ faceId: "top" }}>
             <boxGeometry args={[size - wall * 2, wall, size - wall * 2]} />
             <primitive object={insideMaterial} attach="material" />
           </mesh>
@@ -1200,6 +1246,37 @@ export function Envelope({
 }
 
 // ============================================
+// LABEL — flat rectangular die-cut label
+// ============================================
+export function Label({
+  dimensions,
+  textures,
+  backgroundColor,
+  material: materialType
+}: BoxModelProps) {
+  const groupRef = useRef<THREE.Group>(null)
+  useRotation(groupRef)
+
+  const l = dimensions.length / 100
+  const h = dimensions.height / 100
+  const baseColor = materialType?.includes("kraft") ? "#D4B896" : "#F8F8F8"
+  const baseMat = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.8 }),
+    [baseColor]
+  )
+  const faceMat = resolveFaceMaterial(baseMat, textures, "front")
+
+  return (
+    <group ref={groupRef}>
+      <mesh castShadow userData={{ faceId: "front" }}>
+        <boxGeometry args={[l, h, 0.003]} />
+        <primitive object={faceMat} attach="material" />
+      </mesh>
+    </group>
+  )
+}
+
+// ============================================
 // MODEL FACTORY
 // ============================================
 export function getBoxModel(type: string) {
@@ -1239,6 +1316,12 @@ export function getBoxModel(type: string) {
     case "envelope":
     case "mailer-envelope":
       return Envelope
+    case "label":
+    case "rectangle-label":
+    case "circle-label":
+    case "square-label":
+    case "labels-sheet":
+      return Label
     default:
       return MailerBox
   }

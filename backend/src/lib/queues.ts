@@ -1,11 +1,13 @@
 import { Queue } from 'bullmq';
 import { getRedisClient, isRedisEnabled } from './redis';
+import { initializeExportQueue } from '../workers/export-queue/export.worker';
 
 // Create queues only if Redis is enabled
 let emailQueue: Queue | null = null;
 let settlementQueue: Queue | null = null;
 let reminderQueue: Queue | null = null;
 let marketingQueue: Queue | null = null;
+let exportQueue: Queue | null = null;
 
 function initializeQueues() {
   const redis = getRedisClient();
@@ -27,6 +29,9 @@ function initializeQueues() {
       marketingQueue = new Queue('marketing-queue', {
         connection: redis,
       });
+
+      // Initialize design export queue
+      exportQueue = initializeExportQueue(redis);
     } catch (error) {
       // Queues will remain null
     }
@@ -63,5 +68,10 @@ export function getMarketingQueue(): Queue | null {
   return marketingQueue;
 }
 
+export function getExportQueue(): Queue | null {
+  initializeQueuesIfNeeded();
+  return exportQueue;
+}
+
 // Export queues (may be null if Redis is not available)
-export { emailQueue, settlementQueue, reminderQueue, marketingQueue };
+export { emailQueue, settlementQueue, reminderQueue, marketingQueue, exportQueue };

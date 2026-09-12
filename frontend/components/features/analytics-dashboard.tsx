@@ -1,5 +1,6 @@
 "use client"
 
+import { useCallback, useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -11,43 +12,101 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  LineChart,
-  Line,
   PieChart,
   Pie,
   Cell,
-  AreaChart,
-  Area,
 } from "recharts"
-import { TrendingUp, TrendingDown, Users, ShoppingCart, DollarSign, Package } from "lucide-react"
+import { TrendingUp, ShoppingCart, Package, DollarSign, Loader2, AlertCircle } from "lucide-react"
+import { analyticsApi, type ConversionFunnel, type ProductPopularity } from "@/lib/api/analytics"
+import { financeApi, type FinancialReport } from "@/lib/api/finance"
+import { useLanguage } from "@/providers/language-provider"
 
-const salesData = [
-  { month: "Jan", sales: 12000, orders: 145 },
-  { month: "Feb", sales: 15000, orders: 178 },
-  { month: "Mar", sales: 18000, orders: 210 },
-  { month: "Apr", sales: 22000, orders: 245 },
-  { month: "May", sales: 25000, orders: 289 },
-  { month: "Jun", sales: 28000, orders: 312 },
-]
-
-const productData = [
-  { name: "Corrugated Boxes", value: 35, color: "#10b981" },
-  { name: "Paper Cups", value: 25, color: "#3b82f6" },
-  { name: "Gift Boxes", value: 20, color: "#8b5cf6" },
-  { name: "Shopping Bags", value: 15, color: "#f59e0b" },
-  { name: "Others", value: 5, color: "#ef4444" },
-]
-
-const customerData = [
-  { month: "Jan", new: 45, returning: 89 },
-  { month: "Feb", new: 52, returning: 95 },
-  { month: "Mar", new: 61, returning: 102 },
-  { month: "Apr", new: 58, returning: 108 },
-  { month: "May", new: 67, returning: 115 },
-  { month: "Jun", new: 73, returning: 122 },
-]
+const COLORS = ["#10b981", "#3b82f6", "#8b5cf6", "#f59e0b", "#ef4444"]
 
 export function AnalyticsDashboard() {
+  const { language } = useLanguage()
+
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [funnel, setFunnel] = useState<ConversionFunnel | null>(null)
+  const [report, setReport] = useState<FinancialReport | null>(null)
+  const [products, setProducts] = useState<ProductPopularity[]>([])
+
+  const fetchData = useCallback(async () => {
+    const start = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const end = new Date().toISOString()
+    const [funnelRes, reportRes, productsRes] = await Promise.allSettled([
+      analyticsApi.getFunnel({ start, end }),
+      financeApi.getReport({ start, end }),
+      analyticsApi.getProductPopularity(),
+    ])
+
+    if (funnelRes.status === "fulfilled" && funnelRes.value.data) setFunnel(funnelRes.value.data)
+    if (reportRes.status === "fulfilled" && reportRes.value.data) setReport(reportRes.value.data)
+    if (productsRes.status === "fulfilled") setProducts(productsRes.value.data || [])
+  }, [])
+
+  useEffect(() => {
+    setLoading(true)
+    setLoadError(null)
+    fetchData()
+      .catch((err) => {
+        console.error("Error loading analytics:", err)
+        setLoadError(err.message || "Failed to load analytics")
+      })
+      .finally(() => setLoading(false))
+  }, [fetchData])
+
+  const salesData = funnel
+    ? [
+        {
+          name: language === "ar" ? "تم إنشاؤها" : "Created",
+          orders: funnel.ordersCreated,
+        },
+        {
+          name: language === "ar" ? "مدفوعة" : "Paid",
+          orders: funnel.ordersPaid,
+        },
+        {
+          name: language === "ar" ? "معتمدة" : "Approved",
+          orders: funnel.ordersApproved,
+        },
+        {
+          name: language === "ar" ? "تم التسليم" : "Delivered",
+          orders: funnel.ordersDelivered,
+        },
+      ]
+    : []
+
+  const productPie = products.map((p, index) => ({
+    name: p.productType,
+    value: p.totalQuantity || p.orderCount,
+    color: COLORS[index % COLORS.length],
+  }))
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+      </div>
+    )
+  }
+
+  if (loadError && !funnel && !report && products.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-10 flex flex-col items-center gap-3 text-center">
+          <AlertCircle className="h-8 w-8 text-red-500" />
+          <p className="text-red-600">
+            {language === "ar"
+              ? "تعذر تحميل التحليلات. تحقق من اتصال الخادم."
+              : "Failed to load analytics. Check server connection."}
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
@@ -56,12 +115,17 @@ export function AnalyticsDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Total Revenue</p>
-                <p className="text-2xl font-bold">$128,450</p>
-                <p className="text-sm text-green-600 flex items-center">
-                  <TrendingUp className="h-4 w-4 mr-1" />
-                  +12.5% from last month
+                <p className="text-sm font-medium text-slate-600">
+                  {language === "ar" ? "الإيرادات (30 يوم)" : "Total Revenue (30 days)"}
                 </p>
+                <p className="text-2xl font-bold">
+                  {report ? `${report.revenue.toLocaleString()} EGP` : "—"}
+                </p>
+                {report && report.orderCount > 0 && (
+                  <p className="text-sm text-slate-500">
+                    {report.orderCount} {language === "ar" ? "طلبات مكتملة" : "completed orders"}
+                  </p>
+                )}
               </div>
               <DollarSign className="h-8 w-8 text-green-600" />
             </div>
@@ -72,12 +136,16 @@ export function AnalyticsDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Total Orders</p>
-                <p className="text-2xl font-bold">1,379</p>
-                <p className="text-sm text-green-600 flex items-center">
-                  <TrendingUp className="h-4 w-4 mr-1" />
-                  +8.2% from last month
+                <p className="text-sm font-medium text-slate-600">
+                  {language === "ar" ? "إجمالي الطلبات" : "Total Orders"}
                 </p>
+                <p className="text-2xl font-bold">{funnel?.ordersCreated ?? "—"}</p>
+                {funnel && (
+                  <p className="text-sm text-slate-500 flex items-center">
+                    <TrendingUp className="h-4 w-4 mr-1 text-green-600" />
+                    {funnel.ordersPaid} {language === "ar" ? "مدفوعة" : "paid"}
+                  </p>
+                )}
               </div>
               <ShoppingCart className="h-8 w-8 text-blue-600" />
             </div>
@@ -88,14 +156,18 @@ export function AnalyticsDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Active Customers</p>
-                <p className="text-2xl font-bold">892</p>
-                <p className="text-sm text-green-600 flex items-center">
-                  <TrendingUp className="h-4 w-4 mr-1" />
-                  +15.3% from last month
+                <p className="text-sm font-medium text-slate-600">
+                  {language === "ar" ? "الطلبات المُسلّمة" : "Delivered Orders"}
                 </p>
+                <p className="text-2xl font-bold">{funnel?.ordersDelivered ?? "—"}</p>
+                {funnel && (
+                  <p className="text-sm text-slate-500">
+                    {((funnel.conversionRate ?? 0) * 100).toFixed(2)}%{" "}
+                    {language === "ar" ? "معدل تحويل" : "conversion"}
+                  </p>
+                )}
               </div>
-              <Users className="h-8 w-8 text-purple-600" />
+              <Package className="h-8 w-8 text-orange-600" />
             </div>
           </CardContent>
         </Card>
@@ -104,14 +176,17 @@ export function AnalyticsDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Products Sold</p>
-                <p className="text-2xl font-bold">45,231</p>
-                <p className="text-sm text-red-600 flex items-center">
-                  <TrendingDown className="h-4 w-4 mr-1" />
-                  -2.1% from last month
+                <p className="text-sm font-medium text-slate-600">
+                  {language === "ar" ? "الوحدات المباعة" : "Units Sold"}
+                </p>
+                <p className="text-2xl font-bold">
+                  {products.reduce((sum, p) => sum + (p.totalQuantity || 0), 0)}
+                </p>
+                <p className="text-sm text-slate-500">
+                  {language === "ar" ? "من طلبية الطلبات" : "from current orders"}
                 </p>
               </div>
-              <Package className="h-8 w-8 text-orange-600" />
+              <ShoppingCart className="h-8 w-8 text-purple-600" />
             </div>
           </CardContent>
         </Card>
@@ -120,120 +195,106 @@ export function AnalyticsDashboard() {
       {/* Charts */}
       <Tabs defaultValue="sales" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="sales">Sales Analytics</TabsTrigger>
-          <TabsTrigger value="products">Product Performance</TabsTrigger>
-          <TabsTrigger value="customers">Customer Analytics</TabsTrigger>
+          <TabsTrigger value="sales">{language === "ar" ? "تحليلات المبيعات" : "Sales Analytics"}</TabsTrigger>
+          <TabsTrigger value="products">{language === "ar" ? "أداء المنتجات" : "Product Performance"}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sales" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Monthly Sales</CardTitle>
-                <CardDescription>Revenue and order trends over time</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={salesData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip />
-                    <Area type="monotone" dataKey="sales" stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Order Volume</CardTitle>
-                <CardDescription>Number of orders per month</CardDescription>
-              </CardHeader>
-              <CardContent>
+          <Card>
+            <CardHeader>
+              <CardTitle>{language === "ar" ? "مسار الطلبات" : "Order Funnel"}</CardTitle>
+              <CardDescription>
+                {language === "ar"
+                  ? "الطلبات عبر مراحل الإنشاء والدفع والاعتماد والتسليم"
+                  : "Orders across created, paid, approved and delivered stages"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {salesData.length === 0 ? (
+                <p className="text-sm text-slate-500 py-16 text-center">
+                  {language === "ar" ? "لا توجد بيانات بعد" : "No data yet"}
+                </p>
+              ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={salesData}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
+                    <XAxis dataKey="name" />
                     <YAxis />
                     <Tooltip />
-                    <Bar dataKey="orders" fill="#3b82f6" />
+                    <Bar dataKey="orders" name={language === "ar" ? "الطلبات" : "Orders"} fill="#10b981" />
                   </BarChart>
                 </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="products" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {products.length === 0 ? (
             <Card>
-              <CardHeader>
-                <CardTitle>Product Distribution</CardTitle>
-                <CardDescription>Sales breakdown by product category</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={productData}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      dataKey="value"
-                      label={({ name, value }) => `${name}: ${value}%`}
-                    >
-                      {productData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+              <CardContent className="py-16 text-center">
+                <Package className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                <p className="text-sm text-slate-500">
+                  {language === "ar" ? "لا توجد مبيعات مسجلة بعد" : "No recorded sales yet"}
+                </p>
               </CardContent>
             </Card>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{language === "ar" ? "توزيع المنتجات" : "Product Distribution"}</CardTitle>
+                  <CardDescription>
+                    {language === "ar" ? "الحصة حسب عدد الوحدات" : "Share by unit count"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={productPie}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        dataKey="value"
+                        nameKey="name"
+                        label
+                      >
+                        {productPie.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Top Products</CardTitle>
-                <CardDescription>Best performing products this month</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {productData.map((product, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: product.color }} />
-                        <span className="font-medium">{product.name}</span>
+              <Card>
+                <CardHeader>
+                  <CardTitle>{language === "ar" ? "أفضل المنتجات" : "Top Products"}</CardTitle>
+                  <CardDescription>
+                    {language === "ar" ? "الأداء حسب عدد الطلبات" : "Performance by order count"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {products.map((product, index) => (
+                      <div key={index} className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-4 h-4 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                          <span className="font-medium">{product.productType}</span>
+                        </div>
+                        <Badge variant="secondary">
+                          {product.orderCount} {language === "ar" ? "طلب" : "orders"}
+                        </Badge>
                       </div>
-                      <Badge variant="secondary">{product.value}%</Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="customers" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Customer Acquisition</CardTitle>
-              <CardDescription>New vs returning customers</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={customerData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="new" stroke="#10b981" strokeWidth={2} />
-                  <Line type="monotone" dataKey="returning" stroke="#3b82f6" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

@@ -24,7 +24,7 @@ export function PostProcessingEffects({ enabled = true }: PostProcessingEffectsP
 
       {/* Chromatic aberration for subtle color separation */}
       <ChromaticAberration
-        offset={[0.001, 0.001]}
+        offset={[0.001, 0.001] as any}
         radialModulation={false}
         modulationOffset={0.15}
       />

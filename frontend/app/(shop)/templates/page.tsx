@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
 import { useLanguage } from "@/providers/language-provider"
 import { PRODUCT_TEMPLATES, ProductTemplate } from "@/lib/data/product-templates"
@@ -11,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Package, ShoppingBag, Coffee, Box } from "lucide-react"
 
 export default function TemplatesPage() {
-  const { language } = useLanguage()
+  const { language, isRTL } = useLanguage()
 
   // Helper to format currency
   const formatPrice = (price: number) => {
@@ -28,12 +27,12 @@ export default function TemplatesPage() {
         <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-slate-900/5 rounded-full blur-3xl group-hover:bg-slate-900/10 transition-colors" />
 
         <div className="text-slate-300 group-hover:scale-110 group-hover:text-slate-900/20 transition-all duration-500 transform">
-          {template.type.includes('box') && <Box className="w-20 h-20" />}
-          {template.type === 'pouch' && <ShoppingBag className="w-20 h-20" />}
-          {template.type === 'cup' && <Coffee className="w-20 h-20" />}
-          {template.type === 'bag' && <Package className="w-20 h-20" />}
-          {template.type === 'tube' && <Package className="w-20 h-20 rotate-90" />}
-          {template.type === 'envelope' && <Package className="w-20 h-20 scale-y-50" />}
+          {template.type.includes('box') && <Box className="w-16 h-16 md:w-20 md:h-20" />}
+          {template.type === 'pouch' && <ShoppingBag className="w-16 h-16 md:w-20 md:h-20" />}
+          {template.type === 'cup' && <Coffee className="w-16 h-16 md:w-20 md:h-20" />}
+          {template.type === 'bag' && <Package className="w-16 h-16 md:w-20 md:h-20" />}
+          {template.type === 'tube' && <Package className="w-16 h-16 md:w-20 md:h-20 rotate-90" />}
+          {template.type === 'envelope' && <Package className="w-16 h-16 md:w-20 md:h-20 scale-y-50" />}
         </div>
 
         <div className="absolute top-4 left-4">
@@ -65,8 +64,8 @@ export default function TemplatesPage() {
           {template.description}
         </CardDescription>
 
-        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
-          <div>
+        <div className={`flex gap-4 pt-4 border-t border-slate-50 ${isRTL ? "flex-row-reverse" : ""}`}>
+          <div className="flex-1">
             <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">
               {language === 'ar' ? 'أقل طلب' : 'Min. Order'}
             </p>
@@ -74,7 +73,7 @@ export default function TemplatesPage() {
               {template.minQuantity} <span className="text-[10px] font-medium text-slate-500">{language === 'ar' ? 'قطعة' : 'pcs'}</span>
             </p>
           </div>
-          <div className="text-right">
+          <div className={`flex-1 ${isRTL ? "text-left" : "text-right"}`}>
             <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">
               {language === 'ar' ? 'يبدأ من' : 'Starting at'}
             </p>
@@ -92,7 +91,7 @@ export default function TemplatesPage() {
         >
           <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black h-11 rounded-xl transition-all shadow-lg shadow-slate-200 group-hover:shadow-slate-300">
             {language === 'ar' ? 'ابدأ التصميم' : 'Customize Now'}
-            <span className="ml-2 group-hover:translate-x-1 transition-transform">→</span>
+            <span className={`${isRTL ? 'mr-2 group-hover:-translate-x-1' : 'ml-2 group-hover:translate-x-1'} transition-transform`}>{isRTL ? '←' : '→'}</span>
           </Button>
         </Link>
       </CardFooter>
@@ -125,18 +124,29 @@ export default function TemplatesPage() {
           </TabsList>
         </div>
 
-        <TabsContent value="all" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 animate-in fade-in slide-in-from-bottom-5 duration-700 m-0">
-          {PRODUCT_TEMPLATES.map(t => <TemplateCard key={t.id} template={t} />)}
+        <TabsContent value="all" className="animate-in fade-in slide-in-from-bottom-5 duration-700 m-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            {PRODUCT_TEMPLATES.map(t => <TemplateCard key={t.id} template={t} />)}
+          </div>
         </TabsContent>
-        <TabsContent value="box" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 animate-in fade-in slide-in-from-bottom-5 duration-700 m-0">
-          {PRODUCT_TEMPLATES.filter(t => t.category === 'box').map(t => <TemplateCard key={t.id} template={t} />)}
-        </TabsContent>
-        <TabsContent value="pouch" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 animate-in fade-in slide-in-from-bottom-5 duration-700 m-0">
-          {PRODUCT_TEMPLATES.filter(t => t.category === 'pouch').map(t => <TemplateCard key={t.id} template={t} />)}
-        </TabsContent>
-        <TabsContent value="tube" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 animate-in fade-in slide-in-from-bottom-5 duration-700 m-0">
-          {PRODUCT_TEMPLATES.filter(t => t.category === 'tube').map(t => <TemplateCard key={t.id} template={t} />)}
-        </TabsContent>
+        {["box", "pouch", "tube"].map(cat => {
+          const filtered = PRODUCT_TEMPLATES.filter(t => t.category === cat)
+          return (
+            <TabsContent key={cat} value={cat} className="animate-in fade-in slide-in-from-bottom-5 duration-700 m-0">
+              {filtered.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                  {filtered.map(t => <TemplateCard key={t.id} template={t} />)}
+                </div>
+              ) : (
+                <div className="text-center py-20">
+                  <p className="text-slate-400 text-lg font-medium">
+                    {language === "ar" ? "لا توجد قوالب في هذه الفئة" : "No templates in this category"}
+                  </p>
+                </div>
+              )}
+            </TabsContent>
+          )
+        })}
       </Tabs>
     </div>
   )

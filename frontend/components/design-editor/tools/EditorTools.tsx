@@ -94,8 +94,8 @@ export class EditorTools {
    */
   static addPolygon(
     canvas: fabric.Canvas,
-    points: number[],
-    options?: Partial<fabric.IPolygonOptions>
+    points: { x: number; y: number }[],
+    options?: Partial<fabric.IPolylineOptions>
   ) {
     const polygon = new fabric.Polygon(points, {
       left: 200,

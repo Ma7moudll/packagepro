@@ -15,16 +15,17 @@ const rejectSchema = z.object({
 export const POST = withRole("SUPPLIER")(async (
   request: NextRequest,
   user: any,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) => {
+  const { id } = await params
   try {
-    const order = await getOrder(params.id)
+    const order = await getOrder(id)
     const body = await request.json().catch(() => ({}))
     const validated = rejectSchema.parse(body)
 
     // Transition back to READY_FOR_ROUTING for re-assignment
     await transitionOrderState(
-      params.id,
+      id,
       "READY_FOR_ROUTING",
       { id: user.id, role: user.role },
       {
@@ -38,7 +39,7 @@ export const POST = withRole("SUPPLIER")(async (
       message: "Order rejected",
     })
   } catch (error: any) {
-    logger.error("Error rejecting order", { error, orderId: params.id })
+    logger.error("Error rejecting order", { error, orderId: id })
     return NextResponse.json(
       { error: error.message || "Failed to reject order" },
       { status: 500 },

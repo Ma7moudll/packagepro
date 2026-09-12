@@ -31,11 +31,12 @@ const transitionSchema = z.object({
 export const POST = withAuth(async (
   request: NextRequest,
   user: any,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) => {
+  const { id } = await params
   try {
     // Verify order exists and user has access
-    const order = await getOrder(params.id)
+    const order = await getOrder(id)
 
     if (user.role !== "ADMIN" && order.userId !== user.id) {
       return NextResponse.json(
@@ -48,7 +49,7 @@ export const POST = withAuth(async (
     const validated = transitionSchema.parse(body)
 
     await transitionOrderState(
-      params.id,
+      id,
       validated.toState,
       { id: user.id, role: user.role },
       validated.metadata,
@@ -59,7 +60,7 @@ export const POST = withAuth(async (
       message: `Order transitioned to ${validated.toState}`,
     })
   } catch (error: any) {
-    logger.error("Error transitioning order", { error, orderId: params.id })
+    logger.error("Error transitioning order", { error, orderId: id })
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(

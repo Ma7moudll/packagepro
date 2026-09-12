@@ -9,15 +9,15 @@ import { getConfig } from "../config"
 export interface UploadOptions {
   contentType?: string
   metadata?: Record<string, string>
+  acl?: string
 }
 
 export async function uploadFile(
   key: string,
   buffer: Buffer,
   options?: UploadOptions,
-): Promise<string> {
-  // Mock - should call backend API
-  return `mock-url/${key}`
+): Promise<{ url: string; key: string }> {
+  return { url: `mock-url/${key}`, key }
 }
 
 export async function getPresignedUrl(key: string, expiresIn = 3600): Promise<string> {
@@ -34,6 +34,6 @@ export async function fileExists(key: string): Promise<boolean> {
   return false
 }
 
-export function generateDesignKey(userId: string, designId: string, filename: string): string {
-  return `designs/${userId}/${designId}/${filename}`
+export function generateDesignKey(designId: string, ext: string, userId?: string): string {
+  return `designs/${userId || "unknown"}/${designId}/${ext}`
 }

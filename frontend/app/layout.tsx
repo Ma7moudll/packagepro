@@ -6,7 +6,7 @@ import { Navbar } from "@/components/layout/navbar"
 import { Footer } from "@/components/layout/footer"
 import { CartProvider } from "@/providers/cart-provider"
 import { AuthProvider } from "@/providers/auth-provider"
-import { NextAuthProvider } from "@/components/nextauth-provider"
+import { QueryProvider } from "@/providers/query-provider"
 import { LanguageProvider } from "@/providers/language-provider"
 import { SecurityProvider } from "@/providers/security-provider"
 import { LiveChat } from "@/components/features/live-chat"
@@ -29,12 +29,27 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ar" dir="rtl">
+    <html lang="en" dir="ltr" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            (function() {
+              try {
+                var lang = localStorage.getItem('language');
+                if (lang === 'ar') {
+                  document.documentElement.lang = 'ar';
+                  document.documentElement.dir = 'rtl';
+                }
+              } catch(e) {}
+            })();
+          `
+        }} />
+      </head>
       <body className={inter.className}>
         <SecurityProvider>
           <LanguageProvider>
-            <NextAuthProvider>
-              <AuthProvider>
+            <AuthProvider>
+              <QueryProvider>
                 <CartProvider>
                   <AnalyticsProvider>
                     <Navbar />
@@ -44,8 +59,8 @@ export default function RootLayout({
                     <Toaster />
                   </AnalyticsProvider>
                 </CartProvider>
-              </AuthProvider>
-            </NextAuthProvider>
+              </QueryProvider>
+            </AuthProvider>
           </LanguageProvider>
         </SecurityProvider>
       </body>

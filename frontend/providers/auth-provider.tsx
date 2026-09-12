@@ -60,104 +60,91 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      // Import API client dynamically to avoid SSR issues
-      const { api } = await import("@/lib/api");
-      
-      const result = await api.login({ email, password });
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      })
+      const data = await res.json()
 
-      if (result.user) {
-        // Ensure name is properly formatted
-        let displayName = result.user.name || result.user.firstName || "";
-        if (!displayName || displayName.trim() === "") {
-          const emailName = result.user.email?.split("@")[0] || "User";
-          displayName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-        } else {
-          // Capitalize first letter if needed
-          displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
-        }
-
-        const userData: User = {
-          id: String(result.user.id),
-          email: result.user.email,
-          name: displayName,
-          role: result.user.role || "TRADER",
-          company: result.user.company,
-        };
-
-        setUser(userData);
-        localStorage.setItem("user", JSON.stringify(userData));
-        return true;
+      if (!res.ok || !data.success) {
+        return false
       }
-      
-      return false;
+
+      if (data.token) {
+        localStorage.setItem("token", data.token)
+      }
+      if (data.tokens?.accessToken) {
+        localStorage.setItem("accessToken", data.tokens.accessToken)
+      }
+      if (data.tokens?.refreshToken) {
+        localStorage.setItem("refreshToken", data.tokens.refreshToken)
+      }
+
+      // Ensure name is properly formatted
+      let displayName = data.user?.name || ""
+      if (!displayName || displayName.trim() === "") {
+        const emailName = data.user?.email?.split("@")[0] || "User"
+        displayName = emailName.charAt(0).toUpperCase() + emailName.slice(1)
+      } else {
+        displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1)
+      }
+
+      const userData: User = {
+        id: String(data.user?.id || ""),
+        email: data.user?.email || email,
+        name: displayName,
+        role: data.user?.role || "TRADER",
+        company: data.user?.company,
+      }
+
+      setUser(userData)
+      localStorage.setItem("user", JSON.stringify(userData))
+      return true
     } catch (error) {
-      console.error("Login failed:", error);
-      return false;
+      console.error("Login failed:", error)
+      return false
     }
   }
 
   const register = async (userData: RegisterData): Promise<boolean> => {
     try {
-      // Import API client dynamically to avoid SSR issues
-      const { api } = await import("@/lib/api");
-      
-      // Map frontend role to backend role
-      const backendRole = userData.role === "MANUFACTURER" ? "VENDOR" : "CUSTOMER";
-      
-      const [firstName, ...lastNameParts] = userData.name.split(" ");
-      const lastName = lastNameParts.join(" ") || "";
-      
-      const result = await api.register({
-        email: userData.email,
-        password: userData.password,
-        firstName: firstName || userData.name,
-        lastName: lastName,
-        role: backendRole,
-      });
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: userData.email,
+          password: userData.password,
+          name: userData.name,
+          role: userData.role,
+        }),
+      })
+      const data = await res.json()
 
-      if (result.user) {
-        // Ensure name is properly formatted
-        let displayName = result.user.name || result.user.firstName || "";
-        if (!displayName || displayName.trim() === "") {
-          const emailName = result.user.email?.split("@")[0] || "User";
-          displayName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-        } else {
-          // Capitalize first letter if needed
-          displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
-        }
-
-        const newUser: User = {
-          id: String(result.user.id),
-          email: result.user.email,
-          name: displayName,
-          role: result.user.role === "VENDOR" ? "MANUFACTURER" : "TRADER",
-          company: result.user.company || userData.company,
-        };
-
-        setUser(newUser);
-        localStorage.setItem("user", JSON.stringify(newUser));
-        return true;
+      if (!res.ok || !data.success) {
+        return false
       }
-      
-      return false;
+
+      return true
     } catch (error) {
-      console.error("Registration failed:", error);
-      return false;
+      console.error("Registration failed:", error)
+      return false
     }
   }
 
-  const logout = async () => {
+  const logout = () => {
+    setUser(null)
+    localStorage.removeItem("user")
+    localStorage.removeItem("token")
+    localStorage.removeItem("accessToken")
+    localStorage.removeItem("refreshToken")
+
     try {
-      const { api } = await import("@/lib/api");
-      api.logout();
-    } catch (error) {
-      console.error("Logout error:", error);
-    } finally {
-      setUser(null);
-      localStorage.removeItem("user");
-      localStorage.removeItem("token");
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
+      fetch("/api/auth/logout", { method: "POST" }).catch(() => {
+        // Best-effort: clears the httpOnly session cookie server-side
+      })
+    } catch {
+      // Swallow: local logout must still succeed
     }
   }
 

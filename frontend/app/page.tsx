@@ -98,33 +98,33 @@ export default function HomePage() {
         const data = await response.json()
 
         if (data.success && data.stats) {
-          // Update stats
+          // Update stats (all values now sourced from the real backend)
           setStats([
             {
               label: "صفقة مكتملة",
               labelEn: "Completed Deals",
-              value: formatCategoryCount(data.stats.completedDeals || 0),
+              value: formatCategoryCount(data.stats.completedDeals?.raw ?? 0),
               icon: CheckCircle,
               color: "text-emerald-600",
             },
             {
               label: "مصنع مسجل",
               labelEn: "Registered Factories",
-              value: formatCategoryCount(data.stats.registeredFactories || 0),
+              value: formatCategoryCount(data.stats.registeredFactories?.raw ?? 0),
               icon: Factory,
               color: "text-blue-600",
             },
             {
-              label: "مليون جنيه حجم معاملات",
-              labelEn: "Million EGP Transactions",
-              value: `${((data.stats.totalTransactionVolume || 0) / 1000000).toFixed(1)}+`,
+              label: "مليون دولار حجم معاملات",
+              labelEn: "Million USD Transactions",
+              value: `${((data.stats.transactionVolume?.raw ?? 0) / 1000000).toFixed(1)}+`,
               icon: TrendingUp,
               color: "text-purple-600",
             },
             {
               label: "تاجر نشط",
               labelEn: "Active Traders",
-              value: formatCategoryCount(data.stats.activeTraders || 0),
+              value: formatCategoryCount(data.stats.activeTraders?.raw ?? 0),
               icon: Users,
               color: "text-orange-600",
             },
@@ -215,7 +215,7 @@ export default function HomePage() {
       rating: 4.8,
       reviews: 127,
       minOrder: 1000,
-      image: "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=800&h=600&fit=crop",
+      image: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=600&fit=crop",
       badges: ["sustainable", "featured"],
       inStock: true,
     },
@@ -644,8 +644,8 @@ export default function HomePage() {
             {newFeatures.map((feature, index) => {
               const Icon = feature.icon
               return (
-                <Card key={index} className="hover:shadow-lg transition-all group cursor-pointer" asChild>
-                  <Link href={feature.link}>
+                <Link href={feature.link} key={index}>
+                  <Card className="hover:shadow-lg transition-all group cursor-pointer">
                     <CardContent className="p-6">
                       <div className={`w-12 h-12 ${feature.color} rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
                         <Icon className="h-6 w-6 text-white" />
@@ -657,8 +657,8 @@ export default function HomePage() {
                         <ArrowRight className="h-4 w-4 mr-2" />
                       </Button>
                     </CardContent>
-                  </Link>
-                </Card>
+                  </Card>
+                </Link>
               )
             })}
           </div>
@@ -780,7 +780,7 @@ export default function HomePage() {
 
             <div className="relative">
               <Image
-                src="https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=600&h=500&fit=crop"
+                src="https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=600&h=500&fit=crop"
                 alt={language === "ar" ? "مصانع معتمدة" : "Verified Suppliers"}
                 width={600}
                 height={500}
@@ -920,7 +920,7 @@ export default function HomePage() {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="relative">
               <Image
-                src="https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=600&h=500&fit=crop"
+                src="https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=600&h=500&fit=crop"
                 alt={language === "ar" ? "تغليف مستدام" : "Sustainable Packaging"}
                 width={600}
                 height={500}

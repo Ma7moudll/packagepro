@@ -8,8 +8,9 @@ const assets: any[] = []
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -17,7 +18,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const assetVersions = versions.filter((v) => v.assetId === params.id)
+    const assetVersions = versions.filter((v) => v.assetId === id)
 
     return NextResponse.json(assetVersions)
   } catch (error) {
@@ -28,8 +29,9 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -37,7 +39,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const asset = assets.find((a) => a.id === params.id)
+    const asset = assets.find((a) => a.id === id)
 
     if (!asset) {
       return NextResponse.json({ error: "Asset not found" }, { status: 404 })
@@ -62,7 +64,7 @@ export async function POST(
     // Create new version
     const newVersion = {
       id: `version-${nanoid()}`,
-      assetId: params.id,
+      assetId: id,
       version: asset.version + 1,
       url: `https://example.com/assets/${nanoid()}`,
       thumbnailUrl: `https://example.com/thumbnails/${nanoid()}`,
@@ -82,7 +84,7 @@ export async function POST(
 
     // Mark previous version as not current
     const previousVersions = versions.filter(
-      (v) => v.assetId === params.id && v.isCurrent
+      (v) => v.assetId === id && v.isCurrent
     )
     previousVersions.forEach((v) => {
       v.isCurrent = false

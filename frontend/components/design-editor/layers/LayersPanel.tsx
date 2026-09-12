@@ -31,7 +31,7 @@ export function LayersPanel({ canvas, onLayerSelect, language = "en" }: LayersPa
     const objects = canvas.getObjects()
     const newLayers: Layer[] = objects.map((obj, idx) => ({
       id: `layer-${idx}`,
-      name: obj.type === "text" ? (obj as fabric.Text).text : `${obj.type} ${idx + 1}`,
+      name: obj.type === "text" ? ((obj as fabric.Text).text || '') : `${obj.type} ${idx + 1}`,
       type: obj.type || "unknown",
       visible: obj.visible !== false,
       locked: obj.selectable === false,

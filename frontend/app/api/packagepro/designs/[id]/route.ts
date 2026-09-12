@@ -1,80 +1,42 @@
 import { NextRequest, NextResponse } from "next/server"
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
+
+async function proxy(
+  request: NextRequest,
+  path: string,
+  init: RequestInit
+) {
+  const accessToken =
+    request.headers.get("authorization") ||
+    (request.cookies.get("accessToken")?.value ?? undefined)
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  }
+  if (accessToken) {
+    headers["Authorization"] = accessToken
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: { ...headers, ...((init.headers as Record<string, string>) ?? {}) },
+  })
+
+  const json = await res.json().catch(() => null)
+  if (!res.ok) {
+    return NextResponse.json(
+      json ?? { error: `Backend request failed with status ${res.status}` },
+      { status: res.status }
+    )
+  }
+  return NextResponse.json(json, { status: res.status })
+}
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    // TODO: Add proper authentication
-    // const session = await getSession()
-    // if (!session?.user) {
-    //   return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    // }
-
-    const designId = params.id
-
-    // In a real implementation, fetch from database
-    return NextResponse.json({
-      id: designId,
-      name: "Design",
-      state: null, // Would fetch actual state from DB
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    })
-  } catch (error) {
-    console.error("Error loading design:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-}
-
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    // TODO: Add proper authentication
-    // const session = await getSession()
-    // if (!session?.user) {
-    //   return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    // }
-
-    const designId = params.id
-    const body = await request.json()
-    const { name, state } = body
-
-    // In a real implementation, update in database
-    return NextResponse.json({
-      success: true,
-      id: designId,
-      name,
-      updatedAt: new Date().toISOString(),
-    })
-  } catch (error) {
-    console.error("Error updating design:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-}
-
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    // TODO: Add proper authentication
-    // const session = await getSession()
-    // if (!session?.user) {
-    //   return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    // }
-
-    const designId = params.id
-
-    // In a real implementation, delete from database
-    return NextResponse.json({
-      success: true,
-      id: designId,
-    })
-  } catch (error) {
-    console.error("Error deleting design:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
+  const { id } = await params
+  return proxy(request, `/api/designs/session/${id}`, { method: "GET" })
 }

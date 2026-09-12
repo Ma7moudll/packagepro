@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/session"
+import { getSessionUser } from "@/lib/auth/server-session"
 
 // Mock collaboration rooms
 const rooms: Map<string, any> = new Map()
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth()
+    const session = await getSessionUser(request)
 
-    if (!session?.user) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -35,9 +35,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth()
+    const session = await getSessionUser(request)
 
-    if (!session?.user) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -51,13 +51,13 @@ export async function POST(request: NextRequest) {
     // Create or update room
     const room = rooms.get(roomId) || {
       id: roomId,
-      ownerId: (session.user as any).id,
+      ownerId: session.id,
       users: [],
       permissions: new Map(),
     }
 
     if (permission) {
-      room.permissions.set((session.user as any).id, permission)
+      room.permissions.set(session.id, permission)
     }
 
     rooms.set(roomId, room)

@@ -3,6 +3,7 @@ import { NotFoundError, ValidationError } from '../../utils/errors';
 import { emailService } from '../../services/email/email.service';
 import { getReminderQueue } from '../../lib/queues';
 import { proofGeneratorService } from '../../services/pre-press-checker/proof-generator';
+import { notificationService } from '../notifications/notifications.service';
 import { logger } from '../../utils/logger';
 
 export class ApprovalService {
@@ -49,6 +50,19 @@ export class ApprovalService {
 
     // Schedule reminder emails
     await this.scheduleReminders(orderId, approvalUrl);
+
+    if (order.customer?.user?.id) {
+      await notificationService.createIfUnseen(
+        order.customer.user.id,
+        { entityType: 'order', entityId: orderId },
+        {
+          type: 'approval_required',
+          title: `Approval needed for ${order.orderNumber}`,
+          message: `Review your design proof for ${order.orderNumber} and approve to continue.`,
+          link: `/orders/${orderId}`,
+        }
+      );
+    }
 
     logger.info(`Approval requested for order ${order.orderNumber}`);
   }

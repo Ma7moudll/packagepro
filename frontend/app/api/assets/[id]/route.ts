@@ -6,8 +6,9 @@ const assets: any[] = []
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -15,7 +16,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const asset = assets.find((a) => a.id === params.id)
+    const asset = assets.find((a) => a.id === id)
 
     if (!asset) {
       return NextResponse.json({ error: "Asset not found" }, { status: 404 })
@@ -35,8 +36,9 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -44,7 +46,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const asset = assets.find((a) => a.id === params.id)
+    const asset = assets.find((a) => a.id === id)
 
     if (!asset) {
       return NextResponse.json({ error: "Asset not found" }, { status: 404 })
@@ -69,8 +71,9 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -78,7 +81,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const assetIndex = assets.findIndex((a) => a.id === params.id)
+    const assetIndex = assets.findIndex((a) => a.id === id)
 
     if (assetIndex === -1) {
       return NextResponse.json({ error: "Asset not found" }, { status: 404 })

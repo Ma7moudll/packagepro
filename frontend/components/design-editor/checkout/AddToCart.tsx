@@ -1,61 +1,104 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ShoppingCart, Loader2 } from "lucide-react"
 import { useLanguage } from "@/providers/language-provider"
-import { api } from "@/lib/api"
+import { useAuth } from "@/providers/auth-provider"
+import { cartApi } from "@/lib/api/cart"
+import { pricingApi } from "@/lib/api/pricing"
 import { useRouter } from "next/navigation"
 
 interface AddToCartProps {
-  designData: any
+  productType: "box" | "bag" | "label"
+  materialCode: string
   dimensions: { length: number; width: number; height: number }
-  productType: string
-  material: string
-  quantity: number
-  price: number
+  defaultQuantity: number
+  sessionId: string | null
+  onEnsureSession: () => Promise<string>
 }
 
 export function AddToCart({
-  designData,
-  dimensions,
   productType,
-  material,
-  quantity,
-  price,
+  materialCode,
+  dimensions,
+  defaultQuantity,
+  sessionId,
+  onEnsureSession,
 }: AddToCartProps) {
   const { language } = useLanguage()
   const router = useRouter()
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
   const [adding, setAdding] = useState(false)
   const [designName, setDesignName] = useState("")
+  const [quantity, setQuantity] = useState(defaultQuantity)
+  const [price, setPrice] = useState<{ total: number; unit: number } | null>(null)
+  const [priceLoading, setPriceLoading] = useState(false)
+  const [priceError, setPriceError] = useState<string | null>(null)
+
+  // The editor's quantity is loaded asynchronously (catalog config); the dialog
+  // may have mounted before it resolved. Re-sync with the live model quantity
+  // each time the dialog opens so the cart line matches what was designed.
+  useEffect(() => {
+    if (open) setQuantity(defaultQuantity)
+  }, [open, defaultQuantity])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!open) return
+    setPriceLoading(true)
+    setPriceError(null)
+    pricingApi
+      .calculate({
+        productType,
+        quantity,
+        dimensions: { ...dimensions, unit: "mm" },
+        materialCode,
+      })
+      .then((res) => {
+        if (!cancelled && res.success && res.data) {
+          setPrice({ total: res.data.totalPrice, unit: res.data.totalPrice / quantity })
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setPriceError(error?.message || "Price unavailable")
+          setPrice(null)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPriceLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, quantity, productType, dimensions, materialCode])
 
   const handleAddToCart = async () => {
+    if (!user) {
+      const redirect = encodeURIComponent(
+        typeof window !== "undefined" ? `${window.location.pathname}${window.location.search}` : "/editor"
+      )
+      router.push(`/login?redirect=${redirect}`)
+      return
+    }
+
     setAdding(true)
     try {
-      // First, save the design
-      const sessionResponse = await api.post("/designs/session", {
-        name: designName || "Custom Design",
+      const sid = sessionId || (await onEnsureSession())
+      await cartApi.addItem({
+        productType,
+        quantity,
+        dimensions: { ...dimensions, unit: "mm" },
+        materialCode,
+        sessionId: sid,
       })
-
-      const sessionId = sessionResponse.data.sessionId
-
-      // Save design data
-      await api.post("/designs/save", {
-        sessionId,
-        designData,
-        name: designName || "Custom Design",
-      })
-
-      // Create order item (or add to existing cart)
-      // This would typically call a cart API
-      // For now, redirect to cart/checkout
-
       setOpen(false)
-      router.push(`/cart?design=${sessionId}`)
+      router.push("/cart")
     } catch (error) {
       console.error("Failed to add to cart:", error)
     } finally {
@@ -66,7 +109,7 @@ export function AddToCart({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-emerald-600 hover:bg-emerald-700">
+        <Button className="bg-emerald-600 hover:bg-emerald-700" size="sm" onClick={() => setDesignName("")}>
           <ShoppingCart className="h-4 w-4 mr-2" />
           {language === "ar" ? "إضافة إلى السلة" : "Add to Cart"}
         </Button>
@@ -77,7 +120,7 @@ export function AddToCart({
             {language === "ar" ? "إضافة إلى السلة" : "Add to Cart"}
           </DialogTitle>
           <DialogDescription>
-            {language === "ar" ? "أدخل اسم للتصميم وأضفه إلى السلة" : "Enter a name for your design and add it to cart"}
+            {language === "ar" ? "أدخل اسم التصميم والكمية وأضفه إلى السلة" : "Enter a design name and quantity, then add it to cart"}
           </DialogDescription>
         </DialogHeader>
 
@@ -95,7 +138,22 @@ export function AddToCart({
             />
           </div>
 
-          {/* Order Summary */}
+          {/* Quantity */}
+          <div>
+            <Label htmlFor="quantity">
+              {language === "ar" ? "الكمية" : "Quantity"}
+            </Label>
+            <Input
+              id="quantity"
+              type="number"
+              min={1}
+              value={quantity}
+              onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+              className="w-32"
+            />
+          </div>
+
+          {/* Order Summary - server priced */}
           <div className="bg-slate-50 rounded-lg p-4 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-slate-600">
@@ -103,24 +161,35 @@ export function AddToCart({
               </span>
               <span>{quantity}</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-600">
-                {language === "ar" ? "السعر لكل وحدة" : "Price per unit"}
-              </span>
-              <span>${(price / quantity).toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between font-semibold pt-2 border-t">
-              <span>
-                {language === "ar" ? "الإجمالي" : "Total"}
-              </span>
-              <span>${price.toFixed(2)}</span>
-            </div>
+            {priceLoading ? (
+              <div className="flex justify-between text-sm text-slate-400">
+                <span>{language === "ar" ? "جاري حساب السعر..." : "Calculating price..."}</span>
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </div>
+            ) : priceError ? (
+              <p className="text-sm text-red-500">{priceError}</p>
+            ) : price ? (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">
+                    {language === "ar" ? "السعر لكل وحدة" : "Price per unit"}
+                  </span>
+                  <span>${price.unit.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-semibold pt-2 border-t">
+                  <span>
+                    {language === "ar" ? "الإجمالي" : "Total"}
+                  </span>
+                  <span>${price.total.toFixed(2)}</span>
+                </div>
+              </>
+            ) : null}
           </div>
 
           {/* Add to Cart Button */}
           <Button
             onClick={handleAddToCart}
-            disabled={adding || !designName.trim()}
+            disabled={adding || priceLoading}
             className="w-full"
           >
             {adding ? (
@@ -131,7 +200,9 @@ export function AddToCart({
             ) : (
               <>
                 <ShoppingCart className="h-4 w-4 mr-2" />
-                {language === "ar" ? "إضافة إلى السلة" : "Add to Cart"}
+                {user
+                  ? (language === "ar" ? "إضافة إلى السلة" : "Add to Cart")
+                  : (language === "ar" ? "سجّل الدخول للمتابعة" : "Sign in to continue")}
               </>
             )}
           </Button>
@@ -140,4 +211,3 @@ export function AddToCart({
     </Dialog>
   )
 }
-

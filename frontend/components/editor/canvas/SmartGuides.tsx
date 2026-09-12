@@ -9,6 +9,7 @@ interface SmartGuidesProps {
   enabled?: boolean
   snapThreshold?: number
   guideColor?: string
+  canvasRef?: React.MutableRefObject<fabric.Canvas | null>
 }
 
 interface GuideLine {

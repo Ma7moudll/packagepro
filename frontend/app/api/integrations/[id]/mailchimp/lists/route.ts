@@ -6,8 +6,9 @@ const integrations: any[] = []
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -15,7 +16,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const integration = integrations.find((i) => i.id === params.id)
+    const integration = integrations.find((i) => i.id === id)
 
     if (!integration || integration.provider !== "mailchimp") {
       return NextResponse.json({ error: "Integration not found" }, { status: 404 })

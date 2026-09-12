@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/providers/auth-provider"
 import { useLanguage } from "@/providers/language-provider"
-import { Edit, ArrowLeft, Trash2, Package, PackageCheck } from "lucide-react"
+import { productsApi } from "@/lib/api/products"
+import { Edit, ArrowLeft, Package, PackageCheck, Loader2 } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
+import type { VendorProduct } from "@/lib/api/products"
 
 export default function ViewProductPage() {
   const { user } = useAuth()
@@ -19,23 +21,8 @@ export default function ViewProductPage() {
 
   const productId = Array.isArray(params.id) ? params.id[0] : params.id
   const [loading, setLoading] = useState(true)
-  interface Product {
-    id: number
-    name: string
-    nameEn: string
-    description: string
-    descriptionEn: string
-    price: number
-    category: string
-    material: string
-    stock: number
-    minQuantity: number
-    customizable: boolean
-    sustainableMaterial: boolean
-    image: string
-    sales: number
-  }
-  const [product, setProduct] = useState<Product | null>(null)
+  const [product, setProduct] = useState<VendorProduct | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user || (user.role !== "MANUFACTURER" && user.role !== "ADMIN")) {
@@ -43,57 +30,27 @@ export default function ViewProductPage() {
       return
     }
 
-    // Fetch product data
     const fetchProduct = async () => {
       try {
         setLoading(true)
-        await new Promise((resolve) => setTimeout(resolve, 500))
-
-        const mockProducts: Record<string, Product> = {
-          "1": {
-            id: 1,
-            name: "علب كرتون مموج",
-            nameEn: "Corrugated Boxes",
-            description: "علب كرتون مموج عالية الجودة مناسبة للشحن والتخزين",
-            descriptionEn: "High-quality corrugated boxes suitable for shipping and storage",
-            price: 2.5,
-            category: "food-packaging",
-            material: "Corrugated Cardboard",
-            stock: 5000,
-            minQuantity: 100,
-            customizable: true,
-            sustainableMaterial: false,
-            image: "https://images.unsplash.com/photo-1587293852726-70cdb56c2866?w=800&h=600&fit=crop",
-            sales: 1250,
-          },
-          "2": {
-            id: 2,
-            name: "أكياس ورق كرافت",
-            nameEn: "Kraft Paper Bags",
-            description: "أكياس ورق كرافت صديقة للبيئة",
-            descriptionEn: "Eco-friendly kraft paper bags",
-            price: 0.25,
-            category: "bags-packaging",
-            material: "Kraft Paper",
-            stock: 10000,
-            minQuantity: 500,
-            customizable: true,
-            sustainableMaterial: true,
-            image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&h=600&fit=crop",
-            sales: 875,
-          },
+        setError(null)
+        const res = await productsApi.getById(productId!)
+        if (res.success && res.data) {
+          setProduct(res.data)
+          setLoading(false)
+          return
         }
-
-        setProduct(mockProducts[productId as string])
-      } catch (error) {
-        console.error("Error fetching product:", error)
-      } finally {
+        setError(language === "ar" ? "المنتج غير موجود" : "Product not found")
+        setLoading(false)
+      } catch (err: any) {
+        console.error("Error fetching product:", err)
+        setError(err.message || (language === "ar" ? "المنتج غير موجود" : "Product not found"))
         setLoading(false)
       }
     }
 
     fetchProduct()
-  }, [user, router, productId])
+  }, [user, router, productId, language])
 
   if (!user || (user.role !== "MANUFACTURER" && user.role !== "ADMIN")) {
     return null
@@ -102,18 +59,18 @@ export default function ViewProductPage() {
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="text-center">
-          <p className="text-slate-600">{language === "ar" ? "جاري التحميل..." : "Loading..."}</p>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
         </div>
       </div>
     )
   }
 
-  if (!product) {
+  if (error || !product) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
-          <p className="text-slate-600">{language === "ar" ? "المنتج غير موجود" : "Product not found"}</p>
+          <p className="text-slate-600">{error || (language === "ar" ? "المنتج غير موجود" : "Product not found")}</p>
           <Button asChild className="mt-4">
             <Link href="/manufacturer/products">
               {language === "ar" ? "العودة للمنتجات" : "Back to Products"}
@@ -126,7 +83,6 @@ export default function ViewProductPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="icon" asChild>
@@ -138,9 +94,7 @@ export default function ViewProductPage() {
             <h1 className="text-3xl font-bold text-slate-900">
               {language === "ar" ? product.name : product.nameEn}
             </h1>
-            <p className="text-slate-600">
-              {language === "ar" ? "تفاصيل المنتج" : "Product Details"}
-            </p>
+            <p className="text-slate-600">{language === "ar" ? "تفاصيل المنتج" : "Product Details"}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -150,22 +104,16 @@ export default function ViewProductPage() {
               {language === "ar" ? "تعديل" : "Edit"}
             </Link>
           </Button>
-          <Button variant="destructive">
-            <Trash2 className="h-4 w-4 mr-2" />
-            {language === "ar" ? "حذف" : "Delete"}
-          </Button>
         </div>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Product Image */}
           <Card>
             <CardContent className="p-0">
               <div className="relative aspect-video w-full overflow-hidden rounded-t-lg">
                 <Image
-                  src={product.image}
+                  src={product.image || "/placeholder.svg"}
                   alt={language === "ar" ? product.name : product.nameEn}
                   fill
                   sizes="(max-width: 768px) 100vw, 66vw"
@@ -175,19 +123,17 @@ export default function ViewProductPage() {
             </CardContent>
           </Card>
 
-          {/* Description */}
           <Card>
             <CardHeader>
               <CardTitle>{language === "ar" ? "الوصف" : "Description"}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-slate-600">
-                {language === "ar" ? product.description : product.descriptionEn}
+                {language === "ar" ? product.description || product.name : product.descriptionEn || product.nameEn}
               </p>
             </CardContent>
           </Card>
 
-          {/* Details */}
           <Card>
             <CardHeader>
               <CardTitle>{language === "ar" ? "التفاصيل" : "Details"}</CardTitle>
@@ -207,9 +153,7 @@ export default function ViewProductPage() {
                   <p className="font-medium">{product.stock.toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">
-                    {language === "ar" ? "الحد الأدنى للطلب" : "Min. Quantity"}
-                  </p>
+                  <p className="text-sm text-slate-500">{language === "ar" ? "الحد الأدنى للطلب" : "Min. Quantity"}</p>
                   <p className="font-medium">{product.minQuantity.toLocaleString()}</p>
                 </div>
               </div>
@@ -217,9 +161,7 @@ export default function ViewProductPage() {
           </Card>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-6">
-          {/* Price Card */}
           <Card>
             <CardHeader>
               <CardTitle>{language === "ar" ? "السعر" : "Pricing"}</CardTitle>
@@ -233,12 +175,11 @@ export default function ViewProductPage() {
               </div>
               <div>
                 <p className="text-sm text-slate-500">{language === "ar" ? "المبيعات" : "Sales"}</p>
-                <p className="text-xl font-semibold">{product.sales.toLocaleString()}</p>
+                <p className="text-xl font-semibold">{product.sales?.toLocaleString() || "0"}</p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Features */}
           <Card>
             <CardHeader>
               <CardTitle>{language === "ar" ? "الخصائص" : "Features"}</CardTitle>
@@ -263,4 +204,3 @@ export default function ViewProductPage() {
     </div>
   )
 }
-

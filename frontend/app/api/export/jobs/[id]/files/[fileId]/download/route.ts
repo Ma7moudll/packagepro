@@ -6,8 +6,9 @@ const jobs: any[] = []
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string; fileId: string } }
+  { params }: { params: Promise<{ id: string; fileId: string }> }
 ) {
+  const { id, fileId } = await params
   try {
     const session = await auth()
 
@@ -15,13 +16,13 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const job = jobs.find((j) => j.id === params.id)
+    const job = jobs.find((j) => j.id === id)
 
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 })
     }
 
-    const file = job.files.find((f: any) => f.id === params.fileId)
+    const file = job.files.find((f: any) => f.id === fileId)
 
     if (!file) {
       return NextResponse.json({ error: "File not found" }, { status: 404 })

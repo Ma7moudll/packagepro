@@ -4,11 +4,10 @@ import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { AlertTriangle, Package, Plus, Edit, Trash2, Search, Filter, BarChart3 } from "lucide-react"
+import { AlertTriangle, Package, Edit, Trash2, Search, Filter, BarChart3 } from "lucide-react"
 
 interface InventoryItem {
   id: string
@@ -24,60 +23,7 @@ interface InventoryItem {
   status: "in-stock" | "low-stock" | "out-of-stock"
 }
 
-const inventoryData: InventoryItem[] = [
-  {
-    id: "1",
-    name: "Premium Corrugated Boxes - Medium",
-    sku: "PCB-M-001",
-    category: "Corrugated",
-    currentStock: 1250,
-    minStock: 500,
-    maxStock: 2000,
-    unitCost: 1.85,
-    supplier: "CardBoard Co.",
-    lastRestocked: "2024-01-15",
-    status: "in-stock",
-  },
-  {
-    id: "2",
-    name: "Custom Paper Cups - 12oz",
-    sku: "CPC-12-002",
-    category: "Paper Cups",
-    currentStock: 150,
-    minStock: 500,
-    maxStock: 3000,
-    unitCost: 0.25,
-    supplier: "Paper Plus",
-    lastRestocked: "2024-01-10",
-    status: "low-stock",
-  },
-  {
-    id: "3",
-    name: "Elegant Gift Boxes - Small",
-    sku: "EGB-S-003",
-    category: "Gift Boxes",
-    currentStock: 0,
-    minStock: 100,
-    maxStock: 500,
-    unitCost: 3.5,
-    supplier: "Luxury Pack",
-    lastRestocked: "2024-01-05",
-    status: "out-of-stock",
-  },
-  {
-    id: "4",
-    name: "Shopping Bags - Large",
-    sku: "SB-L-004",
-    category: "Shopping Bags",
-    currentStock: 800,
-    minStock: 200,
-    maxStock: 1000,
-    unitCost: 0.95,
-    supplier: "Bag Masters",
-    lastRestocked: "2024-01-12",
-    status: "in-stock",
-  },
-]
+const inventoryData: InventoryItem[] = []
 
 export function InventoryManagement() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -225,6 +171,14 @@ export function InventoryManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {filteredInventory.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-10 text-slate-500">
+                        Inventory tracking is not connected to the backend yet. Stock levels will appear here once the
+                        inventory module is available.
+                      </TableCell>
+                    </TableRow>
+                  )}
                   {filteredInventory.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.name}</TableCell>
@@ -265,6 +219,12 @@ export function InventoryManagement() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
+                {lowStockItems.length === 0 && (
+                  <p className="text-center text-slate-500 py-10">
+                    Inventory tracking is not connected to the backend yet. Low-stock alerts will appear here once the
+                    inventory module is available.
+                  </p>
+                )}
                 {lowStockItems.map((item) => (
                   <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div>
@@ -290,51 +250,10 @@ export function InventoryManagement() {
               <CardTitle>Add New Product</CardTitle>
               <CardDescription>Add a new item to your inventory</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="productName">Product Name</Label>
-                  <Input id="productName" placeholder="Enter product name" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sku">SKU</Label>
-                  <Input id="sku" placeholder="Enter SKU" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
-                  <select className="w-full p-2 border rounded-md">
-                    <option value="">Select category</option>
-                    <option value="Corrugated">Corrugated</option>
-                    <option value="Paper Cups">Paper Cups</option>
-                    <option value="Gift Boxes">Gift Boxes</option>
-                    <option value="Shopping Bags">Shopping Bags</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="supplier">Supplier</Label>
-                  <Input id="supplier" placeholder="Enter supplier name" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="currentStock">Current Stock</Label>
-                  <Input id="currentStock" type="number" placeholder="0" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="minStock">Minimum Stock</Label>
-                  <Input id="minStock" type="number" placeholder="0" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="maxStock">Maximum Stock</Label>
-                  <Input id="maxStock" type="number" placeholder="0" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="unitCost">Unit Cost</Label>
-                  <Input id="unitCost" type="number" step="0.01" placeholder="0.00" />
-                </div>
-              </div>
-              <Button className="w-full">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Product
-              </Button>
+            <CardContent>
+              <p className="text-center text-slate-500 py-10">
+                Adding inventory items is not available yet. The inventory module is not connected to the backend.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>

@@ -6,6 +6,7 @@ import { analyticsService } from "./analytics-service"
 class PerformanceMonitor {
   private metrics: PerformanceMetric[] = []
   private observers: PerformanceObserver[] = []
+  private initialLoadMeasured = false
 
   constructor() {
     if (typeof window !== "undefined" && "PerformanceObserver" in window) {
@@ -79,8 +80,9 @@ class PerformanceMonitor {
   /**
    * Measure initial page load
    */
-  private measureInitialLoad(): void {
-    if (typeof window === "undefined") return
+  public measureInitialLoad(): void {
+    if (typeof window === "undefined" || this.initialLoadMeasured) return
+    this.initialLoadMeasured = true
 
     window.addEventListener("load", () => {
       setTimeout(() => {

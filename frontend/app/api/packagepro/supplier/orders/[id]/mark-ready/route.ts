@@ -10,13 +10,14 @@ import { logger } from "@/lib/packagepro/utils/logger"
 export const POST = withRole("SUPPLIER")(async (
   request: NextRequest,
   user: any,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) => {
+  const { id } = await params
   try {
-    const order = await getOrder(params.id)
+    const order = await getOrder(id)
 
     await transitionOrderState(
-      params.id,
+      id,
       "READY_FOR_PICKUP",
       { id: user.id, role: user.role },
       { action: "MARKED_READY_BY_SUPPLIER" },
@@ -27,7 +28,7 @@ export const POST = withRole("SUPPLIER")(async (
       message: "Order marked ready for pickup",
     })
   } catch (error: any) {
-    logger.error("Error marking order ready", { error, orderId: params.id })
+    logger.error("Error marking order ready", { error, orderId: id })
     return NextResponse.json(
       { error: error.message || "Failed to mark order ready" },
       { status: 500 },

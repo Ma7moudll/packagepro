@@ -26,7 +26,24 @@ export interface ValidationReport {
   results: ValidationResult[];
   score: number; // 0-100
   printReady: boolean;
+  perFace?: FaceValidationResult[];
 }
+
+export interface FaceValidationResult {
+  faceId: string;
+  faceName: string;
+  layerCount: number;
+  errors: number;
+  warnings: number;
+  score: number;
+  printReady: boolean;
+  results: ValidationResult[];
+  missingRequiredZones: string[];
+}
+
+/** Per-face safe/bleed margins in editor units */
+const SAFE_MARGIN = 10
+const BLEED_MARGIN = 4
 
 export class PrintValidationService {
   private static readonly VALIDATION_RULES: ValidationRule[] = [
@@ -77,6 +94,13 @@ export class PrintValidationService {
       name: 'Overlapping Elements',
       description: 'Check for unintended overlapping elements',
       severity: 'info',
+      category: 'layout'
+    },
+    {
+      id: 'required-zones',
+      name: 'Required Zones',
+      description: 'Each required zone on a face must contain at least one layer element',
+      severity: 'error',
       category: 'layout'
     }
   ];
@@ -282,24 +306,125 @@ export class PrintValidationService {
   /**
    * Run quick validation (subset of rules)
    */
-  static async quickValidate(layers: any[]): Promise<ValidationResult[]> {
-    const results: ValidationResult[] = [];
+static async quickValidate(layers: any[]): Promise<ValidationResult[]> {
+      const results: ValidationResult[] = [];
 
-    // Quick checks only
-    const imageLayers = layers.filter(layer => layer.type === 'image');
-    if (imageLayers.length > 0) {
-      const dpiRule = this.VALIDATION_RULES.find(r => r.id === 'image-dpi')!;
-      for (const layer of imageLayers) {
-        const dpi = layer.dpi || 72;
-        results.push({
-          rule: dpiRule,
-          passed: dpi >= 150, // Lower threshold for quick check
-          message: `Image DPI: ${dpi}`,
-          elementId: layer.id
-        });
+      // Quick checks only
+      const imageLayers = layers.filter(layer => layer.type === 'image');
+      if (imageLayers.length > 0) {
+        const dpiRule = this.VALIDATION_RULES.find(r => r.id === 'image-dpi')!;
+        for (const layer of imageLayers) {
+          const dpi = layer.dpi || 72;
+          results.push({
+            rule: dpiRule,
+            passed: dpi >= 150, // Lower threshold for quick check
+            message: `Image DPI: ${dpi}`,
+            elementId: layer.id
+          });
+        }
       }
+
+      return results;
     }
 
-    return results;
+  /**
+   * M7: Validate each face independently. Returns per-face results that
+   * include required-zone checks. Zones are optional — when none are
+   * provided the check simply passes.
+   */
+  static async validatePerFace(
+    layers: any[],
+    model: any,
+    zones?: Record<string, Array<{ label: string; required: boolean; position: [number, number, number] }>>
+  ): Promise<FaceValidationResult[]> {
+    const faces = model.faces as Array<{ id: string; name: string }> | undefined
+    if (!faces) return []
+
+    const zoneRule = this.VALIDATION_RULES.find(r => r.id === 'required-zones')!
+    const perFace = await Promise.all(faces.map(async (face) => {
+      const faceLayers = layers.filter((l: any) => l.faceId === face.id)
+      const textResults = faceLayers.flatMap((layer: any) =>
+        layer.type === 'text' ? this.validateText(layer) : []
+      )
+      const imageResults = (
+        await Promise.all(
+          faceLayers
+            .filter((l: any) => l.type === 'image')
+            .map((layer: any) => this.validateImage(layer))
+        )
+      ).flat()
+      const results = [...textResults, ...imageResults]
+
+      // Required zones: for each zone marked required, at least one
+      // layer must exist on this face whose position falls within
+      // the zone's neighbourhood (±20 mm around the zone position).
+      const faceZones = zones?.[face.id] ?? []
+      const requiredZones = faceZones.filter((z) => z.required)
+      const missingRequiredZones: string[] = []
+
+      for (const zone of requiredZones) {
+        const [zx, zy] = zone.position
+        const hit = faceLayers.some((layer: any) => {
+          const px = layer.position?.x ?? 0
+          const py = layer.position?.y ?? 0
+          return Math.abs(px - zx) <= 20 && Math.abs(py - zy) <= 20
+        })
+        if (!hit) {
+          missingRequiredZones.push(zone.label)
+          results.push({
+            rule: zoneRule,
+            passed: false,
+            message: `Face "${face.name}" is missing required zone "${zone.label}"`,
+            elementId: face.id,
+          })
+        }
+      }
+
+      const errors = results.filter((r) => r.rule.severity === 'error' && !r.passed).length
+      const warnings = results.filter((r) => r.rule.severity === 'warning' && !r.passed).length
+      const passed = results.filter((r) => r.passed).length
+      const score = results.length ? Math.round((passed / results.length) * 100) : 100
+
+      return {
+        faceId: face.id,
+        faceName: face.name,
+        layerCount: faceLayers.length,
+        errors,
+        warnings,
+        score,
+        printReady: errors === 0 && score >= 80,
+        results,
+        missingRequiredZones,
+      }
+    }))
+    return perFace
+  }
+
+  /**
+   * M7: Aggregate per-face results into a single report.
+   */
+  static async validatePrintReady(
+    layers: any[],
+    model: any,
+    canvas: any,
+    zones?: Record<string, Array<{ label: string; required: boolean; position: [number, number, number] }>>
+  ): Promise<ValidationReport> {
+    const perFace = await this.validatePerFace(layers, model, zones)
+    const allResults = perFace.flatMap((f) => f.results)
+    const errors = perFace.reduce((sum, f) => sum + f.errors, 0)
+    const warnings = perFace.reduce((sum, f) => sum + f.warnings, 0)
+    const passed = allResults.filter((r) => r.passed).length
+    const total = allResults.length
+    const score = total ? Math.round((passed / total) * 100) : 100
+    return {
+      total,
+      errors,
+      warnings,
+      passed,
+      results: allResults,
+      score,
+      printReady: errors === 0 && score >= 80,
+      perFace,
+    }
   }
 }

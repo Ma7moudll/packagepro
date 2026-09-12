@@ -90,7 +90,7 @@ export const CustomOrderSchema = z.object({
   productName: z.string().min(3),
   quantity: z.number().int().positive(),
   specifications: z.string().min(10),
-  customizations: z.record(z.any()).optional(),
+  customizations: z.record(z.string(), z.any()).optional(),
   deadline: z.string().optional(),
   budgetRange: z.string().optional(),
   shippingAddress: z.object({
@@ -138,7 +138,7 @@ export function validateInput<T>(
     return { valid: true, data: validated }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const errors = error.errors.map((e) => `${e.path.join(".")}: ${e.message}`)
+      const errors = (error as any).issues.map((e: any) => `${e.path.join(".")}: ${e.message}`)
       return { valid: false, errors }
     }
     return { valid: false, errors: ["Validation error"] }

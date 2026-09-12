@@ -7,8 +7,9 @@ const projects: any[] = []
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -16,7 +17,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const project = projects.find((p) => p.id === params.id)
+    const project = projects.find((p) => p.id === id)
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
@@ -32,7 +33,7 @@ export async function POST(
 
     const share = {
       id: `share-${nanoid()}`,
-      projectId: params.id,
+      projectId: id,
       userId,
       role,
       permissions: permissions || [],

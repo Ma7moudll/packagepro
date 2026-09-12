@@ -176,7 +176,7 @@ export function Navbar() {
               <Link href="/cart">
                 <ShoppingCart className="h-5 w-5" />
                 {itemCount > 0 && (
-                  <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                  <Badge className={`absolute -top-2 ${isRTL ? "-left-2" : "-right-2"} h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs`}>
                     {itemCount}
                   </Badge>
                 )}
@@ -301,7 +301,7 @@ export function Navbar() {
                   <Link href="/login">{t("nav.login")}</Link>
                 </Button>
                 <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" asChild>
-                  <Link href="/auth/register">{t("nav.register")}</Link>
+                  <Link href="/signup">{t("nav.register")}</Link>
                 </Button>
               </div>
             )}
@@ -347,7 +347,7 @@ export function Navbar() {
                       <Link href="/login" className="text-lg font-medium" onClick={() => setIsOpen(false)}>
                         {t("nav.login")}
                       </Link>
-                      <Link href="/auth/register" className="text-lg font-medium" onClick={() => setIsOpen(false)}>
+                      <Link href="/signup" className="text-lg font-medium" onClick={() => setIsOpen(false)}>
                         {t("nav.register")}
                       </Link>
                     </>

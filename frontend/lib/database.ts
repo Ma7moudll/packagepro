@@ -173,23 +173,6 @@ export class DatabaseService {
     return { success: true };
   }
 
-  // Quote methods
-  static async getQuotesByManufacturer?(manufacturerId: number, filters?: { customOrderId?: string; status?: string }) {
-    return [];
-  }
-
-  static async getQuotesByCustomOrder?(customOrderId: string) {
-    return [];
-  }
-
-  static async getQuotesByTrader?(traderId: number, filters?: { status?: string }) {
-    return [];
-  }
-
-  static async getAllQuotes?(filters?: { customOrderId?: string; status?: string }) {
-    return [];
-  }
-
   // Market insights
   static async getMarketInsights(category?: string) {
     return {
@@ -289,6 +272,19 @@ export class DatabaseService {
   }
 
   static async getAllQuotes(filters?: { customOrderId?: string; status?: string }): Promise<any[]> {
+    return [];
+  }
+
+  static async updateQuoteStatus(quoteId: string, status: string): Promise<any> {
+    return { id: quoteId, status, updatedAt: new Date() };
+  }
+
+  // Sample request methods
+  static async createSampleRequest(data: any): Promise<any> {
+    return { id: `SR-${Date.now()}`, ...data, status: 'pending', createdAt: new Date() };
+  }
+
+  static async getSampleRequestsForManufacturer(manufacturerId: number): Promise<any[]> {
     return [];
   }
 

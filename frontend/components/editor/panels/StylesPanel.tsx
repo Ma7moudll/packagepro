@@ -21,18 +21,26 @@ import {
   CalendarDays,
   Check,
   Star,
-  Lock
+  Lock,
+  ChevronDown,
+  ChevronRight,
+  X
 } from "lucide-react"
 import { useLanguage } from "@/providers/language-provider"
-import { 
-  PRESET_TEMPLATES, 
-  getTemplatesForProduct, 
-  getTemplatesByCategory,
-  searchTemplates,
-  PresetTemplate 
-} from "@/lib/editor/templates/preset-templates"
-import { Layer } from "@/lib/editor/state/types"
+import { Layer, PRODUCT_CATEGORY_TO_TEMPLATE } from "@/lib/editor/state/types"
 import { v4 as uuidv4 } from "uuid"
+import { PRESET_TEMPLATES, PresetTemplate } from "@/lib/editor/data/templates"
+import type { ClosureType, CardboardColor } from "@/lib/editor/types/template"
+
+const searchTemplates = (query: string) => {
+  const q = query.toLowerCase()
+  return PRESET_TEMPLATES.filter(
+    (t) =>
+      (t.name || "").toLowerCase().includes(q) ||
+      (t.nameAr || "").includes(query) ||
+      t.tags?.some((tag: string) => tag.toLowerCase().includes(q))
+  )
+}
 
 const CATEGORY_CONFIG: Record<string, { icon: React.ReactNode; name: string; nameAr: string }> = {
   all: { icon: <Sparkles className="h-4 w-4" />, name: "All", nameAr: "الكل" },
@@ -53,14 +61,20 @@ export function TemplatesPanel() {
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [previewTemplate, setPreviewTemplate] = useState<PresetTemplate | null>(null)
   const [applyDialogOpen, setApplyDialogOpen] = useState(false)
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  const [filterClosureType, setFilterClosureType] = useState<ClosureType | "">("")
+  const [filterCardboardColor, setFilterCardboardColor] = useState<CardboardColor | "">("")
   
   const addLayer = useDesignStore((s) => s.addLayer)
-  const clearLayers = useDesignStore((s) => s.clearLayers)
+  const clearLayers = useDesignStore((s) => (s as any).clearLayers || (() => {}))
   const model = useDesignStore((s) => s.model)
   const layers = useDesignStore((s) => s.layers)
   
   // Get product type from model
   const productType = model.type.replace(/_/g, "-")
+  
+  // Get template categories for current product category
+  const templateCategories = PRODUCT_CATEGORY_TO_TEMPLATE[model.category] || []
   
   // Filter templates
   const filteredTemplates = useMemo(() => {
@@ -68,12 +82,33 @@ export function TemplatesPanel() {
     
     // Filter by search
     if (search) {
-      templates = searchTemplates(search)
+      const q = search.toLowerCase()
+      templates = templates.filter(
+        (t) =>
+          (t.name || "").toLowerCase().includes(q) ||
+          (t.nameAr || "").includes(search) ||
+          t.tags?.some((tag: string) => tag.toLowerCase().includes(q))
+      )
     }
     
-    // Filter by category
+    // Filter by style category
     if (selectedCategory !== "all") {
       templates = templates.filter(t => t.category === selectedCategory)
+    }
+    
+    // Filter by product category (from model.category)
+    if (templateCategories.length > 0) {
+      templates = templates.filter(t => templateCategories.includes(t.category || ""))
+    }
+    
+    // Filter by closure type
+    if (filterClosureType) {
+      templates = templates.filter(t => t.closureType === filterClosureType)
+    }
+    
+    // Filter by cardboard color
+    if (filterCardboardColor) {
+      templates = templates.filter(t => t.cardboardColor === filterCardboardColor)
     }
     
     // Sort: product-compatible first, then by premium status
@@ -86,12 +121,13 @@ export function TemplatesPanel() {
     })
     
     return templates
-  }, [search, selectedCategory, productType])
+  }, [search, selectedCategory, productType, templateCategories, filterClosureType, filterCardboardColor])
   
   // Get compatible templates count
   const compatibleCount = useMemo(() => {
-    return getTemplatesForProduct(productType).length
-  }, [productType])
+    if (templateCategories.length === 0) return PRESET_TEMPLATES.length
+    return PRESET_TEMPLATES.filter(t => templateCategories.includes(t.category || "")).length
+  }, [templateCategories])
   
   // Apply template to editor
   const applyTemplate = (template: PresetTemplate, replaceAll: boolean = false) => {
@@ -101,7 +137,7 @@ export function TemplatesPanel() {
     }
     
     // Add template layers with new IDs
-    template.layers.forEach((layer) => {
+    template.layers.forEach((layer: any) => {
       const newLayer: Omit<Layer, "id"> & { id?: string } = {
         ...layer,
         id: uuidv4(),
@@ -136,13 +172,75 @@ export function TemplatesPanel() {
           />
         </div>
         
-        {/* Compatible badge */}
-        <div className="flex items-center gap-2 text-xs text-slate-500">
+        {/* Compatible badge + advanced filter toggle */}
+        <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
           <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200">
             <Check className="h-3 w-3 mr-1" />
             {compatibleCount} {language === "ar" ? "قالب متوافق" : "compatible"}
           </Badge>
+          <button
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className="flex items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            {showAdvancedFilters ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            <span className="text-[10px]">{language === "ar" ? "تصفية متقدمة" : "Advanced"}</span>
+          </button>
         </div>
+        
+        {/* Advanced filters */}
+        {showAdvancedFilters && (
+          <div className="space-y-2 pt-1">
+            <div>
+              <label className="text-[10px] font-medium text-slate-500 block mb-1">
+                {language === "ar" ? "نوع الإغلاق" : "Closure Type"}
+              </label>
+              <div className="flex flex-wrap gap-1">
+                {([["self-locking", language === "ar" ? "قفل ذاتي" : "Self-Locking"], ["tuck", language === "ar" ? "ثني" : "Tuck"], ["snap", language === "ar" ? "مغناطيسي" : "Snap/Magnetic"], ["velcro", language === "ar" ? "فيلكرو" : "Velcro"], ["metal-clasp", language === "ar" ? "مشبك" : "Metal Clasp"], ["tape-seal", language === "ar" ? "شريط" : "Tape Seal"]] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setFilterClosureType(filterClosureType === value ? "" : value)}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                      filterClosureType === value
+                        ? "bg-emerald-100 text-emerald-700 border-emerald-300"
+                        : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] font-medium text-slate-500 block mb-1">
+                {language === "ar" ? "لون الكرتون" : "Cardboard Color"}
+              </label>
+              <div className="flex flex-wrap gap-1">
+                {([["kraft-brown", language === "ar" ? "كرافت بني" : "Kraft Brown"], ["white", language === "ar" ? "أبيض" : "White"], ["black", language === "ar" ? "أسود" : "Black"], ["recycled-gray", language === "ar" ? "رمادي معاد تدويره" : "Recycled Gray"], ["custom", language === "ar" ? "مخصص" : "Custom"]] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setFilterCardboardColor(filterCardboardColor === value ? "" : value)}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                      filterCardboardColor === value
+                        ? "bg-emerald-100 text-emerald-700 border-emerald-300"
+                        : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {(filterClosureType || filterCardboardColor) && (
+              <button
+                onClick={() => { setFilterClosureType(""); setFilterCardboardColor("") }}
+                className="flex items-center gap-1 text-[10px] text-red-500 hover:text-red-600"
+              >
+                <X className="h-3 w-3" />
+                {language === "ar" ? "إعادة تعيين الفلاتر" : "Clear filters"}
+              </button>
+            )}
+          </div>
+        )}
       </div>
       
       {/* Category Tabs */}
@@ -302,7 +400,7 @@ function TemplatePreview({ template }: { template: PresetTemplate }) {
   return (
     <div className="w-full h-full flex items-center justify-center relative overflow-hidden">
       {/* Render a simplified preview of the template */}
-      {template.layers.slice(0, 5).map((layer, index) => {
+      {template.layers.slice(0, 5).map((layer: any, index: number) => {
         if (layer.type === "shape" && layer.shapeProperties) {
           const { shape, fill, stroke, strokeWidth } = layer.shapeProperties
           const { x, y } = layer.position

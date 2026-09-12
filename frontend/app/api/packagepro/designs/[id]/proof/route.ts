@@ -18,10 +18,11 @@ import { enqueueJob } from "@/lib/packagepro/queue/queue-client"
 export const GET = withAuth(async (
   request: NextRequest,
   user: any,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) => {
+  const { id } = await params
   try {
-    const design = await getDesign(params.id)
+    const design = await getDesign(id)
 
     // Check authorization
     if (user.role !== "ADMIN" && design.userId !== user.id) {
@@ -39,7 +40,7 @@ export const GET = withAuth(async (
     }
 
     // Get presigned URL for secure access
-    const proofUrl = await getDesignFileUrl(params.id, "pdf")
+    const proofUrl = await getDesignFileUrl(id, "pdf")
 
     return NextResponse.json({
       success: true,
@@ -47,7 +48,7 @@ export const GET = withAuth(async (
       status: design.prepressStatus,
     })
   } catch (error: any) {
-    logger.error("Error getting proof", { error, designId: params.id })
+    logger.error("Error getting proof", { error, designId: id })
     return NextResponse.json(
       { error: error.message || "Failed to get proof" },
       { status: 500 },
@@ -62,10 +63,11 @@ export const GET = withAuth(async (
 export const POST = withAuth(async (
   request: NextRequest,
   user: any,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) => {
+  const { id } = await params
   try {
-    const design = await getDesign(params.id)
+    const design = await getDesign(id)
 
     // Check authorization
     if (user.role !== "ADMIN" && design.userId !== user.id) {
@@ -81,7 +83,7 @@ export const POST = withAuth(async (
 
     // Validate design first
     if (shouldValidate) {
-      const validation = await validateDesign(params.id)
+      const validation = await validateDesign(id)
       
       if (!validation.isValid && validation.status === "REJECTED") {
         return NextResponse.json({
@@ -93,14 +95,14 @@ export const POST = withAuth(async (
 
       // Auto-fix if requested and issues are fixable
       if (shouldAutoFix && validation.issues.some((i) => i.fixable)) {
-        await autoFixBasicIssues(params.id)
+        await autoFixBasicIssues(id)
       }
     }
 
     // Enqueue proof generation job (async)
     await enqueueJob("prepress-queue", {
       type: "generate_proof",
-      designId: params.id,
+      designId: id,
     })
 
     return NextResponse.json({
@@ -109,7 +111,7 @@ export const POST = withAuth(async (
       status: "processing",
     })
   } catch (error: any) {
-    logger.error("Error generating proof", { error, designId: params.id })
+    logger.error("Error generating proof", { error, designId: id })
     return NextResponse.json(
       { error: error.message || "Failed to generate proof" },
       { status: 500 },

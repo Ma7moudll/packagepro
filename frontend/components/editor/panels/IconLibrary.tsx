@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { useLanguage } from "@/providers/language-provider"
+import { ColorPicker } from "@/components/editor/panels/ColorPicker"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -21,11 +22,10 @@ import {
   Phone,
   MapPin,
   Globe,
-  Instagram,
-  Facebook,
-  Twitter,
-  Linkedin,
-  Youtube,
+  MessageCircle,
+  MessageSquare,
+  Briefcase,
+  Play,
   Tag,
   Truck,
   Clock,
@@ -100,8 +100,8 @@ import {
   Laugh,
   ThumbsUp,
   ThumbsDown,
-  HandHeart,
-  Handshake,
+  HeartHandshake,
+  HelpingHand,
   Recycle,
   Leaf as EcoLeaf,
   Lightbulb,
@@ -166,11 +166,11 @@ const ICON_CATEGORIES = [
     id: "social",
     name: { en: "Social Media", ar: "وسائل التواصل" },
     icons: [
-      { name: "Instagram", icon: Instagram },
-      { name: "Facebook", icon: Facebook },
-      { name: "Twitter", icon: Twitter },
-      { name: "Linkedin", icon: Linkedin },
-      { name: "Youtube", icon: Youtube },
+      { name: "Instagram", icon: Camera },
+      { name: "Facebook", icon: MessageCircle },
+      { name: "Twitter", icon: MessageSquare },
+      { name: "Linkedin", icon: Briefcase },
+      { name: "Youtube", icon: Play },
       { name: "Globe", icon: Globe },
     ],
   },
@@ -413,12 +413,7 @@ export function IconLibrary() {
           <div>
             <Label className="text-[10px]">{language === "ar" ? "اللون" : "Color"}</Label>
             <div className="flex gap-1 mt-1">
-              <input
-                type="color"
-                value={iconColor}
-                onChange={(e) => setIconColor(e.target.value)}
-                className="w-8 h-7 rounded cursor-pointer"
-              />
+              <ColorPicker value={iconColor} onChange={setIconColor} size="sm" />
               <Input
                 value={iconColor}
                 onChange={(e) => setIconColor(e.target.value)}

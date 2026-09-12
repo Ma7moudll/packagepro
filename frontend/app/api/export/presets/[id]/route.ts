@@ -6,8 +6,9 @@ const presets: any[] = []
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -15,7 +16,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const preset = presets.find((p) => p.id === params.id)
+    const preset = presets.find((p) => p.id === id)
 
     if (!preset) {
       return NextResponse.json({ error: "Preset not found" }, { status: 404 })
@@ -26,7 +27,7 @@ export async function PUT(
     // If setting as default, unset other defaults
     if (updates.isDefault) {
       presets.forEach((p) => {
-        if (p.id !== params.id && p.isDefault) p.isDefault = false
+        if (p.id !== id && p.isDefault) p.isDefault = false
       })
     }
 
@@ -43,8 +44,9 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -52,7 +54,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const presetIndex = presets.findIndex((p) => p.id === params.id)
+    const presetIndex = presets.findIndex((p) => p.id === id)
 
     if (presetIndex === -1) {
       return NextResponse.json({ error: "Preset not found" }, { status: 404 })

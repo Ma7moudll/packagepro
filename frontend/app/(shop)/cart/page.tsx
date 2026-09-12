@@ -1,18 +1,112 @@
 "use client"
 
+import { useEffect, useRef, useState } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { useCartStore } from "@/lib/ecommerce/cart-store"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Trash2, Plus, Minus, ShoppingCart, ArrowRight } from "lucide-react"
+import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, Loader2, AlertCircle } from "lucide-react"
 import { useLanguage } from "@/providers/language-provider"
+import { useAuth } from "@/providers/auth-provider"
+import { designsApi } from "@/lib/api/designs"
 import Link from "next/link"
-import Image from "next/image"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function CartPage() {
   const { language } = useLanguage()
-  const { items, subtotal, tax, shipping, total, removeItem, updateQuantity, clearCart } =
-    useCartStore()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { user } = useAuth()
+  const { cart, loading, error, refresh, addItem, removeItem, updateQuantity, clearCart } = useCartStore()
+
+  const [importingDesign, setImportingDesign] = useState(false)
+  const importedDesignRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!user) {
+      router.push("/login?redirect=/cart")
+      return
+    }
+    refresh()
+  }, [user, refresh, router])
+
+  useEffect(() => {
+    const designSessionId = searchParams.get("design")
+    if (!user || !designSessionId) return
+    if (importedDesignRef.current === designSessionId) return
+    if (cart?.items.some((i) => i.sessionId === designSessionId)) return
+
+    const importDesign = async () => {
+      importedDesignRef.current = designSessionId
+      setImportingDesign(true)
+      try {
+        const res = await designsApi.getSession(designSessionId)
+        const session = res.success && res.data ? (res.data as any) : null
+        await addItem({
+          productType: "box",
+          quantity: session?.quantity || 30,
+          dimensions: session?.dimensions || { length: 100, width: 100, height: 50, unit: "mm" },
+          materialCode: session?.materialCode || "kraft",
+          sessionId: designSessionId,
+        })
+      } catch {
+        await addItem({
+          productType: "box",
+          quantity: 30,
+          dimensions: { length: 100, width: 100, height: 50, unit: "mm" },
+          materialCode: "kraft",
+          sessionId: designSessionId,
+        })
+      }
+      setImportingDesign(false)
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete("design")
+      router.replace(`/cart${params.toString() ? `?${params.toString()}` : ""}`)
+    }
+
+    importDesign()
+  }, [user, searchParams, cart, addItem, router])
+
+  if (importingDesign) {
+    return (
+      <div className="min-h-screen bg-slate-50 py-12">
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        </div>
+      </div>
+    )
+  }
+
+  if (loading && !cart) {
+    return (
+      <div className="min-h-screen bg-slate-50 py-12">
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return null
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-50 py-12">
+        <div className="container mx-auto px-4 max-w-lg">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        </div>
+      </div>
+    )
+  }
+
+  const items = cart?.items ?? []
+  const summary = cart?.summary
 
   if (items.length === 0) {
     return (
@@ -28,7 +122,7 @@ export default function CartPage() {
                 ? "ابدأ بإضافة منتجات إلى سلة التسوق"
                 : "Start adding products to your cart"}
             </p>
-            <Link href="/">
+            <Link href="/products">
               <Button>
                 {language === "ar" ? "تصفح المنتجات" : "Browse Products"}
               </Button>
@@ -38,6 +132,9 @@ export default function CartPage() {
       </div>
     )
   }
+
+  const currency = cart?.currency || "USD"
+  const formatMoney = (n: number) => `${n.toFixed(2)} ${currency}`
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -53,7 +150,7 @@ export default function CartPage() {
               <h2 className="text-lg font-semibold">
                 {language === "ar" ? "المنتجات" : "Items"} ({items.length})
               </h2>
-              <Button variant="ghost" size="sm" onClick={clearCart}>
+              <Button variant="ghost" size="sm" onClick={() => clearCart()}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 {language === "ar" ? "مسح السلة" : "Clear Cart"}
               </Button>
@@ -65,10 +162,11 @@ export default function CartPage() {
                   <CardContent className="p-4">
                     <div className="flex gap-4">
                       <div className="w-24 h-24 bg-slate-200 rounded flex items-center justify-center shrink-0">
-                        {item.image ? (
+                        {item.thumbnail ? (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={item.image}
-                            alt={item.name}
+                            src={item.thumbnail}
+                            alt={item.name || item.productType}
                             className="w-24 h-24 object-cover rounded"
                           />
                         ) : (
@@ -77,11 +175,13 @@ export default function CartPage() {
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold mb-1">{item.name}</h3>
-                        <p className="text-sm text-slate-500 mb-2">SKU: {item.sku}</p>
-                        {item.customization?.designId && (
+                        <h3 className="font-semibold mb-1">{item.name || item.productType}</h3>
+                        <p className="text-sm text-slate-500 mb-2">
+                          {item.productType.toUpperCase()} · {item.materialCode || "default"}
+                        </p>
+                        {item.templateId && (
                           <p className="text-xs text-emerald-600 mb-2">
-                            {language === "ar" ? "مخصص" : "Customized"}
+                            {language === "ar" ? "قالب مخصص" : "From template"}
                           </p>
                         )}
 
@@ -115,9 +215,7 @@ export default function CartPage() {
                           </div>
 
                           <div className="flex items-center gap-4">
-                            <p className="font-semibold">
-                              {(item.price * item.quantity).toFixed(2)} SAR
-                            </p>
+                            <p className="font-semibold">{item.totalPrice.toFixed(2)} USD</p>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -144,36 +242,36 @@ export default function CartPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-600">
-                      {language === "ar" ? "المجموع الفرعي" : "Subtotal"}
-                    </span>
-                    <span>{subtotal.toFixed(2)} SAR</span>
+                {summary && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600">
+                        {language === "ar" ? "المجموع الفرعي" : "Subtotal"}
+                      </span>
+                      <span>{formatMoney(summary.subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600">
+                        {language === "ar" ? "الضريبة" : "Tax"}
+                      </span>
+                      <span>{formatMoney(summary.tax)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600">
+                        {language === "ar" ? "الشحن" : "Shipping"}
+                      </span>
+                      <span>
+                        {summary.shipping === 0
+                          ? language === "ar" ? "مجاني" : "Free"
+                          : formatMoney(summary.shipping)}
+                      </span>
+                    </div>
+                    <div className="border-t pt-2 flex justify-between font-semibold">
+                      <span>{language === "ar" ? "الإجمالي" : "Total"}</span>
+                      <span>{formatMoney(summary.total)}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-600">
-                      {language === "ar" ? "الضريبة" : "Tax"} (15%)
-                    </span>
-                    <span>{tax.toFixed(2)} SAR</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-600">
-                      {language === "ar" ? "الشحن" : "Shipping"}
-                    </span>
-                    <span>
-                      {shipping === 0
-                        ? language === "ar"
-                          ? "مجاني"
-                          : "Free"
-                        : `${shipping.toFixed(2)} SAR`}
-                    </span>
-                  </div>
-                  <div className="border-t pt-2 flex justify-between font-semibold">
-                    <span>{language === "ar" ? "الإجمالي" : "Total"}</span>
-                    <span>{total.toFixed(2)} SAR</span>
-                  </div>
-                </div>
+                )}
 
                 <Link href="/checkout">
                   <Button className="w-full" size="lg">
@@ -181,12 +279,6 @@ export default function CartPage() {
                     <ArrowRight className="h-4 w-4 mr-2" />
                   </Button>
                 </Link>
-
-                <p className="text-xs text-slate-500 text-center">
-                  {language === "ar"
-                    ? "الشحن مجاني للطلبات فوق 500 ريال"
-                    : "Free shipping on orders over 500 SAR"}
-                </p>
               </CardContent>
             </Card>
           </div>

@@ -5,9 +5,10 @@ import { withManufacturerAuth, withValidation, withErrorHandling } from "@/lib/m
 import { MonitoringService } from "@/lib/monitoring"
 
 // GET /api/products/[id] - Get product details
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   try {
-    const productId = Number.parseInt(params.id)
+    const productId = Number.parseInt(id)
 
     if (isNaN(productId)) {
       return NextResponse.json({ error: "Invalid product ID" }, { status: 400 })
@@ -45,8 +46,9 @@ export const PUT = withManufacturerAuth(
   withValidation(
     ProductUpdateSchema,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    withErrorHandling(async (request: NextRequest, data: any, user: { id: number | string; role: string }, { params }: { params: { id: string } }) => {
-      const productId = Number.parseInt(params.id)
+    withErrorHandling(async (request: NextRequest, data: any, user: { id: number | string; role: string }, { params }: { params: Promise<{ id: string }> }) => {
+      const { id } = await params
+      const productId = Number.parseInt(id)
 
       if (isNaN(productId)) {
         return NextResponse.json({ error: "Invalid product ID" }, { status: 400 })
@@ -78,9 +80,10 @@ export const PUT = withManufacturerAuth(
 )
 
 // DELETE /api/products/[id] - Delete product (Manufacturer only)
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   try {
-    const productId = Number.parseInt(params.id)
+    const productId = Number.parseInt(id)
 
     if (isNaN(productId)) {
       return NextResponse.json({ error: "Invalid product ID" }, { status: 400 })

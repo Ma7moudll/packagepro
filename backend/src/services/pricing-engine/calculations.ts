@@ -18,6 +18,11 @@ export interface PricingBreakdown {
   surfaceArea: number;
   materialCost: number;
   conversionCost: number;
+  // Catalog-aware additions (present when pricing a catalog product/variant):
+  optionsMarkup?: number; // total option upcharges (per-unit deltas x qty)
+  optionsMarkupPerUnit?: number; // per-unit option upcharge
+  discountFactor?: number; // applied quantity-discount factor (1 = none)
+  discountApplied?: number; // dollar value of the quantity discount
   marginAmount: number;
   subtotal: number;
   tax: number;

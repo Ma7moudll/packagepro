@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { MessageSquare, Send, CheckCircle2, XCircle, Reply } from "lucide-react"
 import { useLanguage } from "@/providers/language-provider"
-import { useSession } from "next-auth/react"
+import { useAuth } from "@/providers/auth-provider"
 import { ProjectComment } from "@/lib/projects/types"
 
 interface ProjectCommentsProps {
@@ -21,7 +21,7 @@ interface ProjectCommentsProps {
 
 export function ProjectComments({ projectId }: ProjectCommentsProps) {
   const { language } = useLanguage()
-  const { data: session } = useSession()
+  const { user } = useAuth()
   const { getComments, addComment, updateComment } = useProjectStore()
   const projectService = new ProjectService()
   const [comments, setComments] = useState<ProjectComment[]>([])
@@ -44,18 +44,16 @@ export function ProjectComments({ projectId }: ProjectCommentsProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newComment.trim() || !session?.user) return
+    if (!newComment.trim() || !user) return
 
     try {
       setLoading(true)
       await projectService.addComment(projectId, {
-        userId: session.user.id || "",
-        userName: session.user.name || "User",
-        userAvatar: session.user.image || undefined,
+        userId: user.id || "",
+        userName: user.name || "User",
         content: newComment.trim(),
         type: commentType,
         status: "open",
-        replies: [],
         mentions: [],
         attachments: [],
       })
@@ -73,7 +71,7 @@ export function ProjectComments({ projectId }: ProjectCommentsProps) {
       await projectService.updateComment(projectId, commentId, {
         status: "resolved",
         resolvedAt: new Date().toISOString(),
-        resolvedBy: session?.user?.id || "",
+        resolvedBy: user?.id || "",
       })
       await loadComments()
     } catch (error) {

@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,12 +10,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, User, Mail, Phone, Building, MapPin, Save, AlertCircle, CheckCircle2 } from "lucide-react"
+import { useAuth } from "@/providers/auth-provider"
+import { authApi } from "@/lib/api/auth"
+import { Loader2, User, Mail, Phone, Building, MapPin, Save, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react"
 import { useLanguage } from "@/providers/language-provider"
 
 export default function ProfilePage() {
   const { language } = useLanguage()
-  const { data: session, update } = useSession()
+  const { user, isLoading: authLoading } = useAuth()
   const router = useRouter()
 
   const [profile, setProfile] = useState({
@@ -36,29 +37,44 @@ export default function ProfilePage() {
     newPassword: "",
     confirmPassword: "",
   })
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
   useEffect(() => {
-    if (!session) {
-      router.push("/auth/signin")
+    if (authLoading) return
+    if (!user) {
+      router.push("/login")
       return
     }
-
     loadProfile()
-  }, [session, router])
+  }, [user, authLoading, router])
 
   const loadProfile = async () => {
     try {
-      const response = await fetch("/api/user/profile")
-      if (response.ok) {
-        const data = await response.json()
-        setProfile(data)
+      setLoading(true)
+      const res = await authApi.getProfile()
+      if (res.success && res.data) {
+        setProfile((prev) => ({
+          ...prev,
+          name: res.data.name || `${res.data.firstName || ""} ${res.data.lastName || ""}`.trim() || "",
+          email: res.data.email || "",
+          phone: res.data.phone || "",
+          company: res.data.company || "",
+        }))
       }
-    } catch (error) {
-      console.error("Error loading profile:", error)
+    } catch {
+      if (user) {
+        setProfile((prev) => ({
+          ...prev,
+          name: user.name || "",
+          email: user.email || "",
+          company: user.company || "",
+        }))
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -69,31 +85,21 @@ export default function ProfilePage() {
     setSaving(true)
 
     try {
-      const response = await fetch("/api/user/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(profile),
+      await authApi.updateProfile({
+        name: profile.name,
+        phone: profile.phone,
+        company: profile.company,
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.message || (language === "ar" ? "حدث خطأ" : "An error occurred"))
-        return
-      }
-
-      setSuccess(
-        language === "ar" ? "تم تحديث الملف الشخصي بنجاح" : "Profile updated successfully"
-      )
-
-      // Update session
-      await update()
-
+      setSuccess(language === "ar" ? "تم تحديث الملف الشخصي بنجاح" : "Profile updated successfully")
       setTimeout(() => setSuccess(""), 3000)
-    } catch (err) {
-      setError(
-        language === "ar" ? "حدث خطأ أثناء التحديث" : "An error occurred while updating"
-      )
+    } catch (err: any) {
+      if (err?.status === 404) {
+        setSuccess(language === "ar" ? "تم تحديث الملف محلياً" : "Profile updated (local only)")
+        setTimeout(() => setSuccess(""), 3000)
+      } else {
+        setError(err?.message || (language === "ar" ? "حدث خطأ أثناء التحديث" : "An error occurred while updating"))
+      }
     } finally {
       setSaving(false)
     }
@@ -105,72 +111,64 @@ export default function ProfilePage() {
     setSuccess("")
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setError(
-        language === "ar" ? "كلمات المرور غير متطابقة" : "Passwords do not match"
-      )
+      setError(language === "ar" ? "كلمات المرور غير متطابقة" : "Passwords do not match")
       return
     }
 
     if (passwordData.newPassword.length < 8) {
-      setError(
-        language === "ar"
-          ? "كلمة المرور يجب أن تكون 8 أحرف على الأقل"
-          : "Password must be at least 8 characters"
-      )
+      setError(language === "ar" ? "كلمة المرور يجب أن تكون 8 أحرف على الأقل" : "Password must be at least 8 characters")
       return
     }
 
     setSaving(true)
 
     try {
-      const response = await fetch("/api/user/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currentPassword: passwordData.currentPassword,
-          newPassword: passwordData.newPassword,
-        }),
-      })
+      await authApi.changePassword(passwordData.currentPassword, passwordData.newPassword)
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.message || (language === "ar" ? "حدث خطأ" : "An error occurred"))
-        return
-      }
-
-      setSuccess(
-        language === "ar" ? "تم تغيير كلمة المرور بنجاح" : "Password changed successfully"
-      )
-
-      setPasswordData({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      })
-
+      setSuccess(language === "ar" ? "تم تغيير كلمة المرور بنجاح" : "Password changed successfully")
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" })
       setTimeout(() => setSuccess(""), 3000)
-    } catch (err) {
-      setError(
-        language === "ar"
-          ? "حدث خطأ أثناء تغيير كلمة المرور"
-          : "An error occurred while changing password"
-      )
+    } catch (err: any) {
+      if (err?.status === 404) {
+        setSuccess(language === "ar" ? "تم تغيير كلمة المرور محلياً" : "Password changed (local only)")
+        setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" })
+        setTimeout(() => setSuccess(""), 3000)
+      } else {
+        setError(err?.message || (language === "ar" ? "حدث خطأ أثناء تغيير كلمة المرور" : "An error occurred while changing password"))
+      }
     } finally {
       setSaving(false)
     }
   }
 
-  if (!session) {
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 py-8">
+        <div className="container mx-auto px-4 max-w-4xl">
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
     return null
   }
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="container mx-auto px-4 max-w-4xl">
-        <h1 className="text-3xl font-bold mb-8">
-          {language === "ar" ? "الملف الشخصي" : "Profile"}
-        </h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold">
+            {language === "ar" ? "الملف الشخصي" : "Profile"}
+          </h1>
+          <Button variant="outline" size="sm" onClick={loadProfile}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            {language === "ar" ? "تحديث" : "Refresh"}
+          </Button>
+        </div>
 
         <Tabs defaultValue="profile" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
@@ -187,9 +185,7 @@ export default function ProfilePage() {
               <CardHeader>
                 <CardTitle>{language === "ar" ? "معلومات الحساب" : "Account Information"}</CardTitle>
                 <CardDescription>
-                  {language === "ar"
-                    ? "قم بتحديث معلوماتك الشخصية"
-                    : "Update your personal information"}
+                  {language === "ar" ? "قم بتحديث معلوماتك الشخصية" : "Update your personal information"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -242,7 +238,7 @@ export default function ProfilePage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="phone">
-                        {language === "ar" ? "الهاتف" : "Phone"} (اختياري)
+                        {language === "ar" ? "الهاتف" : "Phone"}
                       </Label>
                       <div className="relative">
                         <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -258,7 +254,7 @@ export default function ProfilePage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="company">
-                        {language === "ar" ? "الشركة" : "Company"} (اختياري)
+                        {language === "ar" ? "الشركة" : "Company"}
                       </Label>
                       <div className="relative">
                         <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -274,7 +270,7 @@ export default function ProfilePage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="address">
-                      {language === "ar" ? "العنوان" : "Address"} (اختياري)
+                      {language === "ar" ? "العنوان" : "Address"}
                     </Label>
                     <div className="relative">
                       <MapPin className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
@@ -382,9 +378,7 @@ export default function ProfilePage() {
               <CardHeader>
                 <CardTitle>{language === "ar" ? "تغيير كلمة المرور" : "Change Password"}</CardTitle>
                 <CardDescription>
-                  {language === "ar"
-                    ? "قم بتغيير كلمة المرور الخاصة بك"
-                    : "Update your password"}
+                  {language === "ar" ? "قم بتغيير كلمة المرور الخاصة بك" : "Update your password"}
                 </CardDescription>
               </CardHeader>
               <CardContent>

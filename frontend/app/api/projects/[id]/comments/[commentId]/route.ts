@@ -6,8 +6,9 @@ const comments: any[] = []
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string; commentId: string } }
+  { params }: { params: Promise<{ id: string; commentId: string }> }
 ) {
+  const { id, commentId } = await params
   try {
     const session = await auth()
 
@@ -15,7 +16,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const comment = comments.find((c) => c.id === params.commentId && c.projectId === params.id)
+    const comment = comments.find((c) => c.id === commentId && c.projectId === id)
 
     if (!comment) {
       return NextResponse.json({ error: "Comment not found" }, { status: 404 })
@@ -40,8 +41,9 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string; commentId: string } }
+  { params }: { params: Promise<{ id: string; commentId: string }> }
 ) {
+  const { id, commentId } = await params
   try {
     const session = await auth()
 
@@ -50,7 +52,7 @@ export async function DELETE(
     }
 
     const commentIndex = comments.findIndex(
-      (c) => c.id === params.commentId && c.projectId === params.id
+      (c) => c.id === commentId && c.projectId === id
     )
 
     if (commentIndex === -1) {

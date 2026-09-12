@@ -7,6 +7,13 @@ interface LoginRequest {
   password: string
 }
 
+// Map backend roles to frontend role model
+const ROLE_MAP: Record<string, string> = {
+  CUSTOMER: "TRADER",
+  VENDOR: "MANUFACTURER",
+  ADMIN: "ADMIN",
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -40,19 +47,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Login successful",
-      user: {
-        id: data.data.user.id,
-        email: data.data.user.email,
-        name: `${data.data.user.firstName || ''} ${data.data.user.lastName || ''}`.trim(),
-        role: data.data.user.role,
-        phone: data.data.user.phone || undefined,
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Login successful",
+        user: {
+          id: data.data.user.id,
+          email: data.data.user.email,
+          name: `${data.data.user.firstName || ''} ${data.data.user.lastName || ''}`.trim(),
+          role: ROLE_MAP[data.data.user.role] || data.data.user.role || "TRADER",
+          phone: data.data.user.phone || undefined,
+        },
+        token: data.data.tokens.accessToken,
+        tokens: data.data.tokens,
       },
-      token: data.data.tokens.accessToken,
-      tokens: data.data.tokens,
-    })
+      {
+        headers: {
+          "Set-Cookie": `pp_access_token=${data.data.tokens.accessToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=900`,
+        },
+      }
+    )
   } catch (error) {
     console.error("Error logging in:", error)
     return NextResponse.json(

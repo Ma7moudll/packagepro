@@ -1,17 +1,27 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { authService } from './auth.service';
 import { prisma } from '../../lib/prisma';
 
+const TEST_EMAILS = [
+  'test@example.com',
+  'test2@example.com',
+  'duplicate@example.com',
+  'login@example.com',
+];
+
+async function deleteTestUsers() {
+  await prisma.user.deleteMany({
+    where: { email: { in: TEST_EMAILS } },
+  });
+}
+
 describe('AuthService', () => {
   beforeEach(async () => {
-    // Clean up test data
-    await prisma.user.deleteMany({
-      where: {
-        email: {
-          contains: 'test@',
-        },
-      },
-    });
+    await deleteTestUsers();
+  });
+
+  afterAll(async () => {
+    await deleteTestUsers();
   });
 
   describe('register', () => {
@@ -19,24 +29,21 @@ describe('AuthService', () => {
       const result = await authService.register({
         email: 'test@example.com',
         password: 'password123',
-        firstName: 'Test',
-        lastName: 'User',
+        name: 'Test User',
         role: 'CUSTOMER',
       });
 
-      expect(result).toHaveProperty('user');
-      expect(result).toHaveProperty('user');
-      expect(result.tokens).toHaveProperty('accessToken');
-      expect(result.tokens).toHaveProperty('refreshToken');
-      expect(result.user.email).toBe('test@example.com');
+      expect(result).toHaveProperty('userId');
+      expect(result).toHaveProperty('email');
+      expect(result.email).toBe('test@example.com');
+      expect(result.message).toContain('Registration successful');
     });
 
     it('should hash password correctly', async () => {
       const result = await authService.register({
         email: 'test2@example.com',
         password: 'password123',
-        firstName: 'Test',
-        lastName: 'User',
+        name: 'Test User',
         role: 'CUSTOMER',
       });
 
@@ -46,14 +53,14 @@ describe('AuthService', () => {
 
       expect(user?.passwordHash).not.toBe('password123');
       expect(user?.passwordHash).toHaveLength(60); // bcrypt hash length
+      expect(result.userId).toBe(user?.id);
     });
 
     it('should not register duplicate email', async () => {
       await authService.register({
         email: 'duplicate@example.com',
         password: 'password123',
-        firstName: 'Test',
-        lastName: 'User',
+        name: 'Test User',
         role: 'CUSTOMER',
       });
 
@@ -61,8 +68,7 @@ describe('AuthService', () => {
         authService.register({
           email: 'duplicate@example.com',
           password: 'password123',
-          firstName: 'Test',
-          lastName: 'User',
+          name: 'Test User',
           role: 'CUSTOMER',
         })
       ).rejects.toThrow();
@@ -71,11 +77,11 @@ describe('AuthService', () => {
 
   describe('login', () => {
     beforeEach(async () => {
+      await deleteTestUsers();
       await authService.register({
         email: 'login@example.com',
         password: 'password123',
-        firstName: 'Test',
-        lastName: 'User',
+        name: 'Test User',
         role: 'CUSTOMER',
       });
     });
@@ -86,7 +92,6 @@ describe('AuthService', () => {
         password: 'password123',
       });
 
-      expect(result).toHaveProperty('user');
       expect(result).toHaveProperty('user');
       expect(result.tokens).toHaveProperty('accessToken');
       expect(result.tokens).toHaveProperty('refreshToken');

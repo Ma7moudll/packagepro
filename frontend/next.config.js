@@ -1,9 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  outputFileTracingRoot: __dirname,
   reactStrictMode: true,
   images: {
-    domains: ['localhost', 'images.unsplash.com'],
+    localPatterns: [
+      {
+        pathname: '/placeholder.svg**',
+        search: '',
+      },
+    ],
     remotePatterns: [
       {
         protocol: 'https',
@@ -11,6 +17,7 @@ const nextConfig = {
       },
     ],
   },
+  serverExternalPackages: ['canvas'],
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000',
   },
@@ -32,24 +39,9 @@ const nextConfig = {
   async redirects() {
     return [
       {
-        source: '/auth/login',
-        destination: '/login',
-        permanent: true,
-      },
-      {
-        source: '/auth/signin',
-        destination: '/login',
-        permanent: true,
-      },
-      {
-        source: '/auth/signup',
-        destination: '/signup',
-        permanent: true,
-      },
-      {
-        source: '/auth/register',
-        destination: '/signup',
-        permanent: true,
+        source: '/designs',
+        destination: '/editor',
+        permanent: false,
       },
     ]
   },

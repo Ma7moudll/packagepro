@@ -17,7 +17,7 @@ export function rateLimit(
   },
 ) {
   // Get client IP
-  const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || request.ip || "unknown"
+  const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown"
 
   const key = `${ip}:${new Date().getTime() / options.window}`
   const now = Date.now()

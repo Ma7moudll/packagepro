@@ -23,6 +23,8 @@ export function ValidationPanel({ className }: ValidationPanelProps) {
   const layers = useDesignStore((s) => s.layers);
   const model = useDesignStore((s) => s.model);
   const canvas = useDesignStore((s) => s.canvas);
+  const zones = useDesignStore((s) => s.zones);
+  const structureType = useDesignStore((s) => s.structureType);
 
   // Quick validation on layer changes
   useEffect(() => {
@@ -37,7 +39,8 @@ export function ValidationPanel({ className }: ValidationPanelProps) {
   const runFullValidation = async () => {
     setLoading(true);
     try {
-      const validationReport = await PrintValidationService.validateDesign(layers, model, canvas);
+      // M7: zone-aware, per-face prepress report from the backend ProductStructure.
+      const validationReport = await PrintValidationService.validatePrintReady(layers, model, canvas, zones as any);
       setReport(validationReport);
     } catch (error) {
       console.error('Validation error:', error);
@@ -161,6 +164,30 @@ export function ValidationPanel({ className }: ValidationPanelProps) {
               <h4 className="text-xs font-medium text-muted-foreground">
                 {language === 'ar' ? 'تفاصيل الفحص' : 'Validation Details'}
               </h4>
+
+              {/* M7: Per-face breakdown from the backend ProductStructure */}
+              {report.perFace && report.perFace.length > 0 && (
+                <div className="space-y-1">
+                  {report.perFace.map((face) => (
+                    <div key={face.faceId} className="flex items-center gap-2 text-xs border rounded p-1.5">
+                      <span className="flex-1 font-medium truncate">{face.faceName}</span>
+                      {face.missingRequiredZones.length > 0 && (
+                        <span className="text-red-500 truncate max-w-[60%]">
+                          {language === 'ar' ? 'مطلوب: ' : 'Requires: '}
+                          {face.missingRequiredZones.join(', ')}
+                        </span>
+                      )}
+                      <Badge
+                        variant={face.printReady ? 'default' : 'destructive'}
+                        className="text-[10px] px-1.5"
+                      >
+                        {face.score}%
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {report.results.map((result, index) => (
                 <div key={index} className="border rounded p-2 space-y-1">
                   <div className="flex items-center gap-2">

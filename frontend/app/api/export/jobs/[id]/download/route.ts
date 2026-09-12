@@ -6,8 +6,9 @@ const jobs: any[] = []
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -15,7 +16,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const job = jobs.find((j) => j.id === params.id)
+    const job = jobs.find((j) => j.id === id)
 
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 })
@@ -27,13 +28,13 @@ export async function GET(
 
     // In production, generate ZIP file from job.files
     // For now, return mock ZIP
-    const mockZipContent = `ZIP file for export job ${params.id}`
+    const mockZipContent = `ZIP file for export job ${id}`
     const blob = new Blob([mockZipContent], { type: "application/zip" })
 
     return new NextResponse(blob, {
       headers: {
         "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="export-${params.id}.zip"`,
+        "Content-Disposition": `attachment; filename="export-${id}.zip"`,
       },
     })
   } catch (error) {

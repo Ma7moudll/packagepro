@@ -1,7 +1,5 @@
 "use client"
 
-import { GLTF } from "three/examples/jsm/loaders/GLTFLoader"
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader"
 import { useGLTF } from "@react-three/drei"
 
 export interface ModelInfo {
@@ -21,9 +19,11 @@ export function usePreloadedModel(url: string) {
 /**
  * Load GLTF/GLB model with Draco compression support
  */
-export async function loadModel(url: string): Promise<GLTF> {
-  const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader")
-  const { DRACOLoader } = await import("three/examples/jsm/loaders/DRACOLoader")
+export async function loadModel(url: string): Promise<any> {
+  // @ts-ignore - three.js addon loader types not always resolved
+  const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js")
+  // @ts-ignore - three.js addon loader types not always resolved
+  const { DRACOLoader } = await import("three/examples/jsm/loaders/DRACOLoader.js")
 
   const loader = new GLTFLoader()
 
@@ -35,12 +35,12 @@ export async function loadModel(url: string): Promise<GLTF> {
   return new Promise((resolve, reject) => {
     loader.load(
       url,
-      (gltf) => resolve(gltf),
-      (progress) => {
+      (gltf: any) => resolve(gltf),
+      (progress: any) => {
         // Progress callback
         console.log("Loading model:", (progress.loaded / progress.total) * 100 + "%")
       },
-      (error) => reject(error)
+      (error: any) => reject(error)
     )
   })
 }
@@ -50,7 +50,7 @@ export async function loadModel(url: string): Promise<GLTF> {
  * This would typically be done via CLI: npx gltfjsx model.glb
  * But we can also generate it programmatically
  */
-export function generateGLTFJSX(gltf: GLTF, componentName: string = "Model"): string {
+export function generateGLTFJSX(gltf: any, componentName: string = "Model"): string {
   const nodes = Object.keys(gltf.scene.children).map((key) => {
     const child = gltf.scene.children[key]
     return `  ${key}: THREE.Mesh`

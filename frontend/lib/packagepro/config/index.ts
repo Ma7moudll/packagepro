@@ -227,7 +227,7 @@ function loadConfig(): PackageProConfig {
     return configSchema.parse(rawConfig)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const missingFields = error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join("\n")
+      const missingFields = error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join("\n")
       throw new Error(`Configuration validation failed:\n${missingFields}`)
     }
     throw error

@@ -9,7 +9,9 @@ import { logger } from "../utils/logger"
 import { getConfig } from "../config"
 import { enqueueJob } from "../queue/queue-client"
 
-const prisma = null as any
+const prisma = {
+  $queryRawUnsafe: async <T = any>(strings: TemplateStringsArray | string, ...values: any[]): Promise<T> => [] as T,
+}
 
 export interface RoutingRequirements {
   productId: string

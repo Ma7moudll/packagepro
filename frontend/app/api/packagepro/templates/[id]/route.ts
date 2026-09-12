@@ -7,10 +7,11 @@ let ratingIdCounter = 1
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
-    const template = templates.find((t) => t.id === params.id)
+    const template = templates.find((t) => t.id === id)
 
     if (!template) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 })
@@ -25,11 +26,12 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     // TODO: Add authentication and authorization
-    const template = templates.find((t) => t.id === params.id)
+    const template = templates.find((t) => t.id === id)
 
     if (!template) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 })
@@ -52,11 +54,12 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     // TODO: Add authentication and authorization
-    const index = templates.findIndex((t) => t.id === params.id)
+    const index = templates.findIndex((t) => t.id === id)
 
     if (index === -1) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 })
@@ -74,8 +77,9 @@ export async function DELETE(
 // Ratings endpoints
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     // Check if this is a rating request
     const url = request.url
@@ -90,7 +94,7 @@ export async function POST(
         )
       }
 
-      const template = templates.find((t) => t.id === params.id)
+      const template = templates.find((t) => t.id === id)
       if (!template) {
         return NextResponse.json(
           { error: "Template not found" },
@@ -101,7 +105,7 @@ export async function POST(
       // Create rating
       const newRating = {
         id: `rating-${ratingIdCounter++}`,
-        templateId: params.id,
+        templateId: id,
         userId: "current-user", // TODO: Get from session
         userName: "User", // TODO: Get from session
         rating,
@@ -112,7 +116,7 @@ export async function POST(
       ratings.push(newRating)
 
       // Update template rating stats
-      const templateRatings = ratings.filter((r) => r.templateId === params.id)
+      const templateRatings = ratings.filter((r) => r.templateId === id)
       const totalRating = templateRatings.reduce((sum, r) => sum + r.rating, 0)
       template.avgRating = totalRating / templateRatings.length
       template.ratingsCount = templateRatings.length

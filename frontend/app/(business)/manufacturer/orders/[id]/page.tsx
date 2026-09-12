@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -8,8 +8,25 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/providers/auth-provider"
 import { useLanguage } from "@/providers/language-provider"
-import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, Mail } from "lucide-react"
+import { ordersApi } from "@/lib/api/orders"
+import { vendorsApi, num, type BackendOrder, type PurchaseOrder } from "@/lib/api/vendors"
+import { HandshakeActions } from "@/components/vendor/handshake-actions"
+import { ProductionProgress } from "@/components/vendor/production-progress"
+import { OrderTimeline } from "@/components/orders/order-timeline"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ArrowLeft, MapPin, Phone, Mail, AlertCircle, Loader2 } from "lucide-react"
 import Link from "next/link"
+import type { OrderStatus } from "@shared/types"
+
+type ProductionUiStatus = "not_started" | "in_production" | "sample_ready" | "sample_approved" | "quality_check" | "ready_to_ship"
+
+const PRODUCTION_MAP: Record<string, ProductionUiStatus> = {
+  not_started: "not_started",
+  in_progress: "in_production",
+  sample_production: "sample_ready",
+  quality_review: "quality_check",
+  completed: "ready_to_ship",
+}
 
 export default function ManufacturerOrderDetailPage() {
   const { user } = useAuth()
@@ -19,105 +36,99 @@ export default function ManufacturerOrderDetailPage() {
 
   const orderId = Array.isArray(params.id) ? params.id[0] : params.id
   const [loading, setLoading] = useState(true)
-  interface Order {
-    id: string
-    customer: string
-    customerEn: string
-    customerEmail: string
-    customerPhone: string
-    product: string
-    productEn: string
-    quantity: number
-    unitPrice: number
-    total: number
-    subtotal: number
-    shipping: number
-    tax: number
-    finalTotal: number
-    status: string
-    date: string
-    deliveryDate: string
-    shippingAddress: string
-    shippingAddressEn: string
-    notes?: string
-    notesEn?: string
-    trackingNumber?: string
-  }
-  const [order, setOrder] = useState<Order | null>(null)
+  const [order, setOrder] = useState<BackendOrder | null>(null)
+  const [po, setPo] = useState<PurchaseOrder | null>(null)
+  const [productionStatus, setProductionStatus] = useState<ProductionUiStatus>("not_started")
+  const [productionProgress, setProductionProgress] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const [orderRes, vendorData] = await Promise.all([
+        ordersApi.getById(orderId!),
+        vendorsApi.getOrders().catch(() => ({ success: false, data: [] as PurchaseOrder[] })),
+      ])
+
+      if (orderRes.success && orderRes.data) {
+        setOrder(orderRes.data as unknown as BackendOrder)
+      } else {
+        setOrder(null)
+        setError(language === "ar" ? "لم يتم العثور على الطلب" : "Order not found")
+      }
+
+      const rows = (vendorData.success ? vendorData.data : []) as unknown as PurchaseOrder[]
+      const matched = rows.find((r) => r.orderId === orderId)
+      setPo(matched || null)
+      if (matched?.production) {
+        setProductionStatus(PRODUCTION_MAP[matched.production.status] || "not_started")
+        setProductionProgress(matched.production.progressPercent || 0)
+      } else {
+        setProductionStatus("not_started")
+        setProductionProgress(0)
+      }
+    } catch (err: any) {
+      console.error("Error fetching order:", err)
+      setError(err.message || "Failed to fetch order")
+      setOrder(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [orderId, language])
 
   useEffect(() => {
     if (!user || (user.role !== "MANUFACTURER" && user.role !== "ADMIN")) {
       router.push("/login")
       return
     }
+    if (orderId) {
+      fetchData()
+    }
+  }, [user, router, orderId, fetchData])
 
-    // Fetch order data
-    const fetchOrder = async () => {
+  const handleAcceptHandshake = async () => {
+    if (!po?.handshake) return
+    await vendorsApi.acceptHandshake(po.handshake.id)
+    await fetchData()
+  }
+
+  const handleRejectHandshake = async (reason?: string) => {
+    if (!po?.handshake) return
+    await vendorsApi.rejectHandshake(po.handshake.id, reason)
+    await fetchData()
+  }
+
+  const handleStartProduction = async () => {
+    if (!po) return
+    const res = await vendorsApi.startProduction(po.id)
+    if (res.success && res.data) {
+      setProductionStatus(PRODUCTION_MAP[res.data.status] || "in_production")
+      setProductionProgress(res.data.progressPercent || 0)
+      await fetchData()
+    }
+  }
+
+  const handleUpdateProgress = async (value: number) => {
+    setProductionProgress(value)
+    setProductionStatus((s) => (s === "not_started" ? "in_production" : s))
+    if (po?.production?.id) {
       try {
-        setLoading(true)
-        await new Promise((resolve) => setTimeout(resolve, 500))
-
-        // Mock order data - in real app, fetch from API
-        const mockOrders: Record<string, Order> = {
-          "ORD-1001": {
-            id: "ORD-1001",
-            customer: "شركة الأهرام",
-            customerEn: "Al-Ahram Company",
-            customerEmail: "contact@alahram.com",
-            customerPhone: "+20 123 456 7890",
-            product: "علب كرتون مموج",
-            productEn: "Corrugated Boxes",
-            quantity: 500,
-            unitPrice: 2.5,
-            total: 1250,
-            subtotal: 1250,
-            shipping: 50,
-            tax: 100,
-            finalTotal: 1400,
-            status: "processing",
-            date: "2024-01-15",
-            deliveryDate: "2024-01-25",
-            shippingAddress: "123 شارع النيل، القاهرة، مصر",
-            shippingAddressEn: "123 Nile Street, Cairo, Egypt",
-            notes: "يرجى التأكد من التغليف بعناية",
-            notesEn: "Please ensure careful packaging",
-          },
-          "ORD-1002": {
-            id: "ORD-1002",
-            customer: "مطعم النيل",
-            customerEn: "Nile Restaurant",
-            customerEmail: "info@nilerestaurant.com",
-            customerPhone: "+20 987 654 3210",
-            product: "أكياس ورق كرافت",
-            productEn: "Kraft Paper Bags",
-            quantity: 2000,
-            unitPrice: 0.25,
-            total: 500,
-            subtotal: 500,
-            shipping: 30,
-            tax: 40,
-            finalTotal: 570,
-            status: "shipped",
-            date: "2024-01-14",
-            deliveryDate: "2024-01-22",
-            shippingAddress: "456 شارع التحرير، الجيزة، مصر",
-            shippingAddressEn: "456 Tahrir Street, Giza, Egypt",
-            trackingNumber: "TRACK123456",
-            notes: "",
-            notesEn: "",
-          },
-        }
-
-        setOrder(mockOrders[orderId as string])
-      } catch (error) {
-        console.error("Error fetching order:", error)
-      } finally {
-        setLoading(false)
+        await vendorsApi.updateProductionProgress(po.production.id, value)
+      } catch (err) {
+        console.error("Error updating production progress:", err)
       }
     }
+  }
 
-    fetchOrder()
-  }, [user, router, orderId])
+  const handleMarkReadyToShip = async () => {
+    setProductionStatus("ready_to_ship")
+    if (orderId) {
+      await ordersApi.updateStatus(orderId, "ready_to_ship")
+      await fetchData()
+    }
+  }
 
   if (!user || (user.role !== "MANUFACTURER" && user.role !== "ADMIN")) {
     return null
@@ -126,9 +137,25 @@ export default function ManufacturerOrderDetailPage() {
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="text-center">
-          <p className="text-slate-600">{language === "ar" ? "جاري التحميل..." : "Loading..."}</p>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
         </div>
+      </div>
+    )
+  }
+
+  if (error && !order) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Button asChild className="mt-4">
+          <Link href="/manufacturer/orders">
+            {language === "ar" ? "العودة للطلبات" : "Back to Orders"}
+          </Link>
+        </Button>
       </div>
     )
   }
@@ -148,49 +175,47 @@ export default function ManufacturerOrderDetailPage() {
     )
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "delivered":
-        return <CheckCircle className="h-5 w-5 text-green-600" />
-      case "shipped":
-        return <Truck className="h-5 w-5 text-blue-600" />
-      case "processing":
-        return <Package className="h-5 w-5 text-orange-600" />
-      default:
-        return <Clock className="h-5 w-5 text-slate-600" />
+  const orderStatus = (order.status || "pending_review") as OrderStatus
+
+  const statusVariant = (status: OrderStatus): "default" | "secondary" | "destructive" | "outline" => {
+    const map: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+      pending_review: "secondary",
+      awaiting_approval: "secondary",
+      ready_for_routing: "outline",
+      vendor_confirmed: "default",
+      in_production: "default",
+      quality_check: "outline",
+      ready_to_ship: "default",
+      shipped: "outline",
+      delivered: "default",
+      completed: "default",
+      cancelled: "destructive",
     }
+    return map[status] || "secondary"
   }
 
-  const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { label: { ar: string; en: string }; variant: "default" | "secondary" | "destructive" | "outline"; className: string }> = {
-      pending: {
-        label: { ar: "قيد الانتظار", en: "Pending" },
-        variant: "secondary",
-        className: "bg-yellow-100 text-yellow-800"
-      },
-      processing: {
-        label: { ar: "قيد المعالجة", en: "Processing" },
-        variant: "default",
-        className: "bg-blue-100 text-blue-800"
-      },
-      shipped: {
-        label: { ar: "تم الشحن", en: "Shipped" },
-        variant: "outline",
-        className: "bg-purple-100 text-purple-800"
-      },
-      delivered: {
-        label: { ar: "تم التسليم", en: "Delivered" },
-        variant: "default",
-        className: "bg-green-100 text-green-800"
-      },
+  const statusLabel = (status: OrderStatus): string => {
+    const labels: Record<OrderStatus, { ar: string; en: string }> = {
+      pending_review: { ar: "قيد المراجعة", en: "Pending Review" },
+      awaiting_approval: { ar: "بانتظار الموافقة", en: "Awaiting Approval" },
+      ready_for_routing: { ar: "جاهز للتوجيه", en: "Ready for Routing" },
+      vendor_confirmed: { ar: "تم تأكيد المورد", en: "Vendor Confirmed" },
+      in_production: { ar: "قيد الإنتاج", en: "In Production" },
+      quality_check: { ar: "فحص الجودة", en: "Quality Check" },
+      ready_to_ship: { ar: "جاهز للشحن", en: "Ready to Ship" },
+      shipped: { ar: "تم الشحن", en: "Shipped" },
+      delivered: { ar: "تم التسليم", en: "Delivered" },
+      completed: { ar: "مكتمل", en: "Completed" },
+      cancelled: { ar: "ملغي", en: "Cancelled" },
     }
-    const statusInfo = statusMap[status] || statusMap.pending
-    return (
-      <Badge className={statusInfo.className}>
-        {getStatusIcon(status)}
-        <span className="ml-2">{language === "ar" ? statusInfo.label.ar : statusInfo.label.en}</span>
-      </Badge>
-    )
+    return language === "ar" ? labels[status].ar : labels[status].en
+  }
+
+  const isHandshakable = po?.handshake?.status === "pending"
+  const shipAddr: NonNullable<BackendOrder["shippingAddress"]> = order.shippingAddress || {
+    name: order.shippingName,
+    phone: order.shippingPhone,
+    email: order.shippingEmail ?? undefined,
   }
 
   return (
@@ -204,14 +229,30 @@ export default function ManufacturerOrderDetailPage() {
             </Link>
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">
-              {language === "ar" ? "تفاصيل الطلب" : "Order Details"}
-            </h1>
-            <p className="text-slate-600">#{order.id}</p>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold text-slate-900">
+                {language === "ar" ? "تفاصيل الطلب" : "Order Details"}
+              </h1>
+              {po?.poNumber && (
+                <Badge variant="outline" className="text-xs font-mono">
+                  {po.poNumber}
+                </Badge>
+              )}
+            </div>
+            <p className="text-slate-600">#{order.orderNumber || order.id}</p>
           </div>
         </div>
-        {getStatusBadge(order.status)}
+        <Badge variant={statusVariant(orderStatus)} className="text-sm px-3 py-1">
+          {statusLabel(orderStatus)}
+        </Badge>
       </div>
+
+      {/* Order Timeline */}
+      <Card className="mb-8">
+        <CardContent className="pt-6">
+          <OrderTimeline status={orderStatus} />
+        </CardContent>
+      </Card>
 
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Main Content */}
@@ -222,24 +263,37 @@ export default function ManufacturerOrderDetailPage() {
               <CardTitle>{language === "ar" ? "تفاصيل الطلب" : "Order Items"}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-start justify-between p-4 border rounded-lg">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-lg">
-                    {language === "ar" ? order.product : order.productEn}
-                  </h3>
-                  <p className="text-sm text-slate-600 mt-1">
-                    {language === "ar" ? "الكمية" : "Quantity"}: {order.quantity.toLocaleString()}
-                  </p>
-                  <p className="text-sm text-slate-600">
-                    {language === "ar" ? "سعر الوحدة" : "Unit Price"}: {order.unitPrice.toFixed(2)} {language === "ar" ? "جنيه" : "EGP"}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold text-emerald-600">
-                    {order.total.toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}
-                  </p>
-                </div>
-              </div>
+              {order.items && order.items.length > 0 ? (
+                order.items.map((item) => (
+                  <div key={item.id} className="flex items-start justify-between p-4 border rounded-lg">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg">{item.productType}</h3>
+                      <p className="text-sm text-slate-600 mt-1">
+                        {language === "ar" ? "الكمية" : "Quantity"}: {item.quantity.toLocaleString()}
+                      </p>
+                      {item.dimensions && (
+                        <p className="text-sm text-slate-600">
+                          {item.dimensions.length} × {item.dimensions.width}
+                          {item.dimensions.height ? ` × ${item.dimensions.height}` : ""}{" "}
+                          {item.dimensions.unit}
+                        </p>
+                      )}
+                      <p className="text-sm text-slate-600">
+                        {language === "ar" ? "سعر الوحدة" : "Unit Price"}: {num(item.unitPrice).toFixed(2)} {language === "ar" ? "جنيه" : "EGP"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-emerald-600">
+                        {num(item.totalPrice).toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-slate-500 text-center py-4">
+                  {language === "ar" ? "لا توجد عناصر" : "No items"}
+                </p>
+              )}
             </CardContent>
           </Card>
 
@@ -249,21 +303,13 @@ export default function ManufacturerOrderDetailPage() {
               <CardTitle>{language === "ar" ? "معلومات العميل" : "Customer Information"}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <p className="font-semibold text-lg">
-                  {language === "ar" ? order.customer : order.customerEn}
-                </p>
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-slate-400" />
+                <span className="text-sm">{order.customer?.user?.email || order.shippingEmail || shipAddr?.email || "—"}</span>
               </div>
-              <Separator />
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-slate-400" />
-                  <span className="text-sm">{order.customerEmail}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-slate-400" />
-                  <span className="text-sm">{order.customerPhone}</span>
-                </div>
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-slate-400" />
+                <span className="text-sm">{order.shippingPhone || shipAddr?.phone || "—"}</span>
               </div>
             </CardContent>
           </Card>
@@ -277,9 +323,18 @@ export default function ManufacturerOrderDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-slate-700">
-                {language === "ar" ? order.shippingAddress : order.shippingAddressEn}
-              </p>
+              {shipAddr ? (
+                <div className="text-slate-700 space-y-1">
+                  <p>{shipAddr.name || order.shippingName}</p>
+                  {shipAddr.street ? <p>{shipAddr.street}</p> : null}
+                  {shipAddr.city ? (
+                    <p>{shipAddr.city}{shipAddr.state ? `, ${shipAddr.state}` : ""} {shipAddr.postalCode || ""}</p>
+                  ) : null}
+                  {shipAddr.country ? <p>{shipAddr.country}</p> : null}
+                </div>
+              ) : (
+                <p className="text-slate-400">{language === "ar" ? "غير متوفر" : "Not available"}</p>
+              )}
             </CardContent>
           </Card>
 
@@ -290,9 +345,7 @@ export default function ManufacturerOrderDetailPage() {
                 <CardTitle>{language === "ar" ? "ملاحظات" : "Notes"}</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-slate-700">
-                  {language === "ar" ? order.notes : order.notesEn}
-                </p>
+                <p className="text-slate-700">{order.notes}</p>
               </CardContent>
             </Card>
           )}
@@ -300,6 +353,28 @@ export default function ManufacturerOrderDetailPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
+          {/* Handshake Actions */}
+          <HandshakeActions
+            handshakeExpiresAt={po?.handshake?.expiresAt || new Date(Date.now() + 14400000).toISOString()}
+            onAccept={handleAcceptHandshake}
+            onReject={handleRejectHandshake}
+            isHandshakable={isHandshakable}
+          />
+
+          {/* Production Progress */}
+          {po && (po.handshake?.status === "accepted" || productionStatus !== "not_started" || po.production) && (
+            <ProductionProgress
+              orderId={order.id}
+              currentStatus={productionStatus}
+              progress={productionProgress}
+              samplePhotos={[]}
+              onStartProduction={handleStartProduction}
+              onUpdateProgress={handleUpdateProgress}
+              onUploadSample={async () => {}}
+              onMarkReadyToShip={handleMarkReadyToShip}
+            />
+          )}
+
           {/* Order Summary */}
           <Card>
             <CardHeader>
@@ -308,21 +383,21 @@ export default function ManufacturerOrderDetailPage() {
             <CardContent className="space-y-4">
               <div className="flex justify-between">
                 <span>{language === "ar" ? "المجموع الفرعي" : "Subtotal"}:</span>
-                <span>{order.subtotal.toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}</span>
+                <span>{num(order.subtotal).toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}</span>
               </div>
               <div className="flex justify-between">
                 <span>{language === "ar" ? "الشحن" : "Shipping"}:</span>
-                <span>{order.shipping.toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}</span>
+                <span>{num(order.shippingCost).toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}</span>
               </div>
               <div className="flex justify-between">
                 <span>{language === "ar" ? "الضريبة" : "Tax"}:</span>
-                <span>{order.tax.toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}</span>
+                <span>{num(order.tax).toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}</span>
               </div>
               <Separator />
               <div className="flex justify-between font-semibold text-lg">
                 <span>{language === "ar" ? "الإجمالي" : "Total"}:</span>
                 <span className="text-emerald-600">
-                  {order.finalTotal.toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}
+                  {num(order.total).toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}
                 </span>
               </div>
             </CardContent>
@@ -336,50 +411,12 @@ export default function ManufacturerOrderDetailPage() {
             <CardContent className="space-y-3">
               <div>
                 <p className="text-sm text-slate-500">{language === "ar" ? "تاريخ الطلب" : "Order Date"}:</p>
-                <p className="font-medium">{new Date(order.date).toLocaleDateString()}</p>
+                <p className="font-medium">{new Date(order.createdAt).toLocaleDateString()}</p>
               </div>
               <div>
-                <p className="text-sm text-slate-500">{language === "ar" ? "تاريخ التسليم المتوقع" : "Expected Delivery"}:</p>
-                <p className="font-medium">{new Date(order.deliveryDate).toLocaleDateString()}</p>
+                <p className="text-sm text-slate-500">{language === "ar" ? "آخر تحديث" : "Last Updated"}:</p>
+                <p className="font-medium">{new Date(order.updatedAt).toLocaleDateString()}</p>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Tracking */}
-          {order.trackingNumber && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{language === "ar" ? "تتبع الشحنة" : "Tracking"}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="font-mono text-sm bg-slate-100 p-2 rounded">
-                  {order.trackingNumber}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Actions */}
-          <Card>
-            <CardHeader>
-              <CardTitle>{language === "ar" ? "إجراءات" : "Actions"}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {order.status === "pending" && (
-                <Button className="w-full">
-                  {language === "ar" ? "بدء المعالجة" : "Start Processing"}
-                </Button>
-              )}
-              {order.status === "processing" && (
-                <Button className="w-full">
-                  {language === "ar" ? "تحديث حالة الشحن" : "Update Shipping Status"}
-                </Button>
-              )}
-              {order.status === "shipped" && (
-                <Button className="w-full" variant="outline">
-                  {language === "ar" ? "تم التسليم" : "Mark as Delivered"}
-                </Button>
-              )}
             </CardContent>
           </Card>
         </div>
@@ -387,4 +424,3 @@ export default function ManufacturerOrderDetailPage() {
     </div>
   )
 }
-

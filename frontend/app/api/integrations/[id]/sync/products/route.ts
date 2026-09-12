@@ -8,8 +8,9 @@ const syncJobs: any[] = []
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await auth()
 
@@ -17,7 +18,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const integration = integrations.find((i) => i.id === params.id)
+    const integration = integrations.find((i) => i.id === id)
 
     if (!integration) {
       return NextResponse.json({ error: "Integration not found" }, { status: 404 })
@@ -26,7 +27,7 @@ export async function POST(
     // Create sync job
     const job = {
       id: `sync-${nanoid()}`,
-      integrationId: params.id,
+      integrationId: id,
       type: "products",
       status: "pending",
       progress: 0,
@@ -55,7 +56,7 @@ export async function POST(
       }
 
       // Update integration last sync
-      const integrationIndex = integrations.findIndex((i) => i.id === params.id)
+      const integrationIndex = integrations.findIndex((i) => i.id === id)
       if (integrationIndex !== -1) {
         integrations[integrationIndex].lastSync = new Date().toISOString()
       }

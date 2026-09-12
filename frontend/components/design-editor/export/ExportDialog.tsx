@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Download, FileImage, FileText, FileCode } from "lucide-react"
 import { fabric } from "fabric"
 import { useLanguage } from "@/providers/language-provider"
+import { generateAI, generateEPS, downloadBlob } from "@/lib/editor/services/vector-export"
 
 interface ExportDialogProps {
   canvas: fabric.Canvas | null
@@ -18,7 +19,7 @@ interface ExportDialogProps {
 export function ExportDialog({ canvas, trigger }: ExportDialogProps) {
   const { language } = useLanguage()
   const [open, setOpen] = useState(false)
-  const [format, setFormat] = useState<"png" | "jpg" | "pdf" | "svg" | "dieline">("png")
+  const [format, setFormat] = useState<"png" | "jpg" | "pdf" | "svg" | "dieline" | "ai" | "eps">("png")
   const [resolution, setResolution] = useState<"72" | "150" | "300">("300")
   const [includeBleed, setIncludeBleed] = useState(true)
   const [includeCropMarks, setIncludeCropMarks] = useState(false)
@@ -44,6 +45,10 @@ export function ExportDialog({ canvas, trigger }: ExportDialogProps) {
         case "dieline":
           await exportDieline()
           break
+        case "ai":
+        case "eps":
+          await exportVector(format)
+          break
       }
       setOpen(false)
     } catch (error) {
@@ -53,7 +58,7 @@ export function ExportDialog({ canvas, trigger }: ExportDialogProps) {
     }
   }
 
-  const exportImage = async (format: "png" | "jpg", dpi: number) => {
+  const exportImage = async (format: "png" | "jpg" | "pdf", dpi: number) => {
     if (!canvas) return
 
     // Calculate multiplier based on DPI
@@ -99,6 +104,33 @@ export function ExportDialog({ canvas, trigger }: ExportDialogProps) {
     await exportImage("pdf", 300)
   }
 
+  const exportVector = async (format: "ai" | "eps") => {
+    if (!canvas) return
+    const svg = canvas.toSVG()
+    const rect = canvas.getObjects().reduce(
+      (acc, obj) => {
+        const bounds = obj.getBoundingRect()
+        return {
+          left: Math.min(acc.left, bounds.left),
+          top: Math.min(acc.top, bounds.top),
+          right: Math.max(acc.right, bounds.left + bounds.width),
+          bottom: Math.max(acc.bottom, bounds.top + bounds.height),
+        }
+      },
+      { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }
+    )
+    const width = rect.right - rect.left || canvas.getWidth()
+    const height = rect.bottom - rect.top || canvas.getHeight()
+
+    if (format === "ai") {
+      const content = generateAI(svg, width, height)
+      downloadBlob(content, "design.ai", "application/postscript")
+    } else {
+      const content = generateEPS(svg, width, height)
+      downloadBlob(content, "design.eps", "application/postscript")
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger && isValidElement(trigger) ? (
@@ -131,23 +163,29 @@ export function ExportDialog({ canvas, trigger }: ExportDialogProps) {
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="png">
-                  PNG
-                </SelectItem>
-                <SelectItem value="jpg">
-                  JPG
-                </SelectItem>
-                <SelectItem value="pdf">
-                  PDF
-                </SelectItem>
-                <SelectItem value="svg">
-                  SVG
-                </SelectItem>
-                <SelectItem value="dieline">
-                  {language === "ar" ? "Dieline PDF" : "Dieline PDF"}
-                </SelectItem>
-              </SelectContent>
+               <SelectContent>
+                 <SelectItem value="png">
+                   PNG
+                 </SelectItem>
+                 <SelectItem value="jpg">
+                   JPG
+                 </SelectItem>
+                 <SelectItem value="pdf">
+                   PDF
+                 </SelectItem>
+                 <SelectItem value="svg">
+                   SVG
+                 </SelectItem>
+                 <SelectItem value="dieline">
+                   {language === "ar" ? "Dieline PDF" : "Dieline PDF"}
+                 </SelectItem>
+                 <SelectItem value="ai">
+                   Adobe Illustrator (AI)
+                 </SelectItem>
+                 <SelectItem value="eps">
+                   EPS Vector
+                 </SelectItem>
+               </SelectContent>
             </Select>
           </div>
 
@@ -155,7 +193,7 @@ export function ExportDialog({ canvas, trigger }: ExportDialogProps) {
           {(format === "png" || format === "jpg" || format === "pdf") && (
             <div>
               <Label>{language === "ar" ? "الدقة (DPI)" : "Resolution (DPI)"}</Label>
-              <Select value={resolution} onValueChange={setResolution}>
+              <Select value={resolution} onValueChange={(val) => setResolution(val as "72" | "150" | "300")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

@@ -138,8 +138,9 @@ const blogPosts: Record<number, BlogPost> = {
   },
 }
 
-export default function BlogPostPage({ params }: { params: { id: string } }) {
-  const postId = parseInt(params.id)
+export default async function BlogPostPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const postId = parseInt(id)
   const post = blogPosts[postId]
 
   if (!post) {

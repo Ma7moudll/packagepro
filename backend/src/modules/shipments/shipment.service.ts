@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma';
 import { NotFoundError, ValidationError } from '../../utils/errors';
 import { dhlService } from '../../integrations/dhl/dhl.service';
 import { emailService } from '../../services/email/email.service';
+import { notificationService } from '../notifications/notifications.service';
 
 export class ShipmentService {
   /**
@@ -124,6 +125,19 @@ export class ShipmentService {
         trackingNumber: dhlResult.trackingNumber,
       },
     });
+
+    if (shipment.order.customer.user.id) {
+      await notificationService.createIfUnseen(
+        shipment.order.customer.user.id,
+        { entityType: 'shipment', entityId: shipment.id },
+        {
+          type: 'shipment_created',
+          title: `Your order ${order.orderNumber} has shipped`,
+          message: `Tracking: ${dhlResult.trackingNumber}`,
+          link: `/orders/${order.id}`,
+        }
+      );
+    }
 
     return shipment;
   }

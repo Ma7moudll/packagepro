@@ -77,14 +77,24 @@ export default function ComparePage() {
     setCompareProducts((products) => products.filter((p) => p.id !== productId))
   }
 
-  const addToCart = (product: Product) => {
-    addItem({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      quantity: product.minQuantity,
-      image: product.image,
-    })
+  const addToCart = async (product: Product) => {
+    try {
+      await addItem({
+        productType: "box",
+        name: product.name,
+        quantity: product.minQuantity,
+        dimensions: { length: 100, width: 100, height: 50, unit: "mm" },
+        materialCode: "kraft",
+        image: product.image,
+      })
+    } catch {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to add items to your cart.",
+        variant: "destructive",
+      })
+      return
+    }
     toast({
       title: "Added to cart",
       description: `${product.name} has been added to your cart.`,

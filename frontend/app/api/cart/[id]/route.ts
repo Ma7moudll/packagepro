@@ -14,8 +14,9 @@ export const PUT = withAuth(
     100,
     60000,
   )(
-    withErrorHandling(async (request: NextRequest, user: User, { params }: { params: { id: string } }) => {
-      const cartItemId = Number.parseInt(params.id)
+    withErrorHandling(async (request: NextRequest, user: User, { params }: { params: Promise<{ id: string }> }) => {
+      const { id } = await params
+      const cartItemId = Number.parseInt(id)
       const { quantity } = await request.json()
 
       if (isNaN(cartItemId) || !quantity || quantity < 1) {
@@ -41,8 +42,9 @@ export const DELETE = withAuth(
     100,
     60000,
   )(
-    withErrorHandling(async (request: NextRequest, user: User, { params }: { params: { id: string } }) => {
-      const cartItemId = Number.parseInt(params.id)
+    withErrorHandling(async (request: NextRequest, user: User, { params }: { params: Promise<{ id: string }> }) => {
+      const { id } = await params
+      const cartItemId = Number.parseInt(id)
 
       if (isNaN(cartItemId)) {
         return NextResponse.json({ error: "Invalid cart item ID" }, { status: 400 })

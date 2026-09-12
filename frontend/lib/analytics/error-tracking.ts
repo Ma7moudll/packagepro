@@ -4,6 +4,7 @@ import { analyticsService } from "./analytics-service"
 
 class ErrorTrackingService {
   private initialized = false
+  private listenersAttached = false
 
   /**
    * Initialize error tracking (Sentry)
@@ -30,22 +31,47 @@ class ErrorTrackingService {
         })
         this.initialized = true
       }
-    } catch (error) {
-      console.error("Failed to initialize Sentry:", error)
+    } catch {
+      // Sentry unavailable — analytics tracking still works without it
     }
+
+    this.attachGlobalListeners()
+  }
+
+  private attachGlobalListeners(): void {
+    if (this.listenersAttached || typeof window === "undefined") return
+    this.listenersAttached = true
+
+    // Global error handler
+    window.addEventListener("error", (event) => {
+      this.captureException(event.error, {
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+      })
+    })
+
+    // Unhandled promise rejection handler
+    window.addEventListener("unhandledrejection", (event) => {
+      this.captureException(event.reason instanceof Error ? event.reason : new Error(String(event.reason)), {
+        type: "unhandled_promise_rejection",
+      })
+    })
   }
 
   /**
    * Capture exception
    */
-  captureException(error: Error, context?: Record<string, any>): void {
+  captureException(error: unknown, context?: Record<string, any>): void {
+    const normalized = error instanceof Error ? error : new Error(String(error ?? "Unknown error"))
+
     // Track in analytics
-    analyticsService.trackError(error, context)
+    analyticsService.trackError(normalized, context)
 
     // Send to Sentry if initialized
     if (this.initialized) {
       import("@sentry/nextjs").then((Sentry) => {
-        Sentry.captureException(error, {
+        Sentry.captureException(normalized, {
           contexts: {
             custom: context || {},
           },
@@ -98,24 +124,5 @@ export const errorTrackingService = new ErrorTrackingService()
 // Initialize on client side
 if (typeof window !== "undefined") {
   errorTrackingService.initialize()
-
-  // Global error handler
-  window.addEventListener("error", (event) => {
-    errorTrackingService.captureException(event.error, {
-      filename: event.filename,
-      lineno: event.lineno,
-      colno: event.colno,
-    })
-  })
-
-  // Unhandled promise rejection handler
-  window.addEventListener("unhandledrejection", (event) => {
-    errorTrackingService.captureException(
-      event.reason instanceof Error ? event.reason : new Error(String(event.reason)),
-      {
-        type: "unhandled_promise_rejection",
-      }
-    )
-  })
 }
 

@@ -1,332 +1,192 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { useAuth } from "@/providers/auth-provider"
-import { Package, ShoppingCart, DollarSign, TrendingUp, Plus, FileText, PackageCheck, Settings, BarChart3, Users, Bell, ArrowRight, AlertCircle, CheckCircle2, Eye } from "lucide-react"
 import Link from "next/link"
+import { useAuth } from "@/providers/auth-provider"
 import { useLanguage } from "@/providers/language-provider"
+import { vendorsApi } from "@/lib/api/vendors"
+import type { VendorDashboard } from "@/lib/api/vendors"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Loader2, Package, Plus, Eye, TrendingUp, AlertCircle, DollarSign, ShoppingCart, FileText } from "lucide-react"
 
 export default function ManufacturerDashboard() {
-  const { user } = useAuth()
   const router = useRouter()
   const { language } = useLanguage()
-  const [stats, setStats] = useState({
-    totalProducts: 0,
-    activeOrders: 0,
-    pendingQuotes: 0,
-    monthlyRevenue: 0,
-    pendingSamples: 0,
-  })
+  const { user, isLoading: authLoading } = useAuth()
+  const [data, setData] = useState<VendorDashboard | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const loadDashboard = useCallback(async () => {
+    try {
+      const res = await vendorsApi.getDashboard()
+      if (res.success) {
+        setData(res.data)
+      }
+    } catch (err) {
+      console.error("Dashboard load error:", err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
-    if (!user || (user.role !== "MANUFACTURER" && user.role !== "ADMIN")) {
+    if (!authLoading && !user) {
       router.push("/login")
       return
     }
-
-    // Fetch manufacturer stats
-    const fetchStats = async () => {
-      try {
-        // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 500))
-        setStats({
-          totalProducts: 24,
-          activeOrders: 8,
-          pendingQuotes: 5,
-          monthlyRevenue: 45750,
-          pendingSamples: 3,
-        })
-      } catch (error) {
-        console.error("Error fetching stats:", error)
-      } finally {
-        setLoading(false)
-      }
+    if (user) {
+      loadDashboard()
     }
+  }, [user, authLoading, router, loadDashboard])
 
-    fetchStats()
-  }, [user, router])
-
-  if (!user || (user.role !== "MANUFACTURER" && user.role !== "ADMIN")) {
-    return null
+  if (authLoading || loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+      </div>
+    )
   }
 
-  if (loading) {
-    return <div className="p-8 text-center">Loading...</div>
-  }
+  if (!user) return null
+
+  const stats = data?.stats
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
+    <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">
-          {language === "ar" ? "لوحة تحكم المصنع" : "Manufacturer Dashboard"}
+        <h1 className="text-3xl font-bold text-gray-900">
+          {language === "ar" ? "لوحة تحكم المورد" : "Vendor Dashboard"}
         </h1>
-        <p className="text-slate-600">
-          {language === "ar"
-            ? "مرحباً بك، إدارة شاملة لمنتجاتك وطلباتك"
-            : "Welcome, comprehensive management for your products and orders"}
+        <p className="mt-1 text-gray-500">
+          {language === "ar" ? "مرحباً بعودتك" : `Welcome back, ${data?.vendor?.companyName || user.name}`}
         </p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Link href="/manufacturer/products">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-slate-600">
-                {language === "ar" ? "إجمالي المنتجات" : "Total Products"}
-              </CardTitle>
-              <Package className="h-4 w-4 text-slate-400 group-hover:text-emerald-600 transition-colors" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalProducts}</div>
-              <div className="flex items-center justify-between mt-2">
-                <p className="text-xs text-slate-500">
-                  {language === "ar" ? "منتجات نشطة" : "Active products"}
-                </p>
-                <ArrowRight className="h-3 w-3 text-slate-400 group-hover:text-emerald-600 transition-colors" />
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/manufacturer/orders">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-slate-600">
-                {language === "ar" ? "الطلبات النشطة" : "Active Orders"}
-              </CardTitle>
-              <ShoppingCart className="h-4 w-4 text-slate-400 group-hover:text-emerald-600 transition-colors" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.activeOrders}</div>
-              <div className="flex items-center justify-between mt-2">
-                <p className="text-xs text-slate-500">
-                  {language === "ar" ? "في الانتظار" : "Pending processing"}
-                </p>
-                <ArrowRight className="h-3 w-3 text-slate-400 group-hover:text-emerald-600 transition-colors" />
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/manufacturer/quotes">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-slate-600">
-                {language === "ar" ? "عروض معلقة" : "Pending Quotes"}
-              </CardTitle>
-              <FileText className="h-4 w-4 text-slate-400 group-hover:text-emerald-600 transition-colors" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.pendingQuotes}</div>
-              <div className="flex items-center justify-between mt-2">
-                <p className="text-xs text-slate-500">
-                  {language === "ar" ? "تتطلب رد" : "Require response"}
-                </p>
-                <ArrowRight className="h-3 w-3 text-slate-400 group-hover:text-emerald-600 transition-colors" />
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">
-              {language === "ar" ? "إيرادات الشهر" : "Monthly Revenue"}
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium text-gray-500">
+              {language === "ar" ? "الطلبات النشطة" : "Active Orders"}
             </CardTitle>
-            <DollarSign className="h-4 w-4 text-slate-400" />
+            <Package className="h-4 w-4 text-indigo-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {stats.monthlyRevenue.toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}
-            </div>
-            <p className="text-xs text-slate-500 mt-1 flex items-center">
-              <TrendingUp className="h-3 w-3 text-green-500 mr-1" />
-              {language === "ar" ? "+12% من الشهر الماضي" : "+12% from last month"}
+            <p className="text-3xl font-bold text-gray-900">{stats?.activeOrders || 0}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium text-gray-500">
+              {language === "ar" ? "بانتظار القبول" : "Pending Handshakes"}
+            </CardTitle>
+            <AlertCircle className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-amber-600">{data?.pendingHandshakes?.length || 0}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium text-gray-500">
+              {language === "ar" ? "إجمالي المدفوعات" : "Total Paid"}
+            </CardTitle>
+            <DollarSign className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-green-600">
+              {stats?.totalPaid?.toLocaleString() || "0"} {language === "ar" ? "جنيه" : "EGP"}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium text-gray-500">
+              {language === "ar" ? "التقييم" : "Rating"}
+            </CardTitle>
+            <TrendingUp className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-gray-900">
+              {data?.vendor?.qualityRating != null ? data.vendor.qualityRating.toFixed(1) : "—"}
             </p>
           </CardContent>
         </Card>
       </div>
 
       {/* Quick Actions */}
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Settings className="h-5 w-5 mr-2" />
-              {language === "ar" ? "إجراءات سريعة" : "Quick Actions"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
-            <Button asChild className="h-auto py-4 flex-col">
-              <Link href="/manufacturer/products/new">
-                <Plus className="h-5 w-5 mb-2" />
-                {language === "ar" ? "إضافة منتج" : "Add Product"}
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-auto py-4 flex-col">
-              <Link href="/manufacturer/products">
-                <Package className="h-5 w-5 mb-2" />
-                {language === "ar" ? "إدارة المنتجات" : "Manage Products"}
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-auto py-4 flex-col">
-              <Link href="/manufacturer/orders">
-                <ShoppingCart className="h-5 w-5 mb-2" />
-                {language === "ar" ? "الطلبات" : "Orders"}
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-auto py-4 flex-col">
-              <Link href="/manufacturer/quotes">
-                <FileText className="h-5 w-5 mb-2" />
-                {language === "ar" ? "العروض" : "Quotes"}
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-auto py-4 flex-col">
-              <Link href="/manufacturer/samples">
-                <PackageCheck className="h-5 w-5 mb-2" />
-                {language === "ar" ? "طلبات العينات" : "Sample Requests"}
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-auto py-4 flex-col">
-              <Link href="/manufacturer/custom-orders">
-                <FileText className="h-5 w-5 mb-2" />
-                {language === "ar" ? "طلبات مخصصة" : "Custom Orders"}
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-auto py-4 flex-col">
-              <Link href="/manufacturer/analytics">
-                <BarChart3 className="h-5 w-5 mb-2" />
-                {language === "ar" ? "التحليلات" : "Analytics"}
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-auto py-4 flex-col">
-              <Link href="/b2b">
-                <Users className="h-5 w-5 mb-2" />
-                {language === "ar" ? "بوابة B2B" : "B2B Portal"}
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center">
-              <Bell className="h-5 w-5 mr-2" />
-              {language === "ar" ? "إشعارات" : "Notifications"}
-            </CardTitle>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/manufacturer/notifications">
-                {language === "ar" ? "عرض الكل" : "View All"}
-                <ArrowRight className="h-4 w-4 ml-1" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Link href="/manufacturer/quotes">
-              <div className="flex items-start justify-between p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer group">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <AlertCircle className="h-4 w-4 text-blue-600" />
-                    <p className="text-sm font-medium">
-                      {language === "ar" ? "طلب عرض سعر جديد" : "New quote request"}
-                    </p>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {language === "ar" ? "من: شركة الأهرام" : "From: Al-Ahram Company"}
-                  </p>
-                </div>
-                <Badge variant="secondary" className="group-hover:bg-blue-200">
-                  {language === "ar" ? "جديد" : "New"}
-                </Badge>
-              </div>
-            </Link>
-            <Link href="/manufacturer/samples">
-              <div className="flex items-start justify-between p-3 bg-green-50 rounded-lg hover:bg-green-100 transition-colors cursor-pointer group">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    <p className="text-sm font-medium">
-                      {language === "ar" ? "طلب عينة جديد" : "New sample request"}
-                    </p>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {language === "ar" ? "منتج: علب كرتون" : "Product: Cardboard Boxes"}
-                  </p>
-                </div>
-                <Badge variant="secondary" className="bg-green-100 text-green-800 group-hover:bg-green-200">
-                  {stats.pendingSamples}
-                </Badge>
-              </div>
-            </Link>
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="text-sm">
+            {language === "ar" ? "إجراءات سريعة" : "Quick Actions"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Link href="/manufacturer/orders">
-              <div className="flex items-start justify-between p-3 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors cursor-pointer group">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <ShoppingCart className="h-4 w-4 text-orange-600" />
-                    <p className="text-sm font-medium">
-                      {language === "ar" ? "طلب جديد يحتاج مراجعة" : "New order requires review"}
-                    </p>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {language === "ar" ? "رقم الطلب: #1005" : "Order #1005"}
-                  </p>
-                </div>
-                <Badge variant="secondary" className="bg-orange-100 text-orange-800 group-hover:bg-orange-200">
-                  {language === "ar" ? "جديد" : "New"}
-                </Badge>
-              </div>
+              <Button variant="outline" className="w-full h-20 flex-col gap-1">
+                <ShoppingCart className="h-5 w-5" />
+                <span className="text-xs">{language === "ar" ? "عرض الطلبات" : "View Orders"}</span>
+              </Button>
             </Link>
-          </CardContent>
-        </Card>
-      </div>
+            <Link href="/manufacturer/quotes">
+              <Button variant="outline" className="w-full h-20 flex-col gap-1">
+                <FileText className="h-5 w-5" />
+                <span className="text-xs">{language === "ar" ? "عروض الأسعار" : "Quotes"}</span>
+              </Button>
+            </Link>
+            <Link href="/manufacturer/products">
+              <Button variant="outline" className="w-full h-20 flex-col gap-1">
+                <Package className="h-5 w-5" />
+                <span className="text-xs">{language === "ar" ? "المنتجات" : "Products"}</span>
+              </Button>
+            </Link>
+            <Link href="/manufacturer/products/new">
+              <Button variant="outline" className="w-full h-20 flex-col gap-1">
+                <Plus className="h-5 w-5" />
+                <span className="text-xs">{language === "ar" ? "إضافة منتج" : "Add Product"}</span>
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Recent Orders */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>{language === "ar" ? "الطلبات الأخيرة" : "Recent Orders"}</CardTitle>
-            <CardDescription>
-              {language === "ar" ? "آخر 5 طلبات" : "Last 5 orders"}
-            </CardDescription>
-          </div>
-          <Button asChild variant="outline">
-            <Link href="/manufacturer/orders">
+          <CardTitle className="text-sm">
+            {language === "ar" ? "الطلبات الأخيرة" : "Recent Orders"}
+          </CardTitle>
+          <Link href="/manufacturer/orders">
+            <Button variant="outline" size="sm">
               {language === "ar" ? "عرض الكل" : "View All"}
-              <Eye className="h-4 w-4 ml-2" />
-            </Link>
-          </Button>
+            </Button>
+          </Link>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((order) => (
-              <Link key={order} href={`/manufacturer/orders/${1000 + order}`}>
-                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 transition-colors group">
-                  <div className="flex-1">
-                    <p className="font-medium">#{1000 + order}</p>
-                    <p className="text-sm text-slate-500">
-                      {language === "ar" ? "علب كرتون × 500" : "Cardboard Boxes × 500"}
+          {data?.activeOrders && data.activeOrders.length > 0 ? (
+            <div className="space-y-3">
+              {data.activeOrders.slice(0, 5).map((order: any) => (
+                <div key={order.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                  <div>
+                    <p className="font-medium text-sm">#{order.poNumber || order.orderNumber}</p>
+                    <p className="text-xs text-gray-500">
+                      {order.order?.orderNumber ? `Order #${order.order.orderNumber}` : "Purchase Order"}
                     </p>
                   </div>
-                  <div className="text-right flex items-center gap-4">
-                    <div>
-                      <p className="font-medium">{(1250 * order).toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}</p>
-                      <Badge variant="outline" className="mt-1">
-                        {language === "ar" ? "قيد المعالجة" : "Processing"}
-                      </Badge>
-                    </div>
-                    <Eye className="h-4 w-4 text-slate-400 group-hover:text-emerald-600 transition-colors" />
-                  </div>
+                  <Badge>{order.status}</Badge>
                 </div>
-              </Link>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500 text-sm">
+              <Package className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+              {language === "ar" ? "لا توجد طلبات نشطة" : "No active orders"}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
