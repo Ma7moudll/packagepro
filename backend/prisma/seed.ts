@@ -406,6 +406,123 @@ async function main() {
     editorFields: ['size', 'material', 'print', 'finish', 'lamination', 'foil', 'quantity'],
   };
 
+  // M8-B: Canonical packaging blueprint — dieline template for the mailer
+  // (M8_SPEC §7 §8). JSON-only; no path/bezier geometry (the M8-C engine
+  // derives paths from this template). F42 115x70x38mm: body row
+  // left|front|right|back, top lid above front, bottom panel below front,
+  // glue flaps on the short-side panels. Adjacency is encoded via the `to`
+  // target on fold/glue edges.
+  const MAILER_DIELINE_TEMPLATE = {
+    schemaVersion: 1,
+    boxType: 'mailer-box',
+    faceOrder: ['left', 'front', 'right', 'back', 'top', 'bottom'],
+    panels: {
+      left: {
+        faceId: 'left',
+        x: 0, y: 70, w: 70, h: 38,
+        rotation: 0,
+        edges: {
+          top: { class: 'glue', to: 'glue_flap' },
+          right: { class: 'fold', to: 'front' },
+          bottom: { class: 'glue', to: 'glue_flap' },
+          left: { class: 'cut' },
+        },
+      },
+      front: {
+        faceId: 'front',
+        x: 70, y: 70, w: 115, h: 38,
+        rotation: 0,
+        edges: {
+          top: { class: 'fold', to: 'top' },
+          right: { class: 'fold', to: 'right' },
+          bottom: { class: 'fold', to: 'bottom' },
+          left: { class: 'fold', to: 'left' },
+        },
+      },
+      right: {
+        faceId: 'right',
+        x: 185, y: 70, w: 70, h: 38,
+        rotation: 0,
+        edges: {
+          top: { class: 'glue', to: 'glue_flap' },
+          right: { class: 'fold', to: 'back' },
+          bottom: { class: 'glue', to: 'glue_flap' },
+          left: { class: 'fold', to: 'front' },
+        },
+      },
+      back: {
+        faceId: 'back',
+        x: 255, y: 70, w: 115, h: 38,
+        rotation: 0,
+        edges: {
+          top: { class: 'cut' },
+          right: { class: 'glue', to: 'left' },
+          bottom: { class: 'cut' },
+          left: { class: 'fold', to: 'right' },
+        },
+      },
+      top: {
+        faceId: 'top',
+        x: 70, y: 0, w: 115, h: 70,
+        rotation: 0,
+        edges: {
+          top: { class: 'cut' },
+          right: { class: 'cut' },
+          bottom: { class: 'fold', to: 'front' },
+          left: { class: 'cut' },
+        },
+      },
+      bottom: {
+        faceId: 'bottom',
+        x: 70, y: 108, w: 115, h: 70,
+        rotation: 0,
+        edges: {
+          top: { class: 'fold', to: 'front' },
+          right: { class: 'cut' },
+          bottom: { class: 'cut' },
+          left: { class: 'cut' },
+        },
+      },
+      inside_front: {
+        faceId: 'inside_front',
+        x: 70, y: 70, w: 115, h: 38,
+        rotation: 0,
+        edges: {},
+      },
+      inside_back: {
+        faceId: 'inside_back',
+        x: 255, y: 70, w: 115, h: 38,
+        rotation: 0,
+        edges: {},
+      },
+      inside_left: {
+        faceId: 'inside_left',
+        x: 0, y: 70, w: 70, h: 38,
+        rotation: 0,
+        edges: {},
+      },
+      inside_right: {
+        faceId: 'inside_right',
+        x: 185, y: 70, w: 70, h: 38,
+        rotation: 0,
+        edges: {},
+      },
+      inside_top: {
+        faceId: 'inside_top',
+        x: 70, y: 0, w: 115, h: 70,
+        rotation: 0,
+        edges: {},
+      },
+      inside_bottom: {
+        faceId: 'inside_bottom',
+        x: 70, y: 108, w: 115, h: 70,
+        rotation: 0,
+        edges: {},
+      },
+    },
+    outline: { w: 370, h: 178 },
+  };
+
   const CATALOG_PRODUCTS: CatalogProductDef[] = [
     {
       id: 'prod-mailer-box',
@@ -434,7 +551,7 @@ async function main() {
       ],
       ecoFlags: { ecoChoice: true, fsc: true, recycled: true, biodegradable: true, reusable: true, recycledContent: '70%' },
       filters: { industries: ['ecommerce', 'retail', 'cosmetics', 'subscription', 'apparel'], sizes: ['f42', 'f52', 'f62', 'f72'] },
-      editorDefaults: { boxType: 'mailer-box', defaultMaterial: 'cardboard-kraft', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'E', structure: MAILER_BOX_STRUCTURE },
+      editorDefaults: { boxType: 'mailer-box', defaultMaterial: 'cardboard-kraft', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'E', structure: MAILER_BOX_STRUCTURE, prepress: { caliperMm: 0.5, fluteType: 'E', glueFlapToleranceMm: 1.5 }, schemaVersion: 1, unit: 'mm', dieline: MAILER_DIELINE_TEMPLATE },
       defaultVariant: { materialCode: 'kraft', color: 'kraft', printMode: 'none', printSides: 'outside_only', finish: 'none' },
       options: [OPTION_MATERIAL_BOX, OPTION_PRINT_COLORS, OPTION_PRINT_SIDES, OPTION_FINISH],
       conversion: 0.02,

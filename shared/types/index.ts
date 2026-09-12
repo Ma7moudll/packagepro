@@ -584,6 +584,45 @@ export interface ProductRules {
   variantSizeOptions?: Array<{ value: string; label: string; group?: string; priceDelta: number }>
 }
 
+// ---------------------------------------------------------------------------
+// M8-B: Packaging blueprint — canonical dieline template (M8_SPEC §7–§8)
+// Per-product template stored in Product.editorDefaults. The backend stores it
+// JSON-only; the geometry engine (M8-C) derives paths from it. JSON-only —
+// no path/bezier geometry, no schemaVersion=2, no new Prisma columns.
+// ---------------------------------------------------------------------------
+
+export type LineClass = 'cut' | 'fold' | 'score' | 'glue' | 'perf'
+export type EdgeName = 'top' | 'right' | 'bottom' | 'left'
+
+export interface DielineEdge {
+  class: LineClass
+  to?: FaceId | 'glue_flap' | 'none'
+}
+
+export interface DielinePanel {
+  faceId: FaceId
+  x: number
+  y: number
+  w: number
+  h: number
+  rotation: 0 | 90 | 180 | 270
+  edges: Partial<Record<EdgeName, DielineEdge>>
+}
+
+export interface DielineBlueprint {
+  schemaVersion: number
+  boxType: string
+  faceOrder: FaceId[]
+  panels: Record<FaceId, DielinePanel>
+  outline: { w: number; h: number }
+}
+
+export interface PrepressConfig {
+  caliperMm: number
+  fluteType: string
+  glueFlapToleranceMm: number
+}
+
 /** Canonical editor configuration returned by GET /catalog/:slug/editor-config. */
 export interface EditorConfig {
   product: {
@@ -593,6 +632,11 @@ export interface EditorConfig {
     type: string
     boxType?: string
     structure?: ProductStructure
+    /** M8-B: additive blueprint passthrough — present when the product has one. */
+    schemaVersion?: number
+    unit?: 'mm'
+    dieline?: DielineBlueprint
+    prepress?: PrepressConfig
   }
   variant: {
     id: string

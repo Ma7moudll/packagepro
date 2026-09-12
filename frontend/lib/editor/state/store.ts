@@ -28,6 +28,22 @@ export interface EditorConfigLike {
       faces?: Record<string, { width?: number; height?: number; depth?: number; label: string }>
       zones?: Record<string, Array<{ label: string; required: boolean; position: [number, number, number]; rotation?: [number, number, number] }>>
     }
+    /** M8-B: canonical packaging blueprint — additive optional passthrough. */
+    schemaVersion?: number
+    unit?: 'mm'
+    dieline?: {
+      schemaVersion?: number
+      boxType?: string
+      faceOrder?: string[]
+      panels?: Record<string, {
+        faceId?: string
+        x?: number; y?: number; w?: number; h?: number
+        rotation?: 0 | 90 | 180 | 270
+        edges?: Partial<Record<'top' | 'right' | 'bottom' | 'left', { class?: string; to?: string }>>
+      }>
+      outline?: { w?: number; h?: number }
+    }
+    prepress?: { caliperMm?: number; fluteType?: string; glueFlapToleranceMm?: number }
   }
   variant: { id: string; sku: string; sizeCode: string | null; materialCode: string | null; color?: string; printMode: string; printSides: number; finish: string; dimensions: { length: number; width: number; height: number; unit?: string } }
   material: { code: string; name: string; hex: string }

@@ -232,6 +232,9 @@ export class CatalogService {
 
     // M7: The ProductStructure lives as a nested `structure` key inside
     // editorDefaults. Fall back to the whole blob for resilience.
+    // M8-B: the canonical packaging blueprint (schemaVersion, unit, dieline,
+    // prepress) sits at the same editorDefaults top level. Each field is
+    // passed through additively — absent on products without a blueprint.
     const editorDefaults = (product.editorDefaults as any) ?? undefined;
     const structure = editorDefaults?.structure ?? editorDefaults;
 
@@ -243,6 +246,10 @@ export class CatalogService {
         type: product.productType,
         boxType: product.boxType ?? undefined,
         structure: structure ?? undefined,
+        schemaVersion: editorDefaults?.schemaVersion ?? undefined,
+        unit: editorDefaults?.unit ?? undefined,
+        dieline: editorDefaults?.dieline ?? undefined,
+        prepress: editorDefaults?.prepress ?? undefined,
       },
       variant: {
         id: variant.id,
