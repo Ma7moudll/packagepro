@@ -1,378 +1,319 @@
-// Print-ready Validation Service
-// Validates designs for professional printing requirements
+// Print-ready Validation Service — M8-F: Unified Frontend Geometry Validation (UX mirror).
+// AMENDMENT 4: geometry ONLY (bleed/safe/overlap/zone/face-bounds). The FE never certifies
+// DPI/CMYK/font/corruption/compression — that authority is M8-I (backend prepress).
+
+import {
+  BLEED_MM,
+  SAFE_MM,
+  ZONE_MATCH_TOLERANCE_MM,
+  pxToMm,
+  facePanel,
+} from "../geometry/units.ts"
+import type { PhysicalDimensions } from "../geometry/units.ts"
 
 export interface ValidationRule {
-  id: string;
-  name: string;
-  description: string;
-  severity: 'error' | 'warning' | 'info';
-  category: 'image' | 'text' | 'layout' | 'color' | 'file';
+  id: string
+  name: string
+  description: string
+  severity: "error" | "warning" | "info"
+  category: "image" | "text" | "layout" | "color" | "file"
 }
 
 export interface ValidationResult {
-  rule: ValidationRule;
-  passed: boolean;
-  message: string;
-  suggestions?: string[];
-  elementId?: string;
-  details?: any;
+  rule: ValidationRule
+  passed: boolean
+  message: string
+  suggestions?: string[]
+  elementId?: string
+  details?: unknown
 }
 
 export interface ValidationReport {
-  total: number;
-  errors: number;
-  warnings: number;
-  passed: number;
-  results: ValidationResult[];
-  score: number; // 0-100
-  printReady: boolean;
-  perFace?: FaceValidationResult[];
+  total: number
+  errors: number
+  warnings: number
+  passed: number
+  results: ValidationResult[]
+  score: number // 0-100
+  printReady: boolean
+  perFace?: FaceValidationResult[]
 }
 
 export interface FaceValidationResult {
-  faceId: string;
-  faceName: string;
-  layerCount: number;
-  errors: number;
-  warnings: number;
-  score: number;
-  printReady: boolean;
-  results: ValidationResult[];
-  missingRequiredZones: string[];
+  faceId: string
+  faceName: string
+  layerCount: number
+  errors: number
+  warnings: number
+  score: number
+  printReady: boolean
+  results: ValidationResult[]
+  missingRequiredZones: string[]
 }
 
-/** Per-face safe/bleed margins in editor units */
-const SAFE_MARGIN = 10
-const BLEED_MARGIN = 4
+export interface MmBounds {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+export interface LayerGeometryInput {
+  id?: string
+  faceId?: string
+  position?: { x: number; y: number }
+  scale?: { x: number; y: number }
+  width?: number
+  height?: number
+}
+
+type ZoneAnchorList = Array<{ label: string; required: boolean; position: [number, number, number] }>
+
+const geometryRule = (id: string): ValidationRule => PrintValidationService.getRule(id)
+
+/**
+ * Layer bounding box in mm relative to its face top-left. `width`/`height`
+ * are the canvas logical px extent; the editor state only stores position +
+ * scale, so an unstored size resolves to a point at the layer position.
+ */
+export const layerBoundsMm = (layer: LayerGeometryInput): MmBounds => {
+  const pxLeft = layer.position?.x ?? 0
+  const pxTop = layer.position?.y ?? 0
+  const pxWidth = (layer.width ?? 0) * (layer.scale?.x ?? 1)
+  const pxHeight = (layer.height ?? 0) * (layer.scale?.y ?? 1)
+  return {
+    left: pxToMm(pxLeft),
+    top: pxToMm(pxTop),
+    right: pxToMm(pxLeft + pxWidth),
+    bottom: pxToMm(pxTop + pxHeight),
+  }
+}
+
+/**
+ * An element passes bleed when EVERY side near the trim edge (within
+ * `BLEED_MM`) extends at least `BLEED_MM` beyond it. Deep-interior edges are
+ * unrestricted. Bounds/trim are mm.
+ */
+export const checkElementExtendsBeyondBleed = (
+  bounds: MmBounds,
+  trimW: number,
+  trimH: number,
+  bleedMm: number = BLEED_MM,
+): boolean => {
+  const gapLeft = bounds.left
+  const gapRight = trimW - bounds.right
+  const gapTop = bounds.top
+  const gapBottom = trimH - bounds.bottom
+  if (gapLeft <= bleedMm && bounds.left > -bleedMm) return false
+  if (gapRight <= bleedMm && bounds.right - trimW < bleedMm) return false
+  if (gapTop <= bleedMm && bounds.top > -bleedMm) return false
+  if (gapBottom <= bleedMm && bounds.bottom - trimH < bleedMm) return false
+  return true
+}
+
+/**
+ * An element is inside the safe area only when every edge lies strictly more
+ * than `SAFE_MM` inside the trim (an edge exactly on the safe line fails).
+ */
+export const checkElementWithinSafeArea = (
+  bounds: MmBounds,
+  trimW: number,
+  trimH: number,
+  safeMm: number = SAFE_MM,
+): boolean => {
+  return (
+    bounds.left > safeMm &&
+    bounds.right < trimW - safeMm &&
+    bounds.top > safeMm &&
+    bounds.bottom < trimH - safeMm
+  )
+}
+
+/** True when any pair of mm bounds intersects strictly (touching edges pass). */
+export const checkForOverlaps = (boundsList: MmBounds[]): boolean => {
+  for (let i = 0; i < boundsList.length; i++) {
+    for (let j = i + 1; j < boundsList.length; j++) {
+      const a = boundsList[i]
+      const b = boundsList[j]
+      if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) {
+        return true
+      }
+    }
+  }
+  return false
+}
 
 export class PrintValidationService {
   private static readonly VALIDATION_RULES: ValidationRule[] = [
     {
-      id: 'image-dpi',
-      name: 'Image Resolution (DPI)',
-      description: 'Images must be at least 300 DPI for high-quality printing',
-      severity: 'error',
-      category: 'image'
+      id: "bleed-area",
+      name: "Bleed Area",
+      description: `Design elements near the trim must extend at least ${BLEED_MM}mm beyond it`,
+      severity: "error",
+      category: "layout",
     },
     {
-      id: 'image-color-mode',
-      name: 'Color Mode',
-      description: 'Images should be in CMYK color mode for printing',
-      severity: 'warning',
-      category: 'color'
+      id: "safe-area",
+      name: "Safe Area",
+      description: `Design elements must stay within the ${SAFE_MM}mm safe area`,
+      severity: "warning",
+      category: "layout",
     },
     {
-      id: 'text-size',
-      name: 'Minimum Text Size',
-      description: 'Text should be at least 6pt for readability',
-      severity: 'warning',
-      category: 'text'
+      id: "overlapping-elements",
+      name: "Overlapping Elements",
+      description: "Detect unintended overlapping element bounds",
+      severity: "info",
+      category: "layout",
     },
     {
-      id: 'bleed-area',
-      name: 'Bleed Area',
-      description: 'Design elements should extend 3mm beyond trim lines',
-      severity: 'error',
-      category: 'layout'
+      id: "required-zones",
+      name: "Required Zones",
+      description: `Each required face zone contains a layer within ${ZONE_MATCH_TOLERANCE_MM}mm of its anchor`,
+      severity: "error",
+      category: "layout",
     },
     {
-      id: 'safe-area',
-      name: 'Safe Area',
-      description: 'Important elements should stay within safe area (5mm from trim)',
-      severity: 'warning',
-      category: 'layout'
+      id: "face-bounds",
+      name: "Face Bounds",
+      description: "Every layer maps to a known canonical face",
+      severity: "error",
+      category: "layout",
     },
-    {
-      id: 'file-size',
-      name: 'File Size',
-      description: 'Total file size should not exceed 100MB',
-      severity: 'warning',
-      category: 'file'
-    },
-    {
-      id: 'overlapping-elements',
-      name: 'Overlapping Elements',
-      description: 'Check for unintended overlapping elements',
-      severity: 'info',
-      category: 'layout'
-    },
-    {
-      id: 'required-zones',
-      name: 'Required Zones',
-      description: 'Each required zone on a face must contain at least one layer element',
-      severity: 'error',
-      category: 'layout'
-    }
-  ];
+  ]
 
-  /**
-   * Validate entire design for print readiness
-   */
-  static async validateDesign(layers: any[], model: any, canvas: any): Promise<ValidationReport> {
-    const results: ValidationResult[] = [];
-
-    // Validate images
-    const imageLayers = layers.filter(layer => layer.type === 'image');
-    for (const layer of imageLayers) {
-      results.push(...await this.validateImage(layer));
-    }
-
-    // Validate text
-    const textLayers = layers.filter(layer => layer.type === 'text');
-    for (const layer of textLayers) {
-      results.push(...this.validateText(layer));
-    }
-
-    // Validate layout
-    results.push(...this.validateLayout(layers, canvas));
-
-    // Validate file
-    results.push(...this.validateFile(layers));
-
-    // Calculate statistics
-    const errors = results.filter(r => r.rule.severity === 'error' && !r.passed).length;
-    const warnings = results.filter(r => r.rule.severity === 'warning' && !r.passed).length;
-    const passed = results.filter(r => r.passed).length;
-    const total = results.length;
-
-    const score = Math.round((passed / total) * 100);
-    const printReady = errors === 0 && score >= 80;
-
-    return {
-      total,
-      errors,
-      warnings,
-      passed,
-      results,
-      score,
-      printReady
-    };
+  static getRule(id: string): ValidationRule {
+    const rule = this.VALIDATION_RULES.find((r) => r.id === id)
+    if (!rule) throw new Error(`Unknown validation rule: ${id}`)
+    return rule
   }
 
-  /**
-   * Validate image layers
-   */
-  private static async validateImage(layer: any): Promise<ValidationResult[]> {
-    const results: ValidationResult[] = [];
-
-    // Check DPI
-    const dpiRule = this.VALIDATION_RULES.find(r => r.id === 'image-dpi')!;
-    if (layer.imageData) {
-      // In a real implementation, you'd extract DPI from image metadata
-      const dpi = layer.dpi || 72; // Default assumption
-      const passed = dpi >= 300;
-      results.push({
-        rule: dpiRule,
-        passed,
-        message: passed ? `Image DPI: ${dpi}` : `Image DPI too low: ${dpi} (minimum 300)`,
-        suggestions: passed ? undefined : ['Increase image resolution or replace with higher DPI image'],
-        elementId: layer.id
-      });
-    }
-
-    // Check color mode
-    const colorRule = this.VALIDATION_RULES.find(r => r.id === 'image-color-mode')!;
-    const isCMYK = layer.colorMode === 'cmyk';
-    results.push({
-      rule: colorRule,
-      passed: isCMYK,
-      message: isCMYK ? 'Image is in CMYK mode' : 'Image is in RGB mode (consider converting to CMYK)',
-      suggestions: isCMYK ? undefined : ['Convert image to CMYK color mode for printing'],
-      elementId: layer.id
-    });
-
-    return results;
-  }
-
-  /**
-   * Validate text layers
-   */
-  private static validateText(layer: any): ValidationResult[] {
-    const results: ValidationResult[] = [];
-
-    // Check text size
-    const textSizeRule = this.VALIDATION_RULES.find(r => r.id === 'text-size')!;
-    const fontSize = layer.fontSize || 12;
-    const passed = fontSize >= 6;
-    results.push({
-      rule: textSizeRule,
-      passed,
-      message: passed ? `Text size: ${fontSize}pt` : `Text size too small: ${fontSize}pt (minimum 6pt)`,
-      suggestions: passed ? undefined : ['Increase font size to at least 6pt'],
-      elementId: layer.id
-    });
-
-    return results;
-  }
-
-  /**
-   * Validate layout and positioning
-   */
-  private static validateLayout(layers: any[], canvas: any): ValidationResult[] {
-    const results: ValidationResult[] = [];
-
-    const bleedRule = this.VALIDATION_RULES.find(r => r.id === 'bleed-area')!;
-    const safeAreaRule = this.VALIDATION_RULES.find(r => r.id === 'safe-area')!;
-    const overlapRule = this.VALIDATION_RULES.find(r => r.id === 'overlapping-elements')!;
-
-    // Calculate bleed and safe areas (assuming 3mm bleed, 5mm safe)
-    const bleedMargin = 3;
-    const safeMargin = 5;
-
-    for (const layer of layers) {
-      // Check bleed area
-      const extendsBeyondBleed = this.checkElementExtendsBeyondBleed(layer, canvas, bleedMargin);
-      results.push({
-        rule: bleedRule,
-        passed: extendsBeyondBleed,
-        message: extendsBeyondBleed ? 'Element extends into bleed area' : 'Element stays within bleed area',
-        suggestions: extendsBeyondBleed ? undefined : ['Extend element 3mm beyond trim lines for bleed'],
-        elementId: layer.id
-      });
-
-      // Check safe area
-      const withinSafeArea = this.checkElementWithinSafeArea(layer, canvas, safeMargin);
-      results.push({
-        rule: safeAreaRule,
-        passed: withinSafeArea,
-        message: withinSafeArea ? 'Element stays within safe area' : 'Element extends outside safe area',
-        suggestions: withinSafeArea ? undefined : ['Move important elements inside the 5mm safe area'],
-        elementId: layer.id
-      });
-    }
-
-    // Check for overlapping elements
-    const hasOverlaps = this.checkForOverlaps(layers);
-    results.push({
-      rule: overlapRule,
-      passed: !hasOverlaps,
-      message: hasOverlaps ? 'Some elements may overlap' : 'No overlapping elements detected',
-      suggestions: hasOverlaps ? ['Review element positioning to avoid overlaps'] : undefined
-    });
-
-    return results;
-  }
-
-  /**
-   * Validate file-related requirements
-   */
-  private static validateFile(layers: any[]): ValidationResult[] {
-    const results: ValidationResult[] = [];
-
-    const fileSizeRule = this.VALIDATION_RULES.find(r => r.id === 'file-size')!;
-
-    // Estimate file size (rough calculation)
-    let estimatedSize = 0;
-    for (const layer of layers) {
-      if (layer.type === 'image' && layer.imageData) {
-        estimatedSize += layer.imageData.length * 0.75; // Base64 overhead
-      }
-    }
-
-    const sizeInMB = estimatedSize / (1024 * 1024);
-    const passed = sizeInMB <= 100;
-    results.push({
-      rule: fileSizeRule,
-      passed,
-      message: passed ? `File size: ${sizeInMB.toFixed(1)}MB` : `File size too large: ${sizeInMB.toFixed(1)}MB (maximum 100MB)`,
-      suggestions: passed ? undefined : ['Reduce image quality or remove unused elements'],
-    });
-
-    return results;
-  }
-
-  private static checkElementExtendsBeyondBleed(layer: any, canvas: any, bleedMargin: number): boolean {
-    // Simplified check - in real implementation, you'd check actual bounds
-    return true; // Assume elements extend into bleed for now
-  }
-
-  private static checkElementWithinSafeArea(layer: any, canvas: any, safeMargin: number): boolean {
-    // Simplified check - in real implementation, you'd check actual bounds
-    return true; // Assume elements are within safe area for now
-  }
-
-  private static checkForOverlaps(layers: any[]): boolean {
-    // Simplified overlap detection
-    return false; // Assume no overlaps for now
-  }
-
-  /**
-   * Get validation rules
-   */
   static getValidationRules(): ValidationRule[] {
-    return this.VALIDATION_RULES;
+    return this.VALIDATION_RULES
+  }
+
+  private static faceGeometryResults(
+    bounds: MmBounds,
+    layer: LayerGeometryInput,
+    trimW: number,
+    trimH: number,
+  ): ValidationResult[] {
+    const results: ValidationResult[] = []
+
+    const bleed = checkElementExtendsBeyondBleed(bounds, trimW, trimH)
+    results.push({
+      rule: geometryRule("bleed-area"),
+      passed: bleed,
+      message: bleed
+        ? "Element covers the bleed area"
+        : `Element does not extend ${BLEED_MM}mm beyond the trim`,
+      suggestions: bleed ? undefined : [`Extend element ${BLEED_MM}mm beyond the trim`],
+      elementId: layer.id,
+    })
+
+    const safe = checkElementWithinSafeArea(bounds, trimW, trimH)
+    results.push({
+      rule: geometryRule("safe-area"),
+      passed: safe,
+      message: safe
+        ? "Element stays within the safe area"
+        : "Element crosses the safe-area line",
+      suggestions: safe ? undefined : [`Keep important elements inside the ${SAFE_MM}mm safe area`],
+      elementId: layer.id,
+    })
+
+    return results
+  }
+
+  private static overlapResult(): ValidationResult {
+    return {
+      rule: geometryRule("overlapping-elements"),
+      passed: false,
+      message: "Two or more elements overlap",
+      suggestions: ["Separate overlapping elements"],
+    }
   }
 
   /**
-   * Run quick validation (subset of rules)
+   * Geometry engine across every canonical face (outer + inside_*; inside
+   * bounds resolve through their outer sibling via `facePanel`).
    */
-static async quickValidate(layers: any[]): Promise<ValidationResult[]> {
-      const results: ValidationResult[] = [];
+  static validateLayout(
+    layers: LayerGeometryInput[],
+    model: unknown,
+    _canvas?: unknown,
+  ): ValidationResult[] {
+    const dims = (model as { dimensions?: PhysicalDimensions } | null)?.dimensions
+    if (!dims) return []
+    const faces = ((model as { faces?: Array<{ id: string; name: string }> } | null)?.faces ?? [])
+    const results: ValidationResult[] = []
 
-      // Quick checks only
-      const imageLayers = layers.filter(layer => layer.type === 'image');
-      if (imageLayers.length > 0) {
-        const dpiRule = this.VALIDATION_RULES.find(r => r.id === 'image-dpi')!;
-        for (const layer of imageLayers) {
-          const dpi = layer.dpi || 72;
-          results.push({
-            rule: dpiRule,
-            passed: dpi >= 150, // Lower threshold for quick check
-            message: `Image DPI: ${dpi}`,
-            elementId: layer.id
-          });
-        }
+    for (const face of faces) {
+      const faceLayers = layers.filter((l) => l.faceId === face.id)
+      if (faceLayers.length === 0) continue
+      const trim = facePanel(dims, face.id)
+      const boundsList: MmBounds[] = []
+      for (const layer of faceLayers) {
+        const bounds = layerBoundsMm(layer)
+        results.push(...this.faceGeometryResults(bounds, layer, trim.w, trim.h))
+        boundsList.push(bounds)
       }
-
-      return results;
+      if (checkForOverlaps(boundsList)) {
+        results.push(this.overlapResult())
+      }
     }
+    return results
+  }
 
   /**
-   * M7: Validate each face independently. Returns per-face results that
-   * include required-zone checks. Zones are optional — when none are
-   * provided the check simply passes.
+   * M7: per-face geometry + required-zone mirror. Layer positions are canvas
+   * px, converted to mm via `pxToMm`; zone anchors are mm.
    */
   static async validatePerFace(
-    layers: any[],
-    model: any,
-    zones?: Record<string, Array<{ label: string; required: boolean; position: [number, number, number] }>>
+    layers: LayerGeometryInput[],
+    model: unknown,
+    zones?: Record<string, ZoneAnchorList>,
   ): Promise<FaceValidationResult[]> {
-    const faces = model.faces as Array<{ id: string; name: string }> | undefined
-    if (!faces) return []
+    const dims = (model as { dimensions?: PhysicalDimensions } | null)?.dimensions
+    const faces = ((model as { faces?: Array<{ id: string; name: string }> } | null)?.faces ?? [])
+    if (!dims || faces.length === 0) return []
 
-    const zoneRule = this.VALIDATION_RULES.find(r => r.id === 'required-zones')!
-    const perFace = await Promise.all(faces.map(async (face) => {
-      const faceLayers = layers.filter((l: any) => l.faceId === face.id)
-      const textResults = faceLayers.flatMap((layer: any) =>
-        layer.type === 'text' ? this.validateText(layer) : []
-      )
-      const imageResults = (
-        await Promise.all(
-          faceLayers
-            .filter((l: any) => l.type === 'image')
-            .map((layer: any) => this.validateImage(layer))
-        )
-      ).flat()
-      const results = [...textResults, ...imageResults]
+    const knownIds = new Set(faces.map((f) => f.id))
+    const unknownFaceLayers = layers.filter((l) => !l.faceId || !knownIds.has(l.faceId))
+    const perFace: FaceValidationResult[] = []
 
-      // Required zones: for each zone marked required, at least one
-      // layer must exist on this face whose position falls within
-      // the zone's neighbourhood (±20 mm around the zone position).
-      const faceZones = zones?.[face.id] ?? []
-      const requiredZones = faceZones.filter((z) => z.required)
+    for (const face of faces) {
+      const faceLayers = layers.filter((l) => l.faceId === face.id)
+      const trim = facePanel(dims, face.id)
+      const results: ValidationResult[] = []
+      const boundsList: MmBounds[] = []
+
+      for (const layer of faceLayers) {
+        const bounds = layerBoundsMm(layer)
+        results.push(...this.faceGeometryResults(bounds, layer, trim.w, trim.h))
+        boundsList.push(bounds)
+      }
+
+      if (checkForOverlaps(boundsList)) {
+        results.push(this.overlapResult())
+      }
+
+      const requiredZones = (zones?.[face.id] ?? []).filter((z) => z.required)
       const missingRequiredZones: string[] = []
-
       for (const zone of requiredZones) {
         const [zx, zy] = zone.position
-        const hit = faceLayers.some((layer: any) => {
+        const hit = faceLayers.some((layer) => {
           const px = layer.position?.x ?? 0
           const py = layer.position?.y ?? 0
-          return Math.abs(px - zx) <= 20 && Math.abs(py - zy) <= 20
+          return (
+            Math.abs(pxToMm(px) - zx) <= ZONE_MATCH_TOLERANCE_MM &&
+            Math.abs(pxToMm(py) - zy) <= ZONE_MATCH_TOLERANCE_MM
+          )
         })
         if (!hit) {
           missingRequiredZones.push(zone.label)
           results.push({
-            rule: zoneRule,
+            rule: geometryRule("required-zones"),
             passed: false,
             message: `Face "${face.name}" is missing required zone "${zone.label}"`,
             elementId: face.id,
@@ -380,12 +321,23 @@ static async quickValidate(layers: any[]): Promise<ValidationResult[]> {
         }
       }
 
-      const errors = results.filter((r) => r.rule.severity === 'error' && !r.passed).length
-      const warnings = results.filter((r) => r.rule.severity === 'warning' && !r.passed).length
+      if (face.id === faces[0].id) {
+        for (const layer of unknownFaceLayers) {
+          results.push({
+            rule: geometryRule("face-bounds"),
+            passed: false,
+            message: `Element "${layer.id}" references unknown face "${layer.faceId}"`,
+            elementId: layer.id,
+          })
+        }
+      }
+
+      const errors = results.filter((r) => r.rule.severity === "error" && !r.passed).length
+      const warnings = results.filter((r) => r.rule.severity === "warning" && !r.passed).length
       const passed = results.filter((r) => r.passed).length
       const score = results.length ? Math.round((passed / results.length) * 100) : 100
 
-      return {
+      perFace.push({
         faceId: face.id,
         faceName: face.name,
         layerCount: faceLayers.length,
@@ -395,19 +347,17 @@ static async quickValidate(layers: any[]): Promise<ValidationResult[]> {
         printReady: errors === 0 && score >= 80,
         results,
         missingRequiredZones,
-      }
-    }))
+      })
+    }
     return perFace
   }
 
-  /**
-   * M7: Aggregate per-face results into a single report.
-   */
+  /** M7: aggregate per-face results into a single report. */
   static async validatePrintReady(
-    layers: any[],
-    model: any,
-    canvas: any,
-    zones?: Record<string, Array<{ label: string; required: boolean; position: [number, number, number] }>>
+    layers: LayerGeometryInput[],
+    model: unknown,
+    canvas?: unknown,
+    zones?: Record<string, ZoneAnchorList>,
   ): Promise<ValidationReport> {
     const perFace = await this.validatePerFace(layers, model, zones)
     const allResults = perFace.flatMap((f) => f.results)
@@ -426,5 +376,36 @@ static async quickValidate(layers: any[]): Promise<ValidationResult[]> {
       printReady: errors === 0 && score >= 80,
       perFace,
     }
+  }
+
+  /** Geometry-only quick subset (bleed mirror feedback on layer changes). */
+  static async quickValidate(
+    layers: LayerGeometryInput[],
+    model?: unknown,
+    _canvas?: unknown,
+  ): Promise<ValidationResult[]> {
+    const results: ValidationResult[] = []
+    const dims = (model as { dimensions?: PhysicalDimensions } | null)?.dimensions
+    if (!dims) return results
+    const faces = ((model as { faces?: Array<{ id: string; name: string }> } | null)?.faces ?? [])
+
+    for (const face of faces) {
+      if (results.length >= 10) break
+      const trim = facePanel(dims, face.id)
+      for (const layer of layers.filter((l) => l.faceId === face.id)) {
+        if (results.length >= 10) break
+        const bounds = layerBoundsMm(layer)
+        const bleed = checkElementExtendsBeyondBleed(bounds, trim.w, trim.h)
+        results.push({
+          rule: geometryRule("bleed-area"),
+          passed: bleed,
+          message: bleed
+            ? "Element covers the bleed area"
+            : `Element does not extend ${BLEED_MM}mm beyond the trim`,
+          elementId: layer.id,
+        })
+      }
+    }
+    return results
   }
 }

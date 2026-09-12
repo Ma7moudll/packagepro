@@ -1,7 +1,6 @@
 "use client"
 
 import { Layer, Face } from "@/lib/editor/state/types"
-import { validateDesign, ValidationIssue } from "./validation"
 
 export interface ComplianceRule {
   id: string

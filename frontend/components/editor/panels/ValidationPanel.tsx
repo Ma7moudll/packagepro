@@ -29,7 +29,7 @@ export function ValidationPanel({ className }: ValidationPanelProps) {
   // Quick validation on layer changes
   useEffect(() => {
     const runQuickValidation = async () => {
-      const results = await PrintValidationService.quickValidate(layers);
+      const results = await PrintValidationService.quickValidate(layers, model, canvas);
       setQuickResults(results);
     };
 
