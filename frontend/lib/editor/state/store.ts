@@ -17,6 +17,7 @@ import {
   CameraState,
   UIState,
 } from "./types"
+import type { DielineBlueprint } from "../../../../shared/types/index.ts"
 
 /** Minimal shape of EditorConfig consumed by the store (avoids circular import). */
 export interface EditorConfigLike {
@@ -28,21 +29,10 @@ export interface EditorConfigLike {
       faces?: Record<string, { width?: number; height?: number; depth?: number; label: string }>
       zones?: Record<string, Array<{ label: string; required: boolean; position: [number, number, number]; rotation?: [number, number, number] }>>
     }
-    /** M8-B: canonical packaging blueprint — additive optional passthrough. */
+    /** M8: canonical packaging blueprint — additive optional passthrough (typed from the shared schema since M8-D). */
     schemaVersion?: number
     unit?: 'mm'
-    dieline?: {
-      schemaVersion?: number
-      boxType?: string
-      faceOrder?: string[]
-      panels?: Record<string, {
-        faceId?: string
-        x?: number; y?: number; w?: number; h?: number
-        rotation?: 0 | 90 | 180 | 270
-        edges?: Partial<Record<'top' | 'right' | 'bottom' | 'left', { class?: string; to?: string }>>
-      }>
-      outline?: { w?: number; h?: number }
-    }
+    dieline?: DielineBlueprint
     prepress?: { caliperMm?: number; fluteType?: string; glueFlapToleranceMm?: number }
   }
   variant: { id: string; sku: string; sizeCode: string | null; materialCode: string | null; color?: string; printMode: string; printSides: number; finish: string; dimensions: { length: number; width: number; height: number; unit?: string } }
@@ -457,6 +447,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
           name: config.product.name,
           type: config.product.type,
           boxType: config.product.boxType,
+          ...(config.product.dieline ? { dieline: config.product.dieline } : {}),
         },
         structureType: config.product.structure?.type,
         zones: config.product.structure?.zones,

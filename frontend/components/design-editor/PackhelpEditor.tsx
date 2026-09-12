@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
+import { resolveDieline } from "@/lib/editor/geometry/resolve-dieline"
 import { DesignCanvas2D } from "@/components/editor/canvas/DesignCanvas2D"
 import { DesignCanvas3D } from "@/components/editor/canvas/DesignCanvas3D"
 import { DielineCanvas } from "@/components/editor/canvas/DielineCanvas"
@@ -46,6 +47,18 @@ export function PackhelpEditor({
 }: PackhelpEditorProps) {
   const viewMode = useDesignStore((s) => s.ui.viewMode)
   const applyCoreState = useDesignStore((s) => s.applyCoreState)
+  const product = useDesignStore((s) => s.product)
+  const dimensions = useDesignStore((s) => s.model.dimensions)
+
+  // M8-D: SINGLE canonical geometry resolution point. The blueprint (M8-B
+  // passthrough) + mm dimensions become DielineGeometry exactly once here;
+  // DielineCanvas consumes the result and never resolves again. Products
+  // without a blueprint yield { ok:false, reason:"no-blueprint" }, which
+  // DielineView routes to the frozen M7DielineFallback.
+  const dielineResolution = useMemo(
+    () => resolveDieline(product?.dieline, dimensions),
+    [product?.dieline, dimensions.length, dimensions.width, dimensions.height]
+  )
 
   // Track editor opened
   useEffect(() => {
@@ -135,7 +148,7 @@ export function PackhelpEditor({
     case "3d":
       return <DesignCanvas3D productType={productType} />
     case "dieline":
-      return <DielineCanvas />
+      return <DielineCanvas resolution={dielineResolution} />
     case "wall":
       return <WallViewCanvas />
     default:

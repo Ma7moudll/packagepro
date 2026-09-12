@@ -1,5 +1,7 @@
 "use client"
 
+import type { DielineBlueprint } from "../../../../shared/types/index.ts"
+
 export type ToolType = "select" | "text" | "shape" | "draw" | "upload"
 
 export type DesignLifecycleStatus = 
@@ -246,7 +248,8 @@ export interface DesignCoreState {
   lifecycleStatus: DesignLifecycleStatus
   designId?: string // Backend design ID when loaded from server
   sessionId?: string // Backend editor-session ID (cloud save)
-  product?: { id: string; slug: string; name: string; type: string; category?: string; boxType?: string }
+  product?: { id: string; slug: string; name: string; type: string; category?: string; boxType?: string; /** M8-D: canonical dieline blueprint (M8-B EditorConfig passthrough) — the single inputs for the migrated dieline UI. */
+    dieline?: DielineBlueprint }
   productConfig?: { selectedSize?: string; selectedMaterial?: string; selectedFinish?: string; quantity?: number; customDimensions?: ModelDimensions; variantId?: string; sku?: string }
   /** M7: Backend-issued product structure (faces/zones/rules) for prepress + surfaces. */
   structureType?: string
