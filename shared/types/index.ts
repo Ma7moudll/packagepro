@@ -623,6 +623,69 @@ export interface PrepressConfig {
   glueFlapToleranceMm: number
 }
 
+// ---------------------------------------------------------------------------
+// M8-C: Canonical dieline geometry (M8_SPEC §7 AMENDMENT 2) — engine output
+// of buildDieline(blueprint, dims) in millimeters. Type-only additions; the
+// backend stores the blueprint JSON and consumes resolved geometry from the
+// persisted manifest (M8-H). No curves are implemented in M8 (future-capable).
+// ---------------------------------------------------------------------------
+
+export interface DielinePoint {
+  x: number
+  y: number
+}
+
+export interface DielinePath {
+  /** Stable, deterministic id (e.g. `${faceId}-${edgeName}`, `outline`). */
+  id: string
+  /** Owning face when the path bounds/scores that face. */
+  faceId?: FaceId
+  class: LineClass
+  /** Polyline in mm (open or closed). */
+  points: DielinePoint[]
+  closed?: boolean
+}
+
+export interface DielineAdjacencyEntry {
+  a: FaceId
+  b: FaceId
+  via: EdgeName
+  class: LineClass
+}
+
+export interface DielineFaceRelationship {
+  faceId: FaceId
+  /** 0..N mesh part ids (AMENDMENT 1) — never a new FaceId. */
+  meshPartIds: string[]
+}
+
+export interface DielineGeometry {
+  schemaVersion: number
+  boxType: string
+  /** Product dims this geometry was resolved from (mm). */
+  dims: { length: number; width: number; height: number; unit: 'mm' }
+  /** Semantic faces (rectangular extent metadata), keyed by FaceId. */
+  panels: Record<FaceId, DielinePanel>
+  /** Production cut paths (mm polylines). */
+  cutPaths: DielinePath[]
+  foldPaths: DielinePath[]
+  scorePaths: DielinePath[]
+  gluePaths: DielinePath[]
+  /** Perforations — future-facing, may be empty in M8. */
+  perfPaths: DielinePath[]
+  /** Outer flat boundary (closed). */
+  outline: DielinePath[]
+  /** Face-pair assembly relationships, deduplicated (a<b). */
+  adjacency: DielineAdjacencyEntry[]
+  faceRelationships: DielineFaceRelationship[]
+}
+
+/** Panel AABB overlap pair in canonical mm space (checkOverlaps output). */
+export interface DielineOverlap {
+  a: FaceId
+  b: FaceId
+}
+
 /** Canonical editor configuration returned by GET /catalog/:slug/editor-config. */
 export interface EditorConfig {
   product: {
