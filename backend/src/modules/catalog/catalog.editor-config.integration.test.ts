@@ -5,13 +5,11 @@ import { catalogService } from './catalog.service';
 /**
  * M8-B: Integration test — canonical editor-config blueprint passthrough.
  * Read only, no writes. Depends on the idempotent seed (prod-mailer-box =
- * full M8-B vertical; prod-product-box = backward-compat, no blueprint).
+ * full M8-B vertical; prod-paper-bag = M8-J explicit deferral = no blueprint).
  */
 const MAILER_SLUG = 'custom-mailer-box';
-// Backward-compat target: no structure, no blueprint — but its variant/option
-// set quotes cleanly (product-box filters 'none' print, a pre-existing seed
-// quirk unrelated to M8-B).
-const NON_BLUEPRINT_SLUG = 'custom-shipping-box';
+// M8-J (spec §14): deferred product — support:deferred, NO blueprint fields.
+const DEFERRED_SLUG = 'custom-paper-bag';
 const FACE_IDS = [
   'front', 'back', 'left', 'right', 'top', 'bottom',
   'inside_front', 'inside_back', 'inside_left', 'inside_right',
@@ -85,17 +83,26 @@ describe('catalog getEditorConfig — M8-B blueprint passthrough', () => {
     expect(cfg.product.prepress).toEqual({ caliperMm: 0.5, fluteType: 'E', glueFlapToleranceMm: 1.5 });
   });
 
-  it('returns no blueprint fields for products without one (backward compat)', async () => {
-    const cfg = await catalogService.getEditorConfig(NON_BLUEPRINT_SLUG, 50);
+  it('returns no blueprint fields for deferred products (M8-J, support:deferred)', async () => {
+    const cfg = await catalogService.getEditorConfig(DEFERRED_SLUG, 50);
 
-    expect(cfg.product.slug).toBe(NON_BLUEPRINT_SLUG);
+    expect(cfg.product.slug).toBe(DEFERRED_SLUG);
+    // M8-J: explicit deferral flag, with a human reason, and NO blueprint.
+    expect(cfg.product.support).toBe('deferred');
+    expect(cfg.product.supportReason).toBeTruthy();
     expect(cfg.product.schemaVersion).toBeUndefined();
     expect(cfg.product.unit).toBeUndefined();
     expect(cfg.product.dieline).toBeUndefined();
     expect(cfg.product.prepress).toBeUndefined();
     // Additive only: the existing M7 editorDefaults blob fallback is untouched
-    // (shipping-box carries editorDefaults without a `structure` key, so the
+    // (paper-bag carries editorDefaults without a `structure` key, so the
     // M7 `editorDefaults?.structure ?? editorDefaults` fallback applies).
     expect(cfg.product.structure).toBeTruthy();
+  });
+
+  it('flags M8-required products as supported (mailer vertical)', async () => {
+    const cfg = await catalogService.getEditorConfig(MAILER_SLUG, 50);
+    expect(cfg.product.support).toBe('supported');
+    expect(cfg.product.supportReason).toBeUndefined();
   });
 });

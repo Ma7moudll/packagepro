@@ -251,7 +251,10 @@ export interface DesignCoreState {
   product?: { id: string; slug: string; name: string; type: string; category?: string; boxType?: string; /** M8-D: canonical dieline blueprint (M8-B EditorConfig passthrough) — the single inputs for the migrated dieline UI. */
     dieline?: DielineBlueprint
     /** M8-H: prepress baseline passthrough (caliper/flute/tolerance) snapshot. */
-    prepress?: { caliperMm?: number; fluteType?: string; glueFlapToleranceMm?: number } }
+    prepress?: { caliperMm?: number; fluteType?: string; glueFlapToleranceMm?: number }
+    /** M8-J (spec §14): product-coverage support flag — `deferred` products render a deferral placeholder instead of the M7 generic net. */
+    support?: 'supported' | 'deferred'
+    supportReason?: string }
   productConfig?: { selectedSize?: string; selectedMaterial?: string; selectedFinish?: string; quantity?: number; customDimensions?: ModelDimensions; variantId?: string; sku?: string }
   /** M7: Backend-issued product structure (faces/zones/rules) for prepress + surfaces. */
   structureType?: string

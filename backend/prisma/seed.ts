@@ -286,6 +286,8 @@ async function main() {
     { id: 'sub-mailer-boxes', categoryId: 'cat-boxes', slug: 'mailer-boxes', name: 'Mailer Boxes', sortOrder: 1 },
     { id: 'sub-product-boxes', categoryId: 'cat-boxes', slug: 'product-boxes', name: 'Product Boxes', sortOrder: 2 },
     { id: 'sub-shipping-boxes', categoryId: 'cat-boxes', slug: 'shipping-boxes', name: 'Shipping Boxes', sortOrder: 3 },
+    { id: 'sub-rigid-boxes', categoryId: 'cat-boxes', slug: 'rigid-boxes', name: 'Rigid & Gift Boxes', sortOrder: 4 },
+    { id: 'sub-pizza-boxes', categoryId: 'cat-boxes', slug: 'pizza-boxes', name: 'Pizza & Food Boxes', sortOrder: 5 },
     { id: 'sub-carrier-bags', categoryId: 'cat-bags', slug: 'carrier-bags', name: 'Carrier Bags', sortOrder: 1 },
     { id: 'sub-mailing-bags', categoryId: 'cat-bags', slug: 'mailing-bags', name: 'Mailing Bags', sortOrder: 2 },
     { id: 'sub-label-stickers', categoryId: 'cat-labels', slug: 'label-stickers', name: 'Labels & Stickers', sortOrder: 1 },
@@ -523,6 +525,695 @@ async function main() {
     outline: { w: 370, h: 178 },
   };
 
+  // M8-J (spec §14): product coverage completion. Canonical mm structures +
+  // dieline templates for the four M8-required box products (weighing-machine
+  // folding carton, corrugated shipping box, two-piece rigid box, single-piece
+  // pizza box). All panels are sized by the strict `facePanel(dims, faceId)`
+  // mapping and positioned as a flat (non-overlapping) make-ready blank at the
+  // product's default size. Deferral markers (support:"deferred") live on the
+  // non-box products below — no fake geometry is ever shipped.
+
+  const FOLDING_CARTON_STRUCTURE = {
+    type: 'box',
+    brand: 'PackagePro',
+    boxType: 'folding-carton',
+    defaultSizes: [
+      { code: 's', label: 'Small (100x60x30)', dims: { length: 100, width: 60, height: 30 } },
+      { code: 'm', label: 'Medium (150x100x50)', dims: { length: 150, width: 100, height: 50 } },
+      { code: 'l', label: 'Large (200x150x80)', dims: { length: 200, width: 150, height: 80 } },
+    ],
+    faces: {
+      front: { width: 150, height: 50, depth: 100, label: 'Front Panel' },
+      back: { width: 150, height: 50, depth: 100, label: 'Back Panel' },
+      left: { width: 100, height: 50, depth: 150, label: 'Left Panel' },
+      right: { width: 100, height: 50, depth: 150, label: 'Right Panel' },
+      top: { width: 150, height: 100, depth: 50, label: 'Top Flap' },
+      bottom: { width: 150, height: 100, depth: 50, label: 'Bottom Panel' },
+      inside_front: { width: 150, height: 50, depth: 100, label: 'Inside Front' },
+      inside_back: { width: 150, height: 50, depth: 100, label: 'Inside Back' },
+      inside_left: { width: 100, height: 50, depth: 150, label: 'Inside Left' },
+      inside_right: { width: 100, height: 50, depth: 150, label: 'Inside Right' },
+      inside_top: { width: 150, height: 100, depth: 50, label: 'Inside Top Flap' },
+      inside_bottom: { width: 150, height: 100, depth: 50, label: 'Inside Bottom' },
+    },
+    zones: {
+      front: [
+        { label: 'Brand Logo', required: true, position: [75, 15, 0] },
+        { label: 'Headline', required: false, position: [50, 30, 0] },
+      ],
+      back: [{ label: 'Product Info', required: false, position: [75, 16, 0] }],
+      top: [{ label: 'Brand Mark', required: false, position: [75, 50, 0] }],
+      left: [], right: [], bottom: [],
+      inside_front: [], inside_back: [], inside_left: [], inside_right: [], inside_top: [], inside_bottom: [],
+    },
+    rules: {
+      moq: 30,
+      printing: {
+        outside: {
+          modes: ['none', 'mono', 'full_color'],
+          sides: [1],
+          labels: { none: 'No print', mono: '1 colour', full_color: 'Full colour' },
+        },
+        inside: true,
+      },
+      finishing: {
+        lamination: ['gloss_lamin', 'matte_lamin'],
+        coating: [],
+        foil: ['foil_gold', 'foil_silver'],
+        emboss: false,
+        spotUV: true,
+      },
+      printSides: [1, 2],
+      materialOptions: [
+        { code: 'kraft', label: 'Kraft Board' },
+        { code: 'white-kraft', label: 'White Kraft Board' },
+        { code: 'cardboard-kraft', label: 'Kraft Cardboard' },
+        { code: 'corrugated-kraft', label: 'Corrugated Kraft' },
+        { code: 'cardboard-white', label: 'White Glossy (Imported)' },
+      ],
+      dimensionConstraints: { unit: 'mm', min: [30, 20, 10], max: [400, 300, 200] },
+    },
+    boxTypeOptions: [{ value: 'folding-carton', label: 'Folding Carton' }],
+    editorFields: ['size', 'material', 'print', 'finish', 'lamination', 'foil', 'quantity'],
+  };
+
+  // M8-J folding-carton dieline — Medium 150x100x50mm. Weighing-machine box:
+  // body row left|front|right|back with side/bottom glue flaps (front edges
+  // fold between the four walls, glue along the wall tops/bottoms), full-width
+  // top & bottom flaps attached to the front panel, inside mirrors coincident
+  // for 2-side print. Flat blank fits 700x250mm with no panel overlap.
+  const FOLDING_CARTON_DIELINE_TEMPLATE = {
+    schemaVersion: 1,
+    boxType: 'folding-carton',
+    faceOrder: ['left', 'front', 'right', 'back', 'top', 'bottom'],
+    panels: {
+      left: {
+        faceId: 'left',
+        x: 200, y: 100, w: 100, h: 50,
+        rotation: 0,
+        edges: {
+          top: { class: 'glue', to: 'glue_flap' },
+          right: { class: 'fold', to: 'front' },
+          bottom: { class: 'glue', to: 'glue_flap' },
+          left: { class: 'cut' },
+        },
+      },
+      front: {
+        faceId: 'front',
+        x: 300, y: 100, w: 150, h: 50,
+        rotation: 0,
+        edges: {
+          top: { class: 'fold', to: 'top' },
+          right: { class: 'fold', to: 'right' },
+          bottom: { class: 'fold', to: 'bottom' },
+          left: { class: 'fold', to: 'left' },
+        },
+      },
+      right: {
+        faceId: 'right',
+        x: 450, y: 100, w: 100, h: 50,
+        rotation: 0,
+        edges: {
+          top: { class: 'glue', to: 'glue_flap' },
+          right: { class: 'fold', to: 'back' },
+          bottom: { class: 'glue', to: 'glue_flap' },
+          left: { class: 'fold', to: 'front' },
+        },
+      },
+      back: {
+        faceId: 'back',
+        x: 550, y: 100, w: 150, h: 50,
+        rotation: 0,
+        edges: {
+          top: { class: 'cut' },
+          right: { class: 'glue', to: 'left' },
+          bottom: { class: 'cut' },
+          left: { class: 'fold', to: 'right' },
+        },
+      },
+      top: {
+        faceId: 'top',
+        x: 300, y: 0, w: 150, h: 100,
+        rotation: 0,
+        edges: {
+          top: { class: 'cut' },
+          right: { class: 'cut' },
+          bottom: { class: 'fold', to: 'front' },
+          left: { class: 'cut' },
+        },
+      },
+      bottom: {
+        faceId: 'bottom',
+        x: 300, y: 150, w: 150, h: 100,
+        rotation: 0,
+        edges: {
+          top: { class: 'fold', to: 'front' },
+          right: { class: 'cut' },
+          bottom: { class: 'cut' },
+          left: { class: 'cut' },
+        },
+      },
+      inside_front: {
+        faceId: 'inside_front',
+        x: 300, y: 100, w: 150, h: 50,
+        rotation: 0,
+        edges: {},
+      },
+      inside_back: {
+        faceId: 'inside_back',
+        x: 550, y: 100, w: 150, h: 50,
+        rotation: 0,
+        edges: {},
+      },
+      inside_left: {
+        faceId: 'inside_left',
+        x: 200, y: 100, w: 100, h: 50,
+        rotation: 0,
+        edges: {},
+      },
+      inside_right: {
+        faceId: 'inside_right',
+        x: 450, y: 100, w: 100, h: 50,
+        rotation: 0,
+        edges: {},
+      },
+      inside_top: {
+        faceId: 'inside_top',
+        x: 300, y: 0, w: 150, h: 100,
+        rotation: 0,
+        edges: {},
+      },
+      inside_bottom: {
+        faceId: 'inside_bottom',
+        x: 300, y: 150, w: 150, h: 100,
+        rotation: 0,
+        edges: {},
+      },
+    },
+    outline: { w: 700, h: 250 },
+  };
+
+  const SHIPPING_BOX_STRUCTURE = {
+    type: 'box',
+    brand: 'PackagePro',
+    boxType: 'shipping-box',
+    defaultSizes: [
+      { code: 's', label: 'Small (250x200x150)', dims: { length: 250, width: 200, height: 150 } },
+      { code: 'm', label: 'Medium (400x300x250)', dims: { length: 400, width: 300, height: 250 } },
+      { code: 'l', label: 'Large (600x400x400)', dims: { length: 600, width: 400, height: 400 } },
+      { code: 'xl', label: 'XL (800x600x600)', dims: { length: 800, width: 600, height: 600 } },
+    ],
+    faces: {
+      front: { width: 400, height: 250, depth: 300, label: 'Front Panel' },
+      back: { width: 400, height: 250, depth: 300, label: 'Back Panel' },
+      left: { width: 300, height: 250, depth: 400, label: 'Left Panel' },
+      right: { width: 300, height: 250, depth: 400, label: 'Right Panel' },
+      top: { width: 400, height: 300, depth: 250, label: 'Top Flap' },
+      bottom: { width: 400, height: 300, depth: 250, label: 'Bottom Panel' },
+      inside_front: { width: 400, height: 250, depth: 300, label: 'Inside Front' },
+      inside_back: { width: 400, height: 250, depth: 300, label: 'Inside Back' },
+      inside_left: { width: 300, height: 250, depth: 400, label: 'Inside Left' },
+      inside_right: { width: 300, height: 250, depth: 400, label: 'Inside Right' },
+      inside_top: { width: 400, height: 300, depth: 250, label: 'Inside Top Flap' },
+      inside_bottom: { width: 400, height: 300, depth: 250, label: 'Inside Bottom' },
+    },
+    zones: {
+      front: [
+        { label: 'Brand Logo', required: true, position: [160, 90, 0] },
+        { label: 'Headline', required: false, position: [120, 150, 0] },
+      ],
+      back: [{ label: 'Product Info', required: false, position: [200, 90, 0] }],
+      top: [{ label: 'Brand Mark', required: false, position: [200, 150, 0] }],
+      left: [], right: [], bottom: [],
+      inside_front: [], inside_back: [], inside_left: [], inside_right: [], inside_top: [], inside_bottom: [],
+    },
+    rules: {
+      moq: 30,
+      printing: {
+        outside: {
+          modes: ['none', 'mono', 'full_color'],
+          sides: [1],
+          labels: { none: 'No print', mono: '1 colour', full_color: 'Full colour' },
+        },
+        inside: true,
+      },
+      finishing: {
+        lamination: ['gloss_lamin'],
+        coating: [],
+        foil: [],
+        emboss: false,
+        spotUV: false,
+      },
+      printSides: [1, 2],
+      materialOptions: [
+        { code: 'cardboard-kraft', label: 'Kraft Cardboard' },
+        { code: 'corrugated-kraft', label: 'Corrugated Kraft' },
+        { code: 'kraft', label: 'Kraft Board' },
+        { code: 'white-kraft', label: 'White Kraft Board' },
+      ],
+      dimensionConstraints: { unit: 'mm', min: [100, 100, 50], max: [1200, 800, 800] },
+    },
+    boxTypeOptions: [{ value: 'shipping-box', label: 'Shipping Box' }],
+    editorFields: ['size', 'material', 'print', 'finish', 'lamination', 'quantity'],
+  };
+
+  // M8-J shipping-box dieline — Medium 400x300x250mm. RSC-style: body row
+  // left|front|right|back (corrugated flute B), full-width top & bottom flaps
+  // hinged on the front panel, final closing glue seam back→left. Flat blank
+  // fits 1400x850mm with no panel overlap.
+  const SHIPPING_BOX_DIELINE_TEMPLATE = {
+    schemaVersion: 1,
+    boxType: 'shipping-box',
+    faceOrder: ['left', 'front', 'right', 'back', 'top', 'bottom'],
+    panels: {
+      left: {
+        faceId: 'left',
+        x: 0, y: 300, w: 300, h: 250,
+        rotation: 0,
+        edges: {
+          top: { class: 'fold', to: 'top' },
+          right: { class: 'fold', to: 'front' },
+          bottom: { class: 'fold', to: 'bottom' },
+          left: { class: 'cut' },
+        },
+      },
+      front: {
+        faceId: 'front',
+        x: 300, y: 300, w: 400, h: 250,
+        rotation: 0,
+        edges: {
+          top: { class: 'fold', to: 'top' },
+          right: { class: 'fold', to: 'right' },
+          bottom: { class: 'fold', to: 'bottom' },
+          left: { class: 'fold', to: 'left' },
+        },
+      },
+      right: {
+        faceId: 'right',
+        x: 700, y: 300, w: 300, h: 250,
+        rotation: 0,
+        edges: {
+          top: { class: 'fold', to: 'top' },
+          right: { class: 'fold', to: 'back' },
+          bottom: { class: 'fold', to: 'bottom' },
+          left: { class: 'fold', to: 'front' },
+        },
+      },
+      back: {
+        faceId: 'back',
+        x: 1000, y: 300, w: 400, h: 250,
+        rotation: 0,
+        edges: {
+          top: { class: 'fold', to: 'top' },
+          right: { class: 'glue', to: 'left' },
+          bottom: { class: 'fold', to: 'bottom' },
+          left: { class: 'fold', to: 'right' },
+        },
+      },
+      top: {
+        faceId: 'top',
+        x: 300, y: 0, w: 400, h: 300,
+        rotation: 0,
+        edges: {
+          top: { class: 'cut' },
+          right: { class: 'cut' },
+          bottom: { class: 'fold', to: 'front' },
+          left: { class: 'cut' },
+        },
+      },
+      bottom: {
+        faceId: 'bottom',
+        x: 300, y: 550, w: 400, h: 300,
+        rotation: 0,
+        edges: {
+          top: { class: 'fold', to: 'front' },
+          right: { class: 'cut' },
+          bottom: { class: 'cut' },
+          left: { class: 'cut' },
+        },
+      },
+      inside_front: {
+        faceId: 'inside_front',
+        x: 300, y: 300, w: 400, h: 250,
+        rotation: 0,
+        edges: {},
+      },
+      inside_back: {
+        faceId: 'inside_back',
+        x: 1000, y: 300, w: 400, h: 250,
+        rotation: 0,
+        edges: {},
+      },
+      inside_left: {
+        faceId: 'inside_left',
+        x: 0, y: 300, w: 300, h: 250,
+        rotation: 0,
+        edges: {},
+      },
+      inside_right: {
+        faceId: 'inside_right',
+        x: 700, y: 300, w: 300, h: 250,
+        rotation: 0,
+        edges: {},
+      },
+      inside_top: {
+        faceId: 'inside_top',
+        x: 300, y: 0, w: 400, h: 300,
+        rotation: 0,
+        edges: {},
+      },
+      inside_bottom: {
+        faceId: 'inside_bottom',
+        x: 300, y: 550, w: 400, h: 300,
+        rotation: 0,
+        edges: {},
+      },
+    },
+    outline: { w: 1400, h: 850 },
+  };
+
+  const RIGID_BOX_STRUCTURE = {
+    type: 'box',
+    brand: 'PackagePro',
+    boxType: 'rigid-box',
+    defaultSizes: [
+      { code: 's', label: 'Small (200x150x50)', dims: { length: 200, width: 150, height: 50 } },
+      { code: 'm', label: 'Medium (250x180x60)', dims: { length: 250, width: 180, height: 60 } },
+      { code: 'l', label: 'Large (300x220x80)', dims: { length: 300, width: 220, height: 80 } },
+    ],
+    faces: {
+      front: { width: 250, height: 60, depth: 180, label: 'Front Wall' },
+      back: { width: 250, height: 60, depth: 180, label: 'Back Wall' },
+      left: { width: 180, height: 60, depth: 250, label: 'Left Wall' },
+      right: { width: 180, height: 60, depth: 250, label: 'Right Wall' },
+      top: { width: 250, height: 180, depth: 60, label: 'Lid Board' },
+      bottom: { width: 250, height: 180, depth: 60, label: 'Base Board' },
+      inside_front: { width: 250, height: 60, depth: 180, label: 'Lid Front Wall' },
+      inside_back: { width: 250, height: 60, depth: 180, label: 'Lid Back Wall' },
+      inside_left: { width: 180, height: 60, depth: 250, label: 'Lid Left Wall' },
+      inside_right: { width: 180, height: 60, depth: 250, label: 'Lid Right Wall' },
+      inside_top: { width: 250, height: 180, depth: 60, label: 'Inside Lid Board' },
+      inside_bottom: { width: 250, height: 180, depth: 60, label: 'Inside Base Board' },
+    },
+    zones: {
+      front: [
+        { label: 'Brand Logo', required: true, position: [60, 20, 0] },
+        { label: 'Headline', required: false, position: [40, 38, 0] },
+      ],
+      back: [{ label: 'Product Info', required: false, position: [125, 20, 0] }],
+      top: [{ label: 'Brand Mark', required: false, position: [125, 90, 0] }],
+      left: [], right: [], bottom: [],
+      inside_front: [], inside_back: [], inside_left: [], inside_right: [], inside_top: [], inside_bottom: [],
+    },
+    rules: {
+      moq: 30,
+      printing: {
+        outside: {
+          modes: ['none', 'mono', 'full_color'],
+          sides: [1],
+          labels: { none: 'No print', mono: '1 colour', full_color: 'Full colour' },
+        },
+        inside: true,
+      },
+      finishing: {
+        lamination: ['gloss_lamin', 'matte_lamin'],
+        coating: [],
+        foil: ['foil_gold', 'foil_silver'],
+        emboss: false,
+        spotUV: true,
+      },
+      printSides: [1, 2],
+      materialOptions: [
+        { code: 'chipboard', label: 'Chipboard' },
+        { code: 'cardboard-white', label: 'White Glossy (Imported)' },
+        { code: 'kraft_liner', label: 'Kraft Liner' },
+        { code: 'corrugated-kraft', label: 'Corrugated Kraft' },
+      ],
+      dimensionConstraints: { unit: 'mm', min: [100, 80, 30], max: [600, 500, 200] },
+    },
+    boxTypeOptions: [{ value: 'rigid-box', label: 'Rigid Box' }],
+    editorFields: ['size', 'material', 'print', 'finish', 'lamination', 'foil', 'quantity'],
+  };
+
+  // M8-J rigid-box dieline — Medium 250x180x60mm. Two-piece blank: a base
+  // tray (bottom + 4 walls) and a lid tray (lid board + 4 wall boards). Rigid
+  // boards are die-cut and glued, not creased, so every physical board carries
+  // cut edges only; the inside_* mirror boards overlay the base/lid boards for
+  // 2-side print. No overlap across both trays (960x420mm sheet).
+  const RIGID_BOX_DIELINE_TEMPLATE = {
+    schemaVersion: 1,
+    boxType: 'rigid-box',
+    faceOrder: ['left', 'front', 'right', 'back', 'top', 'bottom'],
+    panels: {
+      back: {
+        faceId: 'back',
+        x: 0, y: 0, w: 250, h: 60,
+        rotation: 0,
+        edges: { top: { class: 'cut' }, right: { class: 'cut' }, bottom: { class: 'cut' }, left: { class: 'cut' } },
+      },
+      left: {
+        faceId: 'left',
+        x: 260, y: 0, w: 180, h: 60,
+        rotation: 0,
+        edges: { top: { class: 'cut' }, right: { class: 'cut' }, bottom: { class: 'cut' }, left: { class: 'cut' } },
+      },
+      bottom: {
+        faceId: 'bottom',
+        x: 0, y: 120, w: 250, h: 180,
+        rotation: 0,
+        edges: { top: { class: 'cut' }, right: { class: 'cut' }, bottom: { class: 'cut' }, left: { class: 'cut' } },
+      },
+      front: {
+        faceId: 'front',
+        x: 0, y: 300, w: 250, h: 60,
+        rotation: 0,
+        edges: { top: { class: 'cut' }, right: { class: 'cut' }, bottom: { class: 'cut' }, left: { class: 'cut' } },
+      },
+      right: {
+        faceId: 'right',
+        x: 260, y: 360, w: 180, h: 60,
+        rotation: 0,
+        edges: { top: { class: 'cut' }, right: { class: 'cut' }, bottom: { class: 'cut' }, left: { class: 'cut' } },
+      },
+      top: {
+        faceId: 'top',
+        x: 520, y: 120, w: 250, h: 180,
+        rotation: 0,
+        edges: { top: { class: 'cut' }, right: { class: 'cut' }, bottom: { class: 'cut' }, left: { class: 'cut' } },
+      },
+      inside_back: {
+        faceId: 'inside_back',
+        x: 520, y: 0, w: 250, h: 60,
+        rotation: 0,
+        edges: {},
+      },
+      inside_front: {
+        faceId: 'inside_front',
+        x: 520, y: 300, w: 250, h: 60,
+        rotation: 0,
+        edges: {},
+      },
+      inside_left: {
+        faceId: 'inside_left',
+        x: 780, y: 0, w: 180, h: 60,
+        rotation: 0,
+        edges: {},
+      },
+      inside_right: {
+        faceId: 'inside_right',
+        x: 780, y: 360, w: 180, h: 60,
+        rotation: 0,
+        edges: {},
+      },
+      inside_top: {
+        faceId: 'inside_top',
+        x: 520, y: 120, w: 250, h: 180,
+        rotation: 0,
+        edges: {},
+      },
+      inside_bottom: {
+        faceId: 'inside_bottom',
+        x: 0, y: 120, w: 250, h: 180,
+        rotation: 0,
+        edges: {},
+      },
+    },
+    outline: { w: 960, h: 420 },
+  };
+
+  const PIZZA_BOX_STRUCTURE = {
+    type: 'box',
+    brand: 'PackagePro',
+    boxType: 'pizza-box',
+    defaultSizes: [
+      { code: 's', label: 'Small (25x25x4)', dims: { length: 250, width: 250, height: 40 } },
+      { code: 'm', label: 'Medium (33x33x4.5)', dims: { length: 330, width: 330, height: 45 } },
+      { code: 'l', label: 'Large (40x40x5)', dims: { length: 400, width: 400, height: 50 } },
+    ],
+    faces: {
+      front: { width: 330, height: 45, depth: 330, label: 'Front Panel' },
+      back: { width: 330, height: 45, depth: 330, label: 'Back Panel' },
+      left: { width: 330, height: 45, depth: 330, label: 'Left Panel' },
+      right: { width: 330, height: 45, depth: 330, label: 'Right Panel' },
+      top: { width: 330, height: 330, depth: 45, label: 'Deck Board' },
+      bottom: { width: 330, height: 330, depth: 45, label: 'Lid Board' },
+      inside_front: { width: 330, height: 45, depth: 330, label: 'Inside Front' },
+      inside_back: { width: 330, height: 45, depth: 330, label: 'Inside Back' },
+      inside_left: { width: 330, height: 45, depth: 330, label: 'Inside Left' },
+      inside_right: { width: 330, height: 45, depth: 330, label: 'Inside Right' },
+      inside_top: { width: 330, height: 330, depth: 45, label: 'Inside Deck' },
+      inside_bottom: { width: 330, height: 330, depth: 45, label: 'Inside Lid' },
+    },
+    zones: {
+      front: [
+        { label: 'Brand Logo', required: true, position: [165, 12, 0] },
+        { label: 'Headline', required: false, position: [120, 25, 0] },
+      ],
+      back: [{ label: 'Product Info', required: false, position: [165, 12, 0] }],
+      top: [{ label: 'Brand Mark', required: false, position: [165, 120, 0] }],
+      left: [], right: [], bottom: [],
+      inside_front: [], inside_back: [], inside_left: [], inside_right: [], inside_top: [], inside_bottom: [],
+    },
+    rules: {
+      moq: 30,
+      printing: {
+        outside: {
+          modes: ['none', 'mono', 'full_color'],
+          sides: [1],
+          labels: { none: 'No print', mono: '1 colour', full_color: 'Full colour' },
+        },
+        inside: true,
+      },
+      finishing: {
+        lamination: ['matte_lamin'],
+        coating: [],
+        foil: [],
+        emboss: false,
+        spotUV: false,
+      },
+      printSides: [1, 2],
+      materialOptions: [
+        { code: 'corrugated-kraft', label: 'Corrugated Kraft' },
+        { code: 'kraft', label: 'Kraft Board' },
+        { code: 'corrugated-white', label: 'Corrugated White' },
+        { code: 'cardboard-white', label: 'White Glossy (Imported)' },
+      ],
+      dimensionConstraints: { unit: 'mm', min: [200, 200, 20], max: [600, 600, 100] },
+    },
+    boxTypeOptions: [{ value: 'pizza-box', label: 'Pizza Box' }],
+    editorFields: ['size', 'material', 'print', 'finish', 'lamination', 'quantity'],
+  };
+
+  // M8-J pizza-box dieline — Medium 330x330x45mm. Single-piece cruciform
+  // blank: lid board with a hinged back panel leading to the deck board, and
+  // front/left/right walls folding up around the deck. Flat blank fits
+  // 990x750mm with no panel overlap.
+  const PIZZA_BOX_DIELINE_TEMPLATE = {
+    schemaVersion: 1,
+    boxType: 'pizza-box',
+    faceOrder: ['left', 'front', 'right', 'back', 'top', 'bottom'],
+    panels: {
+      bottom: {
+        faceId: 'bottom',
+        x: 330, y: 0, w: 330, h: 330,
+        rotation: 0,
+        edges: { top: { class: 'cut' }, right: { class: 'cut' }, bottom: { class: 'cut' }, left: { class: 'cut' } },
+      },
+      back: {
+        faceId: 'back',
+        x: 330, y: 330, w: 330, h: 45,
+        rotation: 0,
+        edges: {
+          top: { class: 'fold', to: 'bottom' },
+          right: { class: 'cut' },
+          bottom: { class: 'fold', to: 'top' },
+          left: { class: 'cut' },
+        },
+      },
+      top: {
+        faceId: 'top',
+        x: 330, y: 375, w: 330, h: 330,
+        rotation: 0,
+        edges: {
+          top: { class: 'fold', to: 'back' },
+          right: { class: 'fold', to: 'right' },
+          bottom: { class: 'fold', to: 'front' },
+          left: { class: 'fold', to: 'left' },
+        },
+      },
+      front: {
+        faceId: 'front',
+        x: 330, y: 705, w: 330, h: 45,
+        rotation: 0,
+        edges: {
+          top: { class: 'fold', to: 'top' },
+          right: { class: 'cut' },
+          bottom: { class: 'cut' },
+          left: { class: 'cut' },
+        },
+      },
+      left: {
+        faceId: 'left',
+        x: 0, y: 375, w: 330, h: 45,
+        rotation: 0,
+        edges: {
+          top: { class: 'cut' },
+          right: { class: 'fold', to: 'top' },
+          bottom: { class: 'cut' },
+          left: { class: 'cut' },
+        },
+      },
+      right: {
+        faceId: 'right',
+        x: 660, y: 375, w: 330, h: 45,
+        rotation: 0,
+        edges: {
+          top: { class: 'cut' },
+          right: { class: 'cut' },
+          bottom: { class: 'cut' },
+          left: { class: 'fold', to: 'top' },
+        },
+      },
+      inside_front: {
+        faceId: 'inside_front',
+        x: 330, y: 705, w: 330, h: 45,
+        rotation: 0,
+        edges: {},
+      },
+      inside_back: {
+        faceId: 'inside_back',
+        x: 330, y: 330, w: 330, h: 45,
+        rotation: 0,
+        edges: {},
+      },
+      inside_left: {
+        faceId: 'inside_left',
+        x: 0, y: 375, w: 330, h: 45,
+        rotation: 0,
+        edges: {},
+      },
+      inside_right: {
+        faceId: 'inside_right',
+        x: 660, y: 375, w: 330, h: 45,
+        rotation: 0,
+        edges: {},
+      },
+      inside_top: {
+        faceId: 'inside_top',
+        x: 330, y: 375, w: 330, h: 330,
+        rotation: 0,
+        edges: {},
+      },
+      inside_bottom: {
+        faceId: 'inside_bottom',
+        x: 330, y: 0, w: 330, h: 330,
+        rotation: 0,
+        edges: {},
+      },
+    },
+    outline: { w: 990, h: 750 },
+  };
+
   const CATALOG_PRODUCTS: CatalogProductDef[] = [
     {
       id: 'prod-mailer-box',
@@ -551,7 +1242,7 @@ async function main() {
       ],
       ecoFlags: { ecoChoice: true, fsc: true, recycled: true, biodegradable: true, reusable: true, recycledContent: '70%' },
       filters: { industries: ['ecommerce', 'retail', 'cosmetics', 'subscription', 'apparel'], sizes: ['f42', 'f52', 'f62', 'f72'] },
-      editorDefaults: { boxType: 'mailer-box', defaultMaterial: 'cardboard-kraft', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'E', structure: MAILER_BOX_STRUCTURE, prepress: { caliperMm: 0.5, fluteType: 'E', glueFlapToleranceMm: 1.5 }, schemaVersion: 1, unit: 'mm', dieline: MAILER_DIELINE_TEMPLATE },
+      editorDefaults: { boxType: 'mailer-box', defaultMaterial: 'cardboard-kraft', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'E', structure: MAILER_BOX_STRUCTURE, prepress: { caliperMm: 0.5, fluteType: 'E', glueFlapToleranceMm: 1.5 }, schemaVersion: 1, unit: 'mm', dieline: MAILER_DIELINE_TEMPLATE, support: 'supported' },
       defaultVariant: { materialCode: 'kraft', color: 'kraft', printMode: 'none', printSides: 'outside_only', finish: 'none' },
       options: [OPTION_MATERIAL_BOX, OPTION_PRINT_COLORS, OPTION_PRINT_SIDES, OPTION_FINISH],
       conversion: 0.02,
@@ -583,11 +1274,11 @@ async function main() {
       ],
       ecoFlags: { ecoChoice: true, fsc: true, recycled: true, recycledContent: '50%' },
       filters: { industries: ['retail', 'cosmetics', 'food', 'electronics'], sizes: ['s', 'm', 'l'] },
-      editorDefaults: { boxType: 'folding-carton', defaultMaterial: 'cardboard-white', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'E' },
+      editorDefaults: { boxType: 'folding-carton', defaultMaterial: 'cardboard-white', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'E', structure: FOLDING_CARTON_STRUCTURE, prepress: { caliperMm: 0.45, fluteType: 'E', glueFlapToleranceMm: 1.5 }, schemaVersion: 1, unit: 'mm', dieline: FOLDING_CARTON_DIELINE_TEMPLATE, support: 'supported' },
       defaultVariant: { materialCode: 'kraft', color: 'kraft', printMode: 'none', printSides: 'outside_only', finish: 'none' },
       options: [
         OPTION_MATERIAL_BOX,
-        { ...OPTION_PRINT_COLORS, values: OPTION_PRINT_COLORS.values.filter((v) => v.value !== 'none') },
+        OPTION_PRINT_COLORS,
         OPTION_PRINT_SIDES,
         OPTION_FINISH,
       ],
@@ -621,7 +1312,7 @@ async function main() {
       ],
       ecoFlags: { ecoChoice: true, recycled: true, reusable: true, recycledContent: '90%' },
       filters: { industries: ['wholesale', 'fulfilment', 'ecommerce', 'manufacturing'], sizes: ['s', 'm', 'l', 'xl'] },
-      editorDefaults: { boxType: 'shipping-box', defaultMaterial: 'corrugated-kraft', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'B' },
+      editorDefaults: { boxType: 'shipping-box', defaultMaterial: 'corrugated-kraft', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'B', structure: SHIPPING_BOX_STRUCTURE, prepress: { caliperMm: 0.75, fluteType: 'B', glueFlapToleranceMm: 1.5 }, schemaVersion: 1, unit: 'mm', dieline: SHIPPING_BOX_DIELINE_TEMPLATE, support: 'supported' },
       defaultVariant: { materialCode: 'corrugated-kraft', color: 'kraft', printMode: 'none', printSides: 'outside_only', finish: 'none' },
       options: [
         {
@@ -644,6 +1335,96 @@ async function main() {
       ],
       conversion: 0.028,
       margin: 0.32,
+    },
+    {
+      id: 'prod-rigid-box',
+      subcategoryId: 'sub-rigid-boxes',
+      slug: 'custom-rigid-box',
+      name: 'Custom Rigid Box',
+      shortDescription: 'Luxury two-piece rigid boxes with a wrapped lid and base for premium gifting.',
+      description: 'A crafted two-piece rigid box: glued chipboard base tray and separate lid tray, wrapped in premium papers, foiling and soft-touch lamination. The M8-J dieline treats the lid and base as a two-piece blank.',
+      productType: 'box',
+      boxType: 'rigid-box',
+      moq: 30,
+      sizeUnit: 'cm',
+      sizes: [
+        { code: 's', name: 'Small (20x15x5)', length: 20, width: 15, height: 5 },
+        { code: 'm', name: 'Medium (25x18x6)', length: 25, width: 18, height: 6 },
+        { code: 'l', name: 'Large (30x22x8)', length: 30, width: 22, height: 8 },
+      ],
+      minDims: { length: 10, width: 8, height: 3 },
+      maxDims: { length: 60, width: 50, height: 20 },
+      priceFrom: 1.85,
+      thumbnail: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&h=600&fit=crop',
+      gallery: [
+        'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
+      ],
+      ecoFlags: { ecoChoice: false, recycled: true, reused: true, recyclable: true },
+      filters: { industries: ['gifting', 'retail', 'luxury', 'cosmetics'], sizes: ['s', 'm', 'l'] },
+      editorDefaults: { boxType: 'rigid-box', defaultMaterial: 'chipboard', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'glue', finishing: 'none', lamination: 'matte_lamin', fluteType: 'none', structure: RIGID_BOX_STRUCTURE, prepress: { caliperMm: 1.5, fluteType: 'none', glueFlapToleranceMm: 1.0 }, schemaVersion: 1, unit: 'mm', dieline: RIGID_BOX_DIELINE_TEMPLATE, support: 'supported' },
+      defaultVariant: { materialCode: 'chipboard', color: 'kraft', printMode: 'none', printSides: 'outside_only', finish: 'none' },
+      options: [
+        {
+          key: 'material', label: 'Material', control: 'select', required: true,
+          values: [
+            { label: 'Chipboard', value: 'chipboard' },
+            { label: 'White Glossy (Imported)', value: 'cardboard-white' },
+            { label: 'Kraft Liner', value: 'kraft_liner' },
+            { label: 'Corrugated Kraft', value: 'corrugated-kraft' },
+          ],
+        },
+        OPTION_PRINT_COLORS,
+        OPTION_PRINT_SIDES,
+        OPTION_FINISH,
+      ],
+      conversion: 0.05,
+      margin: 0.45,
+    },
+    {
+      id: 'prod-pizza-box',
+      subcategoryId: 'sub-pizza-boxes',
+      slug: 'custom-pizza-box',
+      name: 'Custom Pizza Box',
+      shortDescription: 'Corrugated single-piece pizza boxes with strong-side ventilation and full-colour branding.',
+      description: 'A single-piece corrugated pizza box that ships flat and locks in seconds. The M8-J dieline uses a cruciform blank: hinged lid plus deck with folding front, back and side walls.',
+      productType: 'box',
+      boxType: 'pizza-box',
+      moq: 30,
+      sizeUnit: 'cm',
+      sizes: [
+        { code: 's', name: 'Small (25x25x4)', length: 25, width: 25, height: 4 },
+        { code: 'm', name: 'Medium (33x33x4.5)', length: 33, width: 33, height: 4.5 },
+        { code: 'l', name: 'Large (40x40x5)', length: 40, width: 40, height: 5 },
+      ],
+      minDims: { length: 20, width: 20, height: 2 },
+      maxDims: { length: 60, width: 60, height: 10 },
+      priceFrom: 0.95,
+      thumbnail: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=600&fit=crop',
+      gallery: [
+        'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1605902711622-cfb43c4437b5?w=800&h=600&fit=crop',
+      ],
+      ecoFlags: { ecoChoice: true, recyclable: true, biodegradable: true, reusable: true },
+      filters: { industries: ['food', 'restaurants', 'catering', 'beverage'], sizes: ['s', 'm', 'l'] },
+      editorDefaults: { boxType: 'pizza-box', defaultMaterial: 'corrugated-kraft', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'E', structure: PIZZA_BOX_STRUCTURE, prepress: { caliperMm: 0.6, fluteType: 'E', glueFlapToleranceMm: 1.0 }, schemaVersion: 1, unit: 'mm', dieline: PIZZA_BOX_DIELINE_TEMPLATE, support: 'supported' },
+      defaultVariant: { materialCode: 'corrugated-kraft', color: 'kraft', printMode: 'none', printSides: 'outside_only', finish: 'none' },
+      options: [
+        {
+          key: 'material', label: 'Material', control: 'select', required: true,
+          values: [
+            { label: 'Corrugated Kraft', value: 'corrugated-kraft' },
+            { label: 'Kraft Board', value: 'kraft' },
+            { label: 'Corrugated White', value: 'corrugated-white' },
+            { label: 'White Glossy (Imported)', value: 'cardboard-white' },
+          ],
+        },
+        OPTION_PRINT_COLORS,
+        OPTION_PRINT_SIDES,
+        OPTION_FINISH,
+      ],
+      conversion: 0.035,
+      margin: 0.35,
     },
     {
       id: 'prod-paper-bag',
@@ -671,7 +1452,7 @@ async function main() {
       ],
       ecoFlags: { ecoChoice: true, fsc: true, recycled: true, biodegradable: true, recycledContent: '40%' },
       filters: { industries: ['retail', 'food', 'fashion', 'boutique'], sizes: ['s', 'm', 'l'] },
-      editorDefaults: { boxType: 'paper-bag', defaultMaterial: 'kraft', defaultColor: 'one_colour', defaultPrint: 'outside', handle: 'none' },
+      editorDefaults: { boxType: 'paper-bag', defaultMaterial: 'kraft', defaultColor: 'one_colour', defaultPrint: 'outside', handle: 'none', support: 'deferred', supportReason: 'Bag = 2+2 side panels with a gusseted base — non-rectangular gusset authoring is unsafe in M8 (spec §14); deferred to post-M8, never shipped with fake geometry.' },
       defaultVariant: { materialCode: 'kraft', color: 'kraft', printMode: 'none', printSides: 'outside_only', finish: 'none' },
       options: [
         {
@@ -731,7 +1512,7 @@ async function main() {
       ],
       ecoFlags: { ecoChoice: true, recycled: true },
       filters: { industries: ['ecommerce', 'apparel', 'subscription'], sizes: ['s', 'm', 'l'] },
-      editorDefaults: { boxType: 'poly-mailer', defaultMaterial: 'poly', defaultColor: 'one_colour', defaultPrint: 'outside', handle: 'none' },
+      editorDefaults: { boxType: 'poly-mailer', defaultMaterial: 'poly', defaultColor: 'one_colour', defaultPrint: 'outside', handle: 'none', support: 'deferred', supportReason: 'Single-face + back LDPE self-seal pouch — physically not a box; no generic box blueprint/deferral per spec §14.' },
       defaultVariant: { materialCode: 'poly', color: 'clear', printMode: 'none', printSides: 'outside_only', finish: 'none' },
       options: [
         {
@@ -777,7 +1558,7 @@ async function main() {
       ],
       ecoFlags: { ecoChoice: true, recycled: true },
       filters: { industries: ['retail', 'food', 'cosmetics', 'mailing'], sizes: ['sq50', 'r75x50', 'r100x75', 'r150x100'] },
-      editorDefaults: { boxType: 'label', defaultMaterial: 'paper', defaultColor: 'full_color', defaultPrint: 'outside', dieCut: 'rectangle' },
+      editorDefaults: { boxType: 'label', defaultMaterial: 'paper', defaultColor: 'full_color', defaultPrint: 'outside', dieCut: 'rectangle', support: 'deferred', supportReason: 'Flat 1-panel die-cut with zones on a single face — deferred until non-rectangular die-cut path authoring (spec §14).' },
       defaultVariant: { materialCode: 'paper', color: 'white', printMode: 'none', printSides: 'outside_only', finish: 'none' },
       options: [
         {

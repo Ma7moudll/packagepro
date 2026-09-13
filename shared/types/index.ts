@@ -700,6 +700,14 @@ export interface EditorConfig {
     unit?: 'mm'
     dieline?: DielineBlueprint
     prepress?: PrepressConfig
+    /**
+     * M8-J (spec §14): product-coverage support flag. `"supported"` carries a
+     * canonical blueprint+dieline; `"deferred"` carries NO blueprint and must
+     * never be shipped with fake geometry. Absent on legacy editorDefaults
+     * blobs that predate M8-J.
+     */
+    support?: 'supported' | 'deferred'
+    supportReason?: string
   }
   variant: {
     id: string

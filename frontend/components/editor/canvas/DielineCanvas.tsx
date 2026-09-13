@@ -11,6 +11,7 @@
 
 import { useDesignStore } from "@/lib/editor/state/store"
 import { DielineView } from "@/components/editor/canvas/DielineView"
+import { DeferredDielinePlaceholder } from "@/components/editor/canvas/DeferredDielinePlaceholder"
 import type { DielineResolution } from "@/lib/editor/geometry/resolve-dieline"
 
 interface DielineCanvasProps {
@@ -21,6 +22,14 @@ export function DielineCanvas({ resolution }: DielineCanvasProps) {
   const canvas = useDesignStore((s) => s.canvas)
   const selectedFace = useDesignStore((s) => s.ui.selectedFace)
   const setSelectedFace = useDesignStore((s) => s.setSelectedFace)
+  const product = useDesignStore((s) => s.product)
+
+  // M8-J (spec §14): deferred products never render a net — not the canonical
+  // DielineView, and not the frozen M7 generic fallback. Show the deferral
+  // placeholder instead (fake geometry is never shipped).
+  if (product?.support === "deferred") {
+    return <DeferredDielinePlaceholder reason={product.supportReason} />
+  }
 
   return (
     <DielineView

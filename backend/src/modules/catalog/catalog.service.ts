@@ -235,8 +235,13 @@ export class CatalogService {
     // M8-B: the canonical packaging blueprint (schemaVersion, unit, dieline,
     // prepress) sits at the same editorDefaults top level. Each field is
     // passed through additively — absent on products without a blueprint.
+    // M8-J (spec §14): `support` flags coverage. Products explicitly deferred
+    // (support === 'deferred') NEVER carry a blueprint — the override below
+    // guards against any accidental dieline so no fake geometry is ever
+    // shipped for bags/labels/pouches.
     const editorDefaults = (product.editorDefaults as any) ?? undefined;
     const structure = editorDefaults?.structure ?? editorDefaults;
+    const isDeferred = editorDefaults?.support === 'deferred';
 
     return {
       product: {
@@ -246,10 +251,12 @@ export class CatalogService {
         type: product.productType,
         boxType: product.boxType ?? undefined,
         structure: structure ?? undefined,
-        schemaVersion: editorDefaults?.schemaVersion ?? undefined,
-        unit: editorDefaults?.unit ?? undefined,
-        dieline: editorDefaults?.dieline ?? undefined,
-        prepress: editorDefaults?.prepress ?? undefined,
+        schemaVersion: isDeferred ? undefined : (editorDefaults?.schemaVersion ?? undefined),
+        unit: isDeferred ? undefined : (editorDefaults?.unit ?? undefined),
+        dieline: isDeferred ? undefined : (editorDefaults?.dieline ?? undefined),
+        prepress: isDeferred ? undefined : (editorDefaults?.prepress ?? undefined),
+        support: editorDefaults?.support ?? undefined,
+        supportReason: isDeferred ? (editorDefaults?.supportReason ?? undefined) : undefined,
       },
       variant: {
         id: variant.id,

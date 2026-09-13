@@ -34,6 +34,9 @@ export interface EditorConfigLike {
     unit?: 'mm'
     dieline?: DielineBlueprint
     prepress?: { caliperMm?: number; fluteType?: string; glueFlapToleranceMm?: number }
+    /** M8-J (spec §14): product-coverage support flag — `"deferred"` products never carry a dieline. */
+    support?: 'supported' | 'deferred'
+    supportReason?: string
   }
   variant: { id: string; sku: string; sizeCode: string | null; materialCode: string | null; color?: string; printMode: string; printSides: number; finish: string; dimensions: { length: number; width: number; height: number; unit?: string } }
   material: { code: string; name: string; hex: string }
@@ -449,6 +452,8 @@ export const useDesignStore = create<DesignStore>((set, get) => {
           boxType: config.product.boxType,
           ...(config.product.dieline ? { dieline: config.product.dieline } : {}),
           ...(config.product.prepress ? { prepress: config.product.prepress } : {}),
+          ...(config.product.support ? { support: config.product.support } : {}),
+          ...(config.product.supportReason ? { supportReason: config.product.supportReason } : {}),
         },
         structureType: config.product.structure?.type,
         zones: config.product.structure?.zones,
