@@ -32,11 +32,13 @@ const saveDesignSchema = z.object({
 });
 
 const exportDesignSchema = z.object({
-  format: z.enum(['png', 'pdf', 'ai', 'eps']),
+  format: z.enum(['png', 'pdf', 'ai', 'eps', 'svg']),
   options: z.object({
     dpi: z.number().optional(),
     colorMode: z.enum(['rgb', 'cmyk']).optional(),
     bleedMargin: z.number().optional(),
+    // M8-J: marks a certified dieline delivery (svg) instead of a raster job.
+    dieline: z.boolean().optional(),
   }).optional(),
 });
 
@@ -160,6 +162,15 @@ export class DesignController {
     const body = exportDesignSchema.parse(request.body);
     
     const result = await designService.exportDesign(designId, user.userId, body);
+
+    // M8-J: certified dieline deliveries are synchronous receipts (200); raster
+    // formats return an accepted-job (202).
+    if (body.format === 'svg') {
+      return reply.code(200).send({
+        success: true,
+        data: result,
+      });
+    }
 
     return reply.code(202).send({
       success: true,

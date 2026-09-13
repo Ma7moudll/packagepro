@@ -6,6 +6,8 @@ import { fileUploadService } from '../../services/file-upload/upload.service';
 import { DesignLifecycleService, DesignLifecycleState } from '../../services/design-lifecycle/design-lifecycle.service';
 import { isDesignOwner } from '../../middleware/auth.middleware';
 import { enqueueExport, ExportJobData } from '../../workers/export-queue/export.worker';
+import { certifiedDielineReceipt } from './dieline-delivery';
+import { prePressCheckService } from '../../services/pre-press-checker/prepress.service';
 
 export interface CreateDesignSessionData {
   orderId?: string;
@@ -108,6 +110,7 @@ export class DesignService {
     if (design) {
       const session: any = {
         sessionId,
+        designId: design.id,
         orderId: design.orderId,
         name: design.name,
         description: design.description,
@@ -407,11 +410,12 @@ export class DesignService {
     designId: string,
     userId: string,
     options: {
-      format: 'png' | 'pdf' | 'ai' | 'eps';
+      format: 'png' | 'pdf' | 'ai' | 'eps' | 'svg';
       options?: {
         dpi?: number;
         colorMode?: 'rgb' | 'cmyk';
         bleedMargin?: number;
+        dieline?: boolean;
       };
     }
   ): Promise<any> {
@@ -431,6 +435,24 @@ export class DesignService {
         400,
         `Cannot export design in ${currentState} status. Only DRAFT and APPROVED designs can be exported.`
       );
+    }
+
+    // M8-J: certified dieline delivery is synchronous — the geometry lives in the
+    // frontend canonical pipeline (resolveDieline -> serializeSVG), so the server
+    // returns an explicit delivery receipt grounded in the persisted M8-I result
+    // and the design lifecycle, never a fabricated artifact. Raster/composite
+    // formats keep the async job queue below.
+    if (options.format === 'svg') {
+      const boxType = (design.designData as any)?.manifest?.product?.boxType ?? (design.designData as any)?.product?.boxType;
+      const prepress = design.orderId
+        ? await prePressCheckService.getPrePressResults(design.orderId)
+        : null;
+      return certifiedDielineReceipt({
+        orderId: design.orderId ?? null,
+        designUpdatedAt: design.updatedAt,
+        prepress,
+        boxType,
+      });
     }
 
     // Enqueue export job

@@ -46,4 +46,15 @@ export const designsApi = {
 
   addComment: (id: string, comment: { elementRef?: string; commentText: string; commentType?: string }) =>
     apiPost<unknown>(`/designs/${id}/review/comment`, comment),
+
+  // M8-J: certified dieline delivery receipt (synchronous, corroborating record).
+  exportCertifiedDieline: (id: string) =>
+    apiPost<unknown>(`/designs/${id}/export`, {
+      format: 'svg',
+      options: { dieline: true },
+    }),
+
+  // M8-I/M8-J: persisted prepress certification result for the linked order.
+  getPrePressResults: (orderId: string) =>
+    apiGet<unknown>(`/orders/${orderId}/prepress-results`),
 }

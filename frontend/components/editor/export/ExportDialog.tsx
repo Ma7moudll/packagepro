@@ -1,21 +1,31 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
-import { Download, Loader2 } from "lucide-react"
+import { Download, Loader2, BadgeCheck, ShieldAlert, RefreshCw } from "lucide-react"
 import { exportDesign, ExportOptions } from "@/lib/editor/services/export"
 import { useLanguage } from "@/providers/language-provider"
 import { generateAI, generateEPS, downloadBlob } from "@/lib/editor/services/vector-export"
+import { CertifiedExportProvider, useCertifiedExport } from "./certified-export-context"
 
 export function ExportDialog() {
+  return (
+    <CertifiedExportProvider>
+      <ExportDialogInner />
+    </CertifiedExportProvider>
+  )
+}
+
+function ExportDialogInner() {
   const { language } = useLanguage()
   const [open, setOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const certified = useCertifiedExport()
   const [options, setOptions] = useState<Partial<ExportOptions>>({
     format: "pdf",
     resolution: 300,
@@ -26,6 +36,14 @@ export function ExportDialog() {
     includeDieLines: false,
     flattenLayers: true,
   })
+
+  useEffect(() => {
+    if (open && certified.status === "idle") {
+      certified.refresh()
+    }
+  }, [open, certified])
+
+  const t = (en: string, ar: string) => (language === "ar" ? ar : en)
 
   const handleExport = async () => {
     setExporting(true)
@@ -84,8 +102,67 @@ export function ExportDialog() {
           <DialogTitle>{language === "ar" ? "تصدير التصميم" : "Export Design"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
+          <div className="rounded-lg border p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BadgeCheck className="h-4 w-4 text-emerald-600" />
+                <span className="font-medium">
+                  {t("Certified Dieline", "مخطط القص المُعتمد")}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => certified.refresh()}
+                disabled={certified.status === "loading"}
+                title={t("Re-check", "إعادة الفحص")}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Vector die-cut outline (mm) delivered only under an active prepress certification.",
+                "مخطط القص المتجهي (مم) يُسلَّم فقط بموجب شهادة ما قبل الطباعة النشطة."
+              )}
+            </p>
+            {certified.status === "loading" ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t("Checking certification…", "جارٍ التحقق من الشهادة…")}
+              </div>
+            ) : certified.delivery?.status === "delivered" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => certified.downloadCertified()}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {t("Download", "تنزيل")} {certified.delivery.fileName}
+              </Button>
+            ) : (
+              <div className="flex items-start gap-2 rounded-md bg-amber-50 p-2 text-xs text-amber-900">
+                <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-medium">{t("Not certified", "غير مُعتمد")}</p>
+                  <p>
+                    {certified.delivery?.status === "blocked_certification"
+                      ? certified.delivery.certification.reason
+                      : certified.delivery?.status === "unavailable"
+                        ? certified.delivery.reason
+                        : t(
+                            "Run the prepress check to certify this delivery.",
+                            "قم بتشغيل فحص ما قبل الطباعة لاعتماد هذا التسليم."
+                          )}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div>
-            <Label>{language === "ar" ? "التنسيق" : "Format"}</Label>
+            <Label>{t("Format", "التنسيق")}</Label>
             <Select
               value={options.format}
               onValueChange={(v: "pdf" | "png" | "jpg" | "svg" | "ai" | "eps") =>
