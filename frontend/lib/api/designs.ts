@@ -1,8 +1,28 @@
 import { apiGet, apiPost } from './client'
+import type { DesignFile } from '@shared/types'
+
+export interface DesignRecord {
+  id: string
+  sessionId?: string | null
+  orderId?: string | null
+  ownerId?: string | null
+  name?: string | null
+  description?: string | null
+  status?: string
+  lifecycleStatus?: string
+  productId?: string | null
+  variantId?: string | null
+  sku?: string | null
+  designConfig?: Record<string, unknown> | null
+  files?: DesignFile[]
+  order?: { id: string; orderNumber: string; status?: string } | null
+  createdAt?: string
+  updatedAt?: string
+}
 
 export const designsApi = {
   list: () =>
-    apiGet<unknown[]>('/designs'),
+    apiGet<DesignRecord[]>('/designs'),
 
   createSession: (data?: { orderId?: string; name?: string; description?: string }) =>
     apiPost<unknown>('/designs/session', data),
@@ -21,7 +41,7 @@ export const designsApi = {
   }) => apiPost<unknown>('/designs/save', data),
 
   getById: (id: string) =>
-    apiGet<unknown>(`/designs/${id}`),
+    apiGet<DesignRecord>(`/designs/${id}`),
 
   getFiles: (id: string) =>
     apiGet<unknown[]>(`/designs/${id}/files`),

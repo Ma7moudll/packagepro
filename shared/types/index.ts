@@ -28,6 +28,35 @@ export type OrderStatus =
 export type PaymentStatus = 'pending' | 'requires_payment_method' | 'requires_confirmation' | 'processing' | 'succeeded' | 'failed' | 'refunded'
 export type PaymentMethod = 'stripe' | 'paypal' | 'cod'
 
+export interface DesignFile {
+  id: string
+  designId: string
+  fileType:
+    | 'logo'
+    | 'preview'
+    | 'print_file'
+    | 'dieline'
+    | 'proof'
+    | 'export'
+  fileName: string
+  fileUrl: string
+  fileSize?: number | null
+  mimeType?: string | null
+  metadata?: Record<string, unknown> | null
+  createdAt?: string
+}
+
+export interface Design {
+  id: string
+  sessionId?: string | null
+  name?: string
+  status?: string
+  files?: DesignFile[]
+  order?: Order | null
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface Order {
   id: string
   orderNumber: string
@@ -44,8 +73,16 @@ export interface Order {
   currency: string
   notes?: string
   designSessionId?: string
+  /** Linked design + persisted files (preview/print/proof) from getOrder. */
+  design?: Design | null
   trackingNumber?: string
   invoiceId?: string
+  /** Backend authoritative field name — BE Prisma returns `shippingCost`. */
+  shippingCost?: number
+  /** Shipment projection included by getOrder and getCustomerOrders. */
+  shipment?: Shipment
+  /** Payment relation included on order reads (serialized by the backend). */
+  payment?: { currency?: string; status?: string; amount?: number } | null
   createdAt: string
   updatedAt: string
 }
@@ -56,10 +93,18 @@ export interface OrderItem {
   quantity: number
   dimensions: Dimensions
   materialCode: string
+  /** Backend legacy column name (`material`) mirrored for serialization fidelity. */
+  material?: string | null
   color?: string
   finish?: string
   unitPrice: number
   totalPrice: number
+  // Traceability: catalog + design references persisted on the order line.
+  productId?: string | null
+  variantId?: string | null
+  sku?: string | null
+  config?: Record<string, unknown> | null
+  designId?: string | null
 }
 
 export interface ShippingAddress {
@@ -229,12 +274,32 @@ export interface ShippingRate {
 export interface Shipment {
   id: string
   orderId: string
-  trackingNumber: string
-  carrier: string
-  labelUrl: string
-  trackingUrl: string
-  status: 'pending' | 'picked_up' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'failed'
-  estimatedDelivery: string
+  trackingNumber?: string
+  carrier?: string
+  labelUrl?: string
+  trackingUrl?: string
+  /** Full status union covering backend ShipmentStatus enum + real backend state machine. */
+  status:
+    | "created"
+    | "label_generated"
+    | "pending"
+    | "processing"
+    | "picked_up"
+    | "shipped"
+    | "in_transit"
+    | "out_for_delivery"
+    | "delivered"
+    | "failed"
+  estimatedDelivery?: string
+  /** Backend field name for estimated delivery datetime. */
+  estimatedDeliveryDate?: string | null
+  /** DHL-specific tracking number (distinct from the universal trackingNumber). */
+  dhlTrackingNumber?: string | null
+  /** Remote tracking events from carrier API — shape is opaque JSON. */
+  trackingEvents?: unknown
+  actualDeliveryDate?: string | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 export enum DesignLifecycle {

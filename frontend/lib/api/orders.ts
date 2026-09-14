@@ -1,4 +1,6 @@
 import { apiGet, apiPost, apiPatch } from './client'
+import { cartApi } from './cart'
+import { buildReorderLines } from './reorder'
 import type { Order, CreateOrderRequest, CreateOrderResponse } from '@shared/types'
 
 export const ordersApi = {
@@ -36,4 +38,15 @@ export const ordersApi = {
 
   getFinancialSummary: (id: string) =>
     apiGet<unknown>(`/orders/${id}/financial-summary`),
+
+  /**
+   * One-click reorder (P9): rebuild cart lines from a past order using the
+   * real AddCartItemRequest contract.
+   */
+  reorder: async (order: Order) => {
+    for (const line of buildReorderLines(order)) {
+      await cartApi.addItem(line)
+    }
+    return true
+  },
 }

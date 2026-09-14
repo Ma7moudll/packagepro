@@ -13,6 +13,7 @@ import {
   Star,
   LogOut,
   ChevronRight,
+  Receipt,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { NotificationBell } from "@/components/notifications/notification-bell"
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", icon: LayoutDashboard, labelEn: "Dashboard", labelAr: "لوحة التحكم" },
   { href: "/orders", icon: Package, labelEn: "Orders", labelAr: "الطلبات" },
   { href: "/designs", icon: Palette, labelEn: "Designs", labelAr: "التصاميم" },
+  { href: "/billing", icon: Receipt, labelEn: "Billing", labelAr: "الفواتير" },
   { href: "/profile", icon: User, labelEn: "Profile", labelAr: "الملف الشخصي" },
   { href: "/reviews", icon: Star, labelEn: "Reviews", labelAr: "التقييمات" },
 ]

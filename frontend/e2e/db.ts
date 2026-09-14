@@ -194,6 +194,216 @@ export async function findCartItemsByDesignId(designId: string): Promise<CartIte
   )
 }
 
+/* ── Phase 2 approval / billing fixtures ─────────────────────────── */
+
+export async function findCustomerByEmail(email: string): Promise<{ id: string; userId: string } | null> {
+  return dbSingle<{ id: string; userId: string }>(
+    `SELECT c.id, c."userId"
+     FROM "customers" c
+     INNER JOIN "users" u ON u.id = c."userId"
+     WHERE u.email = $1`,
+    [email]
+  )
+}
+
+export interface OrderFixture {
+  orderId: string
+  orderNumber: string
+  designId: string
+  approvalToken: string
+}
+
+/**
+ * Seed a disposable order for the Phase 2 customer-experience E2E flows.
+ * Inserts Order (+ item), optional Design + proof/preview files, optional
+ * Payment's captured row, and an optional Shipment. Deletes on cleanup via
+ * the Order→Payment/Shipment/Item/Design ON DELETE CASCADE.
+ */
+export async function createOrderFixture(opts: {
+  customerId: string
+  orderNumber: string
+  status: string
+  withDesign?: boolean
+  withProofFiles?: boolean
+  withPayment?: boolean
+  withShipment?: boolean
+  approvalToken?: string
+}): Promise<OrderFixture> {
+  const { randomUUID } = require_("crypto")
+  const orderId = randomUUID()
+  const itemId = randomUUID()
+  const orderNumber = opts.orderNumber
+
+  await dbQuery(
+    `INSERT INTO "orders"
+       ("id", "customerId", "orderNumber", "status", "subtotal", "tax", "shippingCost", "total",
+        "shippingAddress", "shippingName", "shippingPhone", "shippingEmail",
+        "metadata", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, $4::"OrderStatus", 120.00, 0.00, 15.00, 135.00,
+        $5::jsonb, 'QA Tester', '+971500000000', $6,
+        '{}'::jsonb, now(), now())`,
+    [
+      orderId,
+      opts.customerId,
+      orderNumber,
+      opts.status,
+      JSON.stringify({
+        firstName: 'QA',
+        lastName: 'Tester',
+        street: '123 Test Street',
+        city: 'Dubai',
+        state: null,
+        postalCode: '00000',
+        country: 'AE',
+      }),
+      "qa-tester@packagepro.test",
+    ]
+  )
+
+  await dbQuery(
+    `INSERT INTO "order_items"
+       ("id", "orderId", "productType", "quantity", "dimensions", "material", "unitPrice", "totalPrice",
+        "createdAt", "updatedAt")
+     VALUES ($1, $2, 'box', 100, $3::jsonb, 'cardboard', 1.20, 120.00, now(), now())`,
+    [itemId, orderId, JSON.stringify({ length: 23, width: 15, height: 5, unit: 'cm' })]
+  )
+
+  let designId = ""
+  if (opts.withDesign) {
+    designId = randomUUID()
+    await dbQuery(
+      `INSERT INTO "designs"
+         ("id", "orderId", "name", "status", "lifecycleStatus", "designData", "designConfig", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, 'saved', 'DRAFT'::"DesignLifecycleStatus", $4::jsonb, $5::jsonb, now(), now())`,
+      [
+        designId,
+        orderId,
+        `QA ${opts.orderNumber}`,
+        JSON.stringify({ schemaVersion: 2, layers: [], provenance: { source: 'e2e' } }),
+        JSON.stringify({ printCoverage: 10, finish: 'matte' }),
+      ]
+    )
+
+    if (opts.withProofFiles) {
+      for (const file of [
+        { type: 'preview', name: 'preview.png', url: '/qa-assets/preview.png', mime: 'image/png', size: 1024 },
+        { type: 'proof', name: 'proof.pdf', url: '/qa-assets/proof.pdf', mime: 'application/pdf', size: 2048 },
+      ]) {
+        await dbQuery(
+          `INSERT INTO "design_files" ("id", "designId", "fileType", "fileName", "fileUrl", "fileSize", "mimeType", "createdAt")
+           VALUES ($1, $2, $3, $4, $5, $6, $7, now())`,
+          [randomUUID(), designId, file.type, file.name, file.url, file.size, file.mime]
+        )
+      }
+    }
+  }
+
+  if (opts.withPayment) {
+    await dbQuery(
+      `INSERT INTO "payments" ("id", "orderId", "amount", "currency", "status", "capturedAt", "createdAt", "updatedAt")
+       VALUES ($1, $2, 135.00, 'USD', 'captured'::"PaymentStatus", now(), now(), now())`,
+      [randomUUID(), orderId]
+    )
+  }
+
+  if (opts.withShipment) {
+    await dbQuery(
+      `INSERT INTO "shipments"
+         ("id", "orderId", "dhlTrackingNumber", "status", "estimatedDeliveryDate", "trackingEvents", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, 'delivered'::"ShipmentStatus", now() + interval '3 days',
+          $4::jsonb, now(), now())`,
+      [
+        randomUUID(),
+        orderId,
+        `JDQA${orderNumber.replace(/[^A-Z0-9]/gi, '').slice(-9)}`,
+        JSON.stringify([
+          { status: 'picked_up', description: 'Package picked up by DHL', timestamp: new Date().toISOString() },
+        ]),
+      ]
+    )
+  }
+
+  let approvalToken = ""
+  if (opts.approvalToken) {
+    approvalToken = opts.approvalToken
+    await redisSetJSON(`approval:token:${approvalToken}`, {
+      orderId,
+      createdAt: new Date().toISOString(),
+    })
+  }
+
+  return { orderId, orderNumber, designId, approvalToken }
+}
+
+export async function deleteOrderFixture(orderId: string): Promise<void> {
+  await dbQuery(`DELETE FROM "orders" WHERE "id" = $1`, [orderId])
+}
+
+/* ── Redis seams (backend ioredis instance, same URL as server) ────── */
+
+let redisClient: InstanceType<any> | null = null
+
+function getRedis(): InstanceType<any> | null {
+  if (redisClient) return redisClient
+  const dotEnv = loadDotenv(path.join(backendDir, ".env"))
+  const url = dotEnv.REDIS_URL
+  if (!url) return null
+  const Redis = require_(require_.resolve("ioredis"))
+  redisClient = new Redis(url, {
+    lazyConnect: true,
+    maxRetriesPerRequest: 0,
+    enableOfflineQueue: false,
+    connectTimeout: 2000,
+    retryStrategy: () => null,
+  })
+  return redisClient
+}
+
+export async function redisSetJSON(key: string, value: unknown): Promise<void> {
+  const client = getRedis()
+  if (!client) return
+  if (client.status === "wait") {
+    try {
+      await client.connect()
+    } catch {
+      return
+    }
+  }
+  try {
+    await client.set(key, JSON.stringify(value))
+  } catch {
+    /* Redis unavailable — approval-token flows are skipped by the caller */
+  }
+}
+
+export async function redisDel(key: string): Promise<void> {
+  const client = getRedis()
+  if (!client) return
+  if (client.status === "wait") {
+    try {
+      await client.connect()
+    } catch {
+      return
+    }
+  }
+  try {
+    await client.del(key)
+  } catch {
+    /* Redis unavailable */
+  }
+}
+
+export async function closeRedis(): Promise<void> {
+  if (redisClient) {
+    try {
+      await redisClient.quit()
+    } catch {
+      /* ignore */
+    }
+    redisClient = null
+  }
+}
+
 /* ── Cleanup ────────────────────────────────────────────────────── */
 
 export async function closeDb(): Promise<void> {

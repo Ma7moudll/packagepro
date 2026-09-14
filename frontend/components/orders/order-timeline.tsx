@@ -8,12 +8,14 @@ import type { OrderStatus } from "@shared/types"
 const STEPS: { status: OrderStatus; icon: typeof Circle; labelEn: string; labelAr: string }[] = [
   { status: "pending_review", icon: Clock, labelEn: "Pending Review", labelAr: "قيد المراجعة" },
   { status: "awaiting_approval", icon: CheckCircle2, labelEn: "Awaiting Approval", labelAr: "بانتظار الموافقة" },
+  { status: "ready_for_routing", icon: Settings, labelEn: "Routing to Vendor", labelAr: "التوجيه للمورد" },
   { status: "vendor_confirmed", icon: Package, labelEn: "Vendor Confirmed", labelAr: "تم تأكيد المورد" },
   { status: "in_production", icon: Settings, labelEn: "In Production", labelAr: "قيد الإنتاج" },
   { status: "quality_check", icon: AlertCircle, labelEn: "Quality Check", labelAr: "فحص الجودة" },
   { status: "ready_to_ship", icon: Package, labelEn: "Ready to Ship", labelAr: "جاهز للشحن" },
   { status: "shipped", icon: Truck, labelEn: "Shipped", labelAr: "تم الشحن" },
   { status: "delivered", icon: Check, labelEn: "Delivered", labelAr: "تم التوصيل" },
+  { status: "completed", icon: CheckCircle2, labelEn: "Completed", labelAr: "مكتمل" },
 ]
 
 const STATUS_ORDER: Record<OrderStatus, number> = {

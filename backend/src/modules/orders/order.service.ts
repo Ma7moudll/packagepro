@@ -5,6 +5,42 @@ import { pricingService } from '../../services/pricing-engine/pricing.service';
 import { notificationService } from '../notifications/notifications.service';
 import { randomUUID } from 'crypto';
 
+/**
+ * Map Prisma Payment.status → shared PaymentStatus union the FE renders.
+ * 'captured' (webhook-confirmed Stripe capture) is surfaced as 'succeeded'
+ * so the invoice/billing gates (`isPaid`) work against the real API.
+ */
+const PAYMENT_STATUS_MAP: Record<string, string> = {
+  pending: 'pending',
+  captured: 'succeeded',
+  failed: 'failed',
+  refunded: 'refunded',
+};
+
+/**
+ * Normalize a raw Prisma Order into the shared Order contract consumed by
+ * the customer portal. Prisma Order has no paymentStatus/paymentMethod/
+ * currency/shipping/trackingNumber columns — those are projections over
+ * the payment + shipment relations. Decimals serialize to strings via
+ * JSON, which the FE projection helpers coerce back to numbers.
+ */
+export function serializeOrder<T extends Record<string, any>>(order: T): T {
+  const rawPaymentStatus = order.payment?.status as string | undefined;
+  return {
+    ...order,
+    paymentStatus: rawPaymentStatus
+      ? (PAYMENT_STATUS_MAP[rawPaymentStatus] ?? rawPaymentStatus)
+      : 'pending',
+    paymentMethod: 'stripe',
+    currency: order.payment?.currency || 'USD',
+    shipping: order.shippingCost ?? 0,
+    trackingNumber:
+      order.shipment?.dhlTrackingNumber ??
+      order.shipment?.trackingNumber ??
+      null,
+  };
+}
+
 export interface CreateOrderData {
   customerId: string;
   items: Array<{
@@ -197,7 +233,7 @@ export class OrderService {
       });
     }
 
-    return order;
+    return serializeOrder(order);
   }
 
   /**
@@ -253,13 +289,13 @@ export class OrderService {
         order.customer.user.id === userId ||
         order.purchaseOrder?.vendor.userId === userId
       ) {
-        return order;
+        return serializeOrder(order);
       }
 
       throw new ValidationError('Access denied');
     }
 
-    return order;
+    return serializeOrder(order);
   }
 
   /**
@@ -294,13 +330,14 @@ export class OrderService {
               dhlTrackingNumber: true,
             },
           },
+          payment: true,
         },
       }),
       prisma.order.count({ where: { customerId } }),
     ]);
 
     return {
-      data: orders,
+      data: orders.map(serializeOrder),
       pagination: {
         page,
         limit,
@@ -370,7 +407,7 @@ export class OrderService {
       }
     }
 
-    return updatedOrder;
+    return serializeOrder(updatedOrder);
   }
 }
 

@@ -62,3 +62,8 @@ backend/database/backups/*.sql.gz
 *.bak
 *.old
 
+
+# Playwright / QA artifacts
+playwright-report/
+test-results/
+.qa-tmp/
