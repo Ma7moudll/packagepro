@@ -1,19 +1,19 @@
 # Quick Start Guide - PackagePro
 
-## خطوات التشغيل السريع
+## Quick Setup Steps
 
-### 1. تثبيت الـ Dependencies
+### 1. Install Dependencies
 
 ```bash
 cd backend
 npm install
 ```
 
-### 2. إعداد قاعدة البيانات
+### 2. Set Up the Database
 
-#### خيار 1: استخدام SQLite (للاختبار السريع)
+#### Option 1: Use SQLite (for quick testing)
 
-عدّل `prisma/schema.prisma`:
+Edit `prisma/schema.prisma`:
 ```prisma
 datasource db {
   provider = "sqlite"
@@ -21,41 +21,41 @@ datasource db {
 }
 ```
 
-ثم قم بـ:
+Then run:
 ```bash
 npm run prisma:generate
 npm run prisma:migrate
 npm run prisma:seed
 ```
 
-#### خيار 2: استخدام PostgreSQL (للإنتاج)
+#### Option 2: Use PostgreSQL (for production)
 
-1. تأكد من تثبيت PostgreSQL
-2. أنشئ قاعدة بيانات:
+1. Ensure PostgreSQL is installed
+2. Create a database:
 ```sql
 CREATE DATABASE packagepro;
 ```
 
-3. حدّث `.env`:
+3. Update `.env`:
 ```
 DATABASE_URL="postgresql://user:password@localhost:5432/packagepro?schema=public"
 ```
 
-4. قم بـ:
+4. Run:
 ```bash
 npm run prisma:generate
 npm run prisma:migrate
 npm run prisma:seed
 ```
 
-### 3. إعداد Redis (اختياري للتجربة)
+### 3. Set Up Redis (optional for testing)
 
-Redis اختياري للتجربة. النظام سيعمل بدون Redis ولكن بعض الميزات قد لا تعمل:
+Redis is optional for testing. The system will work without Redis but some features may not function:
 - Sessions
 - Background Jobs
 - Caching
 
-لتثبيت Redis:
+To install Redis:
 ```bash
 # macOS
 brew install redis
@@ -66,36 +66,36 @@ sudo apt-get install redis-server
 sudo systemctl start redis
 ```
 
-### 4. إعداد ملف .env
+### 4. Configure the .env File
 
-انسخ `env.example` إلى `.env`:
+Copy `env.example` to `.env`:
 ```bash
 cp env.example .env
 ```
 
-عدّل القيم المطلوبة (يمكنك ترك معظمها فارغة للتجربة).
+Update the required values (you can leave most of them empty for testing).
 
-### 5. تشغيل الخادم
+### 5. Start the Server
 
 ```bash
 npm run dev
 ```
 
-الخادم سيعمل على: `http://localhost:3000`
+The server will run at: `http://localhost:3000`
 
-### 6. اختبار النظام
+### 6. Test the System
 
-#### اختبار Health Check:
+#### Health Check:
 ```bash
 curl http://localhost:3000/health
 ```
 
-#### اختبار API:
+#### Test API:
 ```bash
 curl http://localhost:3000/api
 ```
 
-#### تسجيل حساب جديد:
+#### Register a New Account:
 ```bash
 curl -X POST http://localhost:3000/api/auth/register \
   -H "Content-Type: application/json" \
@@ -107,7 +107,7 @@ curl -X POST http://localhost:3000/api/auth/register \
   }'
 ```
 
-#### تسجيل الدخول:
+#### Login:
 ```bash
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
@@ -117,7 +117,7 @@ curl -X POST http://localhost:3000/api/auth/login \
   }'
 ```
 
-### 7. تشغيل Frontend (اختياري)
+### 7. Start Frontend (optional)
 
 ```bash
 cd ../frontend
@@ -125,22 +125,22 @@ npm install
 npm run dev
 ```
 
-Frontend سيعمل على: `http://localhost:3001`
+Frontend will run at: `http://localhost:3001`
 
-## ملاحظات
+## Notes
 
-- بعض الميزات تحتاج إلى خدمات خارجية (Stripe, DHL, SendGrid) - يمكنك تركها فارغة للتجربة
-- Redis اختياري - النظام سيعمل بدونها
-- للتجربة السريعة، استخدم SQLite بدلاً من PostgreSQL
+- Some features require external services (Stripe, DHL, SendGrid) - you can leave them empty for testing
+- Redis is optional - the system will work without it
+- For quick testing, use SQLite instead of PostgreSQL
 
-## المشاكل الشائعة
+## Common Issues
 
-### خطأ في الاتصال بقاعدة البيانات
-- تأكد من أن PostgreSQL يعمل أو استخدم SQLite
-- تحقق من `DATABASE_URL` في `.env`
+### Database Connection Error
+- Ensure PostgreSQL is running or use SQLite
+- Check `DATABASE_URL` in `.env`
 
-### خطأ في Redis
-- يمكنك إيقاف Redis - النظام سيعمل بدونها (بعض الميزات قد لا تعمل)
+### Redis Error
+- You can stop Redis - the system will work without it (some features may not function)
 
-### خطأ في Port 3000
-- غيّر `PORT` في `.env` إلى رقم آخر
+### Port 3000 Error
+- Change `PORT` in `.env` to a different number

@@ -1,8 +1,8 @@
-# 🏗️ معمارية PackagePro - Architecture Documentation
+# 🏗️ PackagePro Architecture Documentation
 
-## نظرة عامة
+## Overview
 
-PackagePro هو نظام Full-Stack لإدارة الطلبات والتغليف المخصص، مبني على معمارية Microservices-ready مع فصل واضح بين Frontend و Backend.
+PackagePro is a Full-Stack system for order management and custom packaging, built on a Microservices-ready architecture with a clear separation between the Frontend and Backend.
 
 ---
 
@@ -539,19 +539,19 @@ Monitoring Dashboard
 
 ### Backend Patterns
 
-- **Module Pattern**: تنظيم الكود في وحدات منفصلة
-- **Service Layer**: فصل Business Logic عن Controllers
-- **Repository Pattern**: تجريد Database Access
-- **Factory Pattern**: إنشاء Objects معقدة
-- **Strategy Pattern**: خوارزميات قابلة للتبديل
+- **Module Pattern**: Organize code into separate modules
+- **Service Layer**: Separate business logic from controllers
+- **Repository Pattern**: Abstract database access
+- **Factory Pattern**: Create complex objects
+- **Strategy Pattern**: Interchangeable algorithms
 
 ### Frontend Patterns
 
-- **Component Composition**: بناء UI من مكونات صغيرة
-- **Custom Hooks**: إعادة استخدام Logic
-- **Render Props**: مشاركة Code بين Components
-- **Higher-Order Components**: تحسين Components
-- **State Management**: Zustand للحالة العامة
+- **Component Composition**: Build UI from small components
+- **Custom Hooks**: Reuse logic
+- **Render Props**: Share code between components
+- **Higher-Order Components**: Enhance components
+- **State Management**: Zustand for global state
 
 ---
 
@@ -592,4 +592,4 @@ Monitoring Dashboard
 
 ---
 
-**تم التحديث:** 24 ديسمبر 2025
+**Last updated:** December 24, 2025

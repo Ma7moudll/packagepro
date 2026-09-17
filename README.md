@@ -1,6 +1,6 @@
 # PackagePro
 
-**PackagePro — حلول التغليف المخصصة | Custom Packaging Marketplace.**
+**PackagePro — Custom Packaging Marketplace.**
 
 A full-stack packaging marketplace: a **custom packaging marketplace** that
 connects factories with traders — catalog + search, custom design editor,
@@ -9,7 +9,6 @@ DHL fulfilment, settlements and analytics — implemented as a monorepo with a
 Fastify + PostgreSQL backend and a Next.js frontend.
 
 [![CI](https://github.com/Ma7moudll/packagepro/workflows/CI/badge.svg)](https://github.com/Ma7moudll/packagepro/actions)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org/)
 [![Fastify](https://img.shields.io/badge/Fastify-4-green)](https://www.fastify.io/)
@@ -24,18 +23,18 @@ Fastify + PostgreSQL backend and a Next.js frontend.
 
 ## 🚀 Quick Start
 
-**الطريقة الأسرع للبدء:**
+**This is the fastest way to get started:**
 
 ```bash
-# 1. Clone المشروع
+# 1. Clone the project
 git clone https://github.com/Ma7moudll/packagepro.git
 cd packagepro
 
-# 2. تشغيل Setup Script
+# 2. Run the setup script
 chmod +x scripts/setup.sh
 ./scripts/setup.sh
 
-# 3. تشغيل المشروع
+# 3. Run the project
 # Terminal 1: Backend
 cd backend && npm run dev
 
@@ -43,7 +42,7 @@ cd backend && npm run dev
 cd frontend && npm run dev
 ```
 
-**الوصول إلى التطبيق:**
+**App access:**
 - Frontend: http://localhost:3001
 - Backend API: http://localhost:3000
 - API Docs: http://localhost:3000/api
@@ -51,14 +50,14 @@ cd frontend && npm run dev
 
 ## 📚 Documentation
 
-- 📊 **[PROJECT_REVIEW.md](docs/PROJECT_REVIEW.md)** - مراجعة شاملة للمشروع
-- 📋 **[ACTION_PLAN.md](docs/guides/ACTION_PLAN.md)** - خطة العمل التنفيذية
-- ⚡ **[QUICK_SUMMARY.md](docs/QUICK_SUMMARY.md)** - ملخص سريع
-- 🧪 **[TESTING_GUIDE.md](docs/guides/TESTING_GUIDE.md)** - دليل الاختبارات
-- 🚀 **[DEPLOYMENT_GUIDE.md](docs/guides/DEPLOYMENT_GUIDE.md)** - دليل النشر
-- 🤝 **[CONTRIBUTING.md](CONTRIBUTING.md)** - دليل المساهمة
-- 🏗️ **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - توثيق المعمارية
-- ✅ **[COMPLETION_SUMMARY.md](docs/guides/COMPLETION_SUMMARY.md)** - ملخص الإنجازات
+- 📊 **[PROJECT_REVIEW.md](docs/PROJECT_REVIEW.md)** - Comprehensive project review
+- 📋 **[ACTION_PLAN.md](docs/guides/ACTION_PLAN.md)** - Action plan
+- ⚡ **[QUICK_SUMMARY.md](docs/QUICK_SUMMARY.md)** - Quick summary
+- 🧪 **[TESTING_GUIDE.md](docs/guides/TESTING_GUIDE.md)** - Testing guide
+- 🚀 **[DEPLOYMENT_GUIDE.md](docs/guides/DEPLOYMENT_GUIDE.md)** - Deployment guide
+- 🤝 **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guide
+- 🏗️ **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Architecture documentation
+- ✅ **[COMPLETION_SUMMARY.md](docs/guides/COMPLETION_SUMMARY.md)** - Completion summary
 
 ## Project Structure
 
@@ -221,7 +220,3 @@ See `backend/env.example` for all required environment variables
   environment provisioning are the operator's responsibility.
 - Backend tests run with Vitest; both packages expose `npm run lint`.
 - The FAQ/statistics on the landing page show seed figures until wired to the live API.
-
-## License
-
-MIT — see [LICENSE](LICENSE).

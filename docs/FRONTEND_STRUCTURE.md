@@ -1,66 +1,66 @@
-# 🎨 هيكلة Frontend الجديدة
+# 🎨 New Frontend Structure
 
-تم إعادة تنظيم مجلد `frontend` لتحسين القابلية للصيانة والتوسع.
+The `frontend` folder was reorganized to improve maintainability and scalability.
 
-## 📁 الهيكل العام
+## 📁 Overall Structure
 
 ```
 frontend/
 ├── app/                        # Next.js App Router Pages
-│   ├── (auth)/                 # صفحات المصادقة (Login, Signup)
-│   ├── (marketing)/            # الصفحات التسويقية (About, Contact, etc.)
-│   ├── (shop)/                 # صفحات المتجر (Products, Cart, Checkout)
-│   ├── (customer)/             # لوحة تحكم العميل (Dashboard, Orders)
-│   ├── (business)/             # صفحات الأعمال (B2B, Wholesale)
-│   ├── admin/                  # لوحة تحكم المسؤول
+│   ├── (auth)/                 # Auth pages (Login, Signup)
+│   ├── (marketing)/            # Marketing pages (About, Contact, etc.)
+│   ├── (shop)/                 # Shop pages (Products, Cart, Checkout)
+│   ├── (customer)/             # Customer dashboard (Dashboard, Orders)
+│   ├── (business)/             # Business pages (B2B, Wholesale)
+│   ├── admin/                  # Admin dashboard
 │   └── api/                    # API Endpoints (Next.js API Routes)
 │
 ├── components/                 # React Components
-│   ├── ui/                     # مكونات واجهة المستخدم الأساسية (Buttons, Inputs)
-│   ├── layout/                 # مكونات تخطيط الصفحة (Navbar, Footer)
-│   ├── features/               # مكونات الميزات المحددة (LiveChat, Analytics)
-│   └── ...                     # مكونات أخرى
+│   ├── ui/                     # Base UI components (Buttons, Inputs)
+│   ├── layout/                 # Page layout components (Navbar, Footer)
+│   ├── features/               # Feature-specific components (LiveChat, Analytics)
+│   └── ...                     # Other components
 │
 ├── providers/                  # Context Providers (Auth, Theme, etc.)
 │
 ├── lib/                        # Utilities & Libraries
-│   ├── api.ts                  # Axios Client الموحد
-│   └── utils.ts                # أدوات مساعدة عامة
+│   ├── api.ts                  # Unified Axios client
+│   └── utils.ts                # General utilities
 │
 ├── store/                      # State Management (Zustand)
-│   └── auth-store.ts           # مخزن حالة المصادقة
+│   └── auth-store.ts           # Auth state store
 │
 ├── hooks/                      # Custom React Hooks
 └── types/                      # TypeScript Types
 ```
 
-## 🚀 التغييرات الرئيسية
+## 🚀 Key Changes
 
-1. **Route Groups**: تم استخدام مجموعات المسارات `(group)` لتنظيم الصفحات منطقياً دون التأثير على URL.
-   - مثال: `frontend/app/(shop)/products` يظهر في المتصفح كـ `/products`.
+1. **Route Groups**: Route groups `(group)` were used to organize pages logically without affecting the URL.
+   - Example: `frontend/app/(shop)/products` appears in the browser as `/products`.
 
-2. **Components Organization**: تم نقل المكونات من `app/components` إلى المجلد الرئيسي `components/` وتقسيمها إلى `layout` و `features`.
+2. **Components Organization**: Components were moved from `app/components` to the main `components/` folder and split into `layout` and `features`.
 
-3. **Providers**: تم تجميع جميع Providers في مجلد `providers/`.
+3. **Providers**: All providers were grouped into the `providers/` folder.
 
 4. **API & State**:
-   - تم إضافة `lib/api.ts` للتعامل مع الطلبات بشكل مركزي.
-   - تم إضافة `store/auth-store.ts` لإدارة حالة المصادقة.
+   - `lib/api.ts` was added for centralized request handling.
+   - `store/auth-store.ts` was added to manage authentication state.
 
-## 💡 كيفية الاستخدام
+## 💡 How to Use
 
-### إضافة صفحة جديدة
-- إذا كانت صفحة عامة: أضفها إلى `(marketing)`.
-- إذا كانت متعلقة بالمتجر: أضفها إلى `(shop)`.
-- إذا كانت لوحة تحكم: أضفها إلى `(customer)`.
+### Adding a New Page
+- If the page is public: add it to `(marketing)`.
+- If it's store-related: add it to `(shop)`.
+- If it's a dashboard: add it to `(customer)`.
 
-### إضافة مكون جديد
-- إذا كان عاماً (زر، حقل إدخال): `components/ui`.
-- إذا كان جزءاً من التخطيط (قائمة جانبية): `components/layout`.
-- إذا كان ميزة مستقلة (شات، خريطة): `components/features`.
+### Adding a New Component
+- If it's generic (button, input field): `components/ui`.
+- If it's part of the layout (sidebar): `components/layout`.
+- If it's a standalone feature (chat, map): `components/features`.
 
-### استدعاء API
-استخدم `api` من `@/lib/api`:
+### Calling the API
+Use `api` from `@/lib/api`:
 
 ```typescript
 import { api } from '@/lib/api';

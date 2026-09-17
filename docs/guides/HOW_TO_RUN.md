@@ -1,35 +1,35 @@
-# كيفية تشغيل PackagePro 🚀
+# How to Run PackagePro 🚀
 
-## ✅ الخطوات السريعة
+## ✅ Quick Steps
 
-### 1. تثبيت Dependencies (تم ✅)
+### 1. Install Dependencies (done ✅)
 ```bash
 cd backend
 npm install
 ```
 
-### 2. توليد Prisma Client (تم ✅)
+### 2. Generate Prisma Client (done ✅)
 ```bash
 npm run prisma:generate
 ```
 
-### 3. تشغيل الخادم 🚀
+### 3. Run the Server 🚀
 
-#### الطريقة 1: باستخدام سكريبت التشغيل
+#### Method 1: Using the startup script
 ```bash
 cd /Users/mac/packagepro
 ./START_SERVER.sh
 ```
 
-#### الطريقة 2: مباشرة
+#### Method 2: Directly
 ```bash
 cd backend
 npm run dev
 ```
 
-### 4. اختبار النظام
+### 4. Test the System
 
-افتح Terminal جديد واختبر:
+Open a new terminal and test:
 
 #### ✅ Health Check:
 ```bash
@@ -58,31 +58,31 @@ curl -X POST http://localhost:3000/api/auth/register \
   }'
 ```
 
-## 📝 ملاحظات
+## 📝 Notes
 
-⚠️ **قاعدة البيانات**: النظام يحتاج قاعدة بيانات. يمكنك:
-- استخدام SQLite للتجربة السريعة (عدّل `schema.prisma`)
-- أو استخدام PostgreSQL للإنتاج
+⚠️ **Database**: The system needs a database. You can:
+- Use SQLite for a quick trial (edit `schema.prisma`)
+- Or use PostgreSQL for production
 
-⚠️ **Redis**: اختياري - النظام سيعمل بدونه
+⚠️ **Redis**: Optional - the system will work without it
 
-⚠️ **الخدمات الخارجية**: Stripe, DHL, SendGrid اختيارية للتجربة
+⚠️ **External services**: Stripe, DHL, and SendGrid are optional for testing
 
-## 🎯 Endpoints المتاحة
+## 🎯 Available Endpoints
 
-بعد تشغيل الخادم، ستجد:
+After starting the server, you will find:
 
 - `GET /health` - Health check
 - `GET /api` - API info
 - `GET /api/pricing/materials` - Materials list
 - `POST /api/auth/register` - Register
 - `POST /api/auth/login` - Login
-- ... وأكثر من 60 endpoint آخر!
+- ... and more than 60 other endpoints!
 
-## 📚 للمزيد من المعلومات
+## 📚 For More Information
 
-- `backend/QUICK_START.md` - دليل التشغيل الكامل
-- `TRY_IT.md` - خطوات التجربة
-- `docs/api/ENDPOINTS.md` - جميع الـ APIs
+- `backend/QUICK_START.md` - The complete startup guide
+- `TRY_IT.md` - The steps to try it out
+- `docs/api/ENDPOINTS.md` - All the APIs
 
-**جاهز للبدء! 🎉**
+**Ready to start! 🎉**

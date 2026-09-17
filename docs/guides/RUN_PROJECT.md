@@ -1,14 +1,14 @@
-# 🚀 كيفية تشغيل المشروع PackagePro
+# 🚀 How to Run the PackagePro Project
 
-## ✅ التحقق النهائي
+## ✅ Final Check
 
 ### Backend Status
-- ✅ يعمل على: `http://localhost:3000`
+- ✅ Running on: `http://localhost:3000`
 - ✅ Health check: `/health`
 - ✅ API: `/api`
 
 ### Frontend Status
-- ✅ يعمل على: `http://localhost:3001`
+- ✅ Running on: `http://localhost:3001`
 - ✅ Home: `/`
 - ✅ Login: `/login`
 - ✅ Register: `/register`
@@ -16,33 +16,33 @@
 
 ---
 
-## 📋 خطوات التشغيل
+## 📋 Steps to Run
 
-### 1. تشغيل Backend
+### 1. Run the Backend
 
 ```bash
 cd backend
-npm install  # إذا لم يتم التثبيت بعد
+npm install  # if not already installed
 npm run dev
 ```
 
-**Backend سيعمل على:** `http://localhost:3000`
+**Backend will run on:** `http://localhost:3000`
 
-### 2. تشغيل Frontend
+### 2. Run the Frontend
 
-**في Terminal جديد:**
+**In a new terminal:**
 
 ```bash
 cd frontend
-npm install  # إذا لم يتم التثبيت بعد
+npm install  # if not already installed
 npm run dev
 ```
 
-**Frontend سيعمل على:** `http://localhost:3001`
+**Frontend will run on:** `http://localhost:3001`
 
 ---
 
-## 🌐 الوصول إلى التطبيق
+## 🌐 Access the Application
 
 ### Backend API
 - **Health Check**: http://localhost:3000/health
@@ -57,14 +57,14 @@ npm run dev
 
 ---
 
-## ✅ التحقق من التشغيل
+## ✅ Verify It's Running
 
-### اختبار Backend:
+### Test the Backend:
 ```bash
 curl http://localhost:3000/health
 ```
 
-يجب أن تحصل على:
+You should get:
 ```json
 {
   "status": "ok",
@@ -73,48 +73,47 @@ curl http://localhost:3000/health
 }
 ```
 
-### اختبار Frontend:
-افتح المتصفح على: http://localhost:3001
+### Test the Frontend:
+Open the browser at: http://localhost:3001
 
-يجب أن ترى صفحة PackagePro الرئيسية.
+You should see the PackagePro home page.
 
 ---
 
-## 🔧 المشاكل المحتملة
+## 🔧 Potential Issues
 
-### Backend لا يعمل:
-1. تحقق من أن PostgreSQL يعمل
-2. تحقق من ملف `.env`
-3. تحقق من logs: `cd backend && npm run dev`
+### Backend is not working:
+1. Make sure PostgreSQL is running
+2. Check the `.env` file
+3. Check the logs: `cd backend && npm run dev`
 
-### Frontend لا يعمل:
-1. تأكد من تثبيت dependencies: `cd frontend && npm install`
-2. تحقق من أن port 3001 متاح
-3. تحقق من logs في Terminal
+### Frontend is not working:
+1. Make sure dependencies are installed: `cd frontend && npm install`
+2. Make sure port 3001 is available
+3. Check the logs in the terminal
 
 ### Port Conflicts:
-- Backend يستخدم port 3000
-- Frontend يستخدم port 3001
-- إذا كان أي من المنافذ مستخدم، غيّر المنفذ في:
+- Backend uses port 3000
+- Frontend uses port 3001
+- If either port is in use, change the port in:
   - Backend: `.env` file (PORT=3000)
   - Frontend: `package.json` scripts
 
 ---
 
-## 📝 ملاحظات
+## 📝 Notes
 
-1. **Redis**: اختياري - النظام يعمل بدونه
-2. **Database**: يحتاج PostgreSQL أو SQLite
-3. **Environment Variables**: راجع `backend/.env.example`
+1. **Redis**: Optional - the system works without it
+2. **Database**: Requires PostgreSQL or SQLite
+3. **Environment Variables**: See `backend/.env.example`
 
 ---
 
-## ✅ الحالة النهائية
+## ✅ Final Status
 
-- ✅ Backend: جاهز ويعمل
-- ✅ Frontend: جاهز ويعمل
-- ✅ جميع الصفحات: متاحة
-- ✅ API Integration: متصل
+- ✅ Backend: Ready and running
+- ✅ Frontend: Ready and running
+- ✅ All pages: Available
+- ✅ API Integration: Connected
 
-**المشروع جاهز للعمل! 🎉**
-
+**The project is ready to work! 🎉**

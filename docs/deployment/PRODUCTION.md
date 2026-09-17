@@ -1,17 +1,17 @@
 # Production Deployment Guide
 
-## المتطلبات الأساسية
+## Prerequisites
 
 - Node.js 20+
 - PostgreSQL 15+
-- Redis (اختياري)
-- Docker & Docker Compose (موصى به)
+- Redis (optional)
+- Docker & Docker Compose (recommended)
 
-## إعداد الإنتاج
+## Production Setup
 
 ### 1. Environment Variables
 
-قم بإنشاء ملف `.env.production`:
+Create a `.env.production` file:
 
 ```bash
 # Database
@@ -21,7 +21,7 @@ DATABASE_URL=postgresql://user:password@host:5432/packagepro?schema=public
 JWT_SECRET=your-super-secret-jwt-key-change-this
 JWT_REFRESH_SECRET=your-super-secret-refresh-key-change-this
 
-# Redis (اختياري)
+# Redis (optional)
 REDIS_URL=redis://localhost:6379
 REDIS_ENABLED=true
 
@@ -57,19 +57,19 @@ AWS_REGION=us-east-1
 # Exchange Rate API
 EXCHANGE_RATE_API_URL=https://api.exchangerate-api.com/v4
 
-# Monitoring (اختياري)
+# Monitoring (optional)
 SENTRY_DSN=your-sentry-dsn
 ```
 
 ### 2. Database Setup
 
-#### باستخدام Docker Compose:
+#### Using Docker Compose:
 
 ```bash
 docker-compose up -d postgres
 ```
 
-#### يدوياً:
+#### Manually:
 
 ```bash
 # Create database
@@ -83,15 +83,15 @@ npm run prisma:migrate deploy
 npm run prisma:seed
 ```
 
-### 3. بناء وتشغيل Backend
+### 3. Build and run the Backend
 
-#### باستخدام Docker:
+#### Using Docker:
 
 ```bash
 docker-compose up -d backend
 ```
 
-#### يدوياً:
+#### Manually:
 
 ```bash
 cd backend
@@ -112,15 +112,15 @@ npm run build
 npm start
 ```
 
-### 4. بناء وتشغيل Frontend
+### 4. Build and run the Frontend
 
-#### باستخدام Docker:
+#### Using Docker:
 
 ```bash
 docker-compose up -d frontend
 ```
 
-#### يدوياً:
+#### Manually:
 
 ```bash
 cd frontend
@@ -135,7 +135,7 @@ npm run build
 npm start
 ```
 
-### 5. استخدام Docker Compose الكامل
+### 5. Using Full Docker Compose
 
 ```bash
 # Build all services
@@ -173,7 +173,7 @@ docker-compose logs -f
 
 ## SSL/HTTPS
 
-استخدم reverse proxy مثل Nginx مع Let's Encrypt:
+Use a reverse proxy such as Nginx with Let's Encrypt:
 
 ```nginx
 server {
@@ -211,7 +211,7 @@ psql -U packagepro packagepro < backup_20241128.sql
 
 ### Automated Backups
 
-استخدم cron job:
+Use a cron job:
 
 ```bash
 0 2 * * * pg_dump -U packagepro packagepro | gzip > /backups/packagepro_$(date +\%Y\%m\%d).sql.gz
@@ -221,25 +221,25 @@ psql -U packagepro packagepro < backup_20241128.sql
 
 ### Horizontal Scaling
 
-- استخدم load balancer (Nginx, AWS ELB)
-- قم بتشغيل عدة instances من Backend
-- استخدم Redis للـ sessions المشتركة
+- Use a load balancer (Nginx, AWS ELB)
+- Run multiple Backend instances
+- Use Redis for shared sessions
 
 ### Database Scaling
 
-- استخدم connection pooling
-- قم بإعداد read replicas للقراءة فقط
-- فكر في sharding للبيانات الكبيرة
+- Use connection pooling
+- Set up read replicas for read-only access
+- Consider sharding for large datasets
 
 ## Security Checklist
 
-- ✅ قم بتغيير جميع secrets في `.env`
-- ✅ قم بتفعيل HTTPS
-- ✅ قم بإعداد firewall
-- ✅ قم بتحديث dependencies بانتظام
-- ✅ قم بإعداد rate limiting
-- ✅ قم بمراجعة logs بانتظام
-- ✅ قم بإعداد monitoring alerts
+- ✅ Change all secrets in `.env`
+- ✅ Enable HTTPS
+- ✅ Set up a firewall
+- ✅ Update dependencies regularly
+- ✅ Set up rate limiting
+- ✅ Review logs regularly
+- ✅ Set up monitoring alerts
 
 ## Troubleshooting
 

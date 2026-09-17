@@ -1,26 +1,26 @@
-# تقرير ضمان الجودة الشامل | Comprehensive QA Report
+# Comprehensive QA Report
 
-**التاريخ:** 10 سبتمبر 2026
-**المنصة:** PackagePro (http://localhost:3001)
-**الخلفية:** http://localhost:3000 (Backend, tsx watch) — Redis 6379 ✅ — PostgreSQL `packagepro` ✅
-**المُختبر:** Playwright 1.63 (Chromium headless) — 14 tests, 14 passed (100%)
-**الرابط:** Code Layer 2D/3D Editor + Marketplace (Design → Save → Reload → Reopen → Cart → Checkout → Order)
+**Date:** September 10, 2026
+**Platform:** PackagePro (http://localhost:3001)
+**Backend:** http://localhost:3000 (Backend, tsx watch) — Redis 6379 ✅ — PostgreSQL `packagepro` ✅
+**Tool:** Playwright 1.63 (Chromium headless) — 14 tests, 14 passed (100%)
+**Scope:** Code Layer 2D/3D Editor + Marketplace (Design → Save → Reload → Reopen → Cart → Checkout → Order)
 
 ---
 
-## ملخص تنفيذي | Executive Summary
+## Executive Summary
 
-| البند | النتيجة |
+| Item | Result |
 |---|---|
-| إجمالي الاختبارات | 14 |
-| الاختبارات الناجحة | 14 ✅ (100%) |
-| تدفق المحرر (2D/3D) الكامل | ✅ Verified (نقل/تدوير/تكبير، حفظ سحابي، إعادة تحميل، فتح من جديد) |
-| تدفق السلة → الدفع → الطلب | ✅ Verified (تسعير مفعّل من الخادم، CartItem بـ sessionId، Order في Postgres) |
-| المثابرة في قاعدة البيانات | ✅ Verified (23 Design، 12 CartItem مع sessionId، 2 Order) |
-| اختبارات الموقع العامة (auth, catalog, profile, RTL, responsive) | ✅ 8/8 |
-| أخطاء حرجة أثناء الجلسة | 2 (كلاهما أُصلح خلال الجلسة) |
+| Total Tests | 14 |
+| Tests Passed | 14 ✅ (100%) |
+| Editor Flow (2D/3D) Complete | ✅ Verified (move/rotate/scale, cloud save, reload, reopen) |
+| Cart → Checkout → Order Flow | ✅ Verified (server-side pricing, CartItem with sessionId, Order in Postgres) |
+| Database Persistence | ✅ Verified (23 Designs, 12 CartItems with sessionId, 2 Orders) |
+| General Site Tests (auth, catalog, profile, RTL, responsive) | ✅ 8/8 |
+| Critical Errors During Session | 2 (both fixed during the session) |
 
-### تدفق الاختبار النهائي المُختبَر فعلياً في المتصفح
+### Final Test Flow Actually Executed in the Browser
 
 ```
 Design (open template) → Add layers (EN/AR text + image) → Transform (move/rotate/scale)
@@ -31,55 +31,55 @@ Design (open template) → Add layers (EN/AR text + image) → Transform (move/r
 
 ---
 
-## 1. بيئة الاختبار والمنهجية | Environment & Methodology
+## 1. Test Environment & Methodology
 
-| المكوّن | القيمة |
+| Component | Value |
 |---|---|
 | Backend | Fastify @ http://localhost:3000 (mode $ tsx watch — auto-reload) |
 | Frontend | Next.js @ http://localhost:3001 |
-| قاعدة البيانات | PostgreSQL 5432, db `packagepro` (DATABASE_URL=`postgresql://mac@localhost:5432/packagepro`) |
-| Redis | 6379 (متصل في هذه الجلسة) |
+| Database | PostgreSQL 5432, db `packagepro` (DATABASE_URL=`postgresql://mac@localhost:5432/packagepro`) |
+| Redis | 6379 (connected during this session) |
 | Playwright | 1.63.0, Chromium (chromium_headless_shell-1243), 1 worker (serial) |
-| Viewport | Desktop 1440×900، Mobile 375×812، Tablet 768×1024 |
-| المصادقة | JWT Bearer — `POST /api/auth/login` → `json.data.tokens.accessToken` |
-| مستخدم QA | `qa-tester@packagepro.test` / `TestPass!2026` — role `CUSTOMER`، مع `Customer` profile، `emailVerified=true` |
+| Viewport | Desktop 1440×900, Mobile 375×812, Tablet 768×1024 |
+| Authentication | JWT Bearer — `POST /api/auth/login` → `json.data.tokens.accessToken` |
+| QA User | `qa-tester@packagepro.test` / `TestPass!2026` — role `CUSTOMER`, with `Customer` profile, `emailVerified=true` |
 
-**المبادئ الملتزَم بها:**
-- **بدون mocks** — كل طلب هو طلب API حقيقي يصل إلى PostgreSQL؛ الأسعار محسوبة على الخادم.
-- **لا الاعتماد على اقتراب الزمن الثابت** — استخدام `waitForURL` / `waitForFunction` / `waitForLoadState("networkidle")` بدل `timeout` التعسفي.
-- **التمييز بين الطبقات:** حالة UI (Zustand store) ↔ localStorage/IndexedDB ↔ الواجهة الخلفية (تنتهي في Postgres).
-- **التحقق المزدوج:** كل اختبار E2E يتحقق أيضاً من استجابة الـ API الفعلية/صف في قاعدة البيانات.
+**Principles Followed:**
+- **No mocks** — every request is a real API request reaching PostgreSQL; prices are calculated server-side.
+- **No reliance on fixed timeouts** — use `waitForURL` / `waitForFunction` / `waitForLoadState("networkidle")` instead of arbitrary timeouts.
+- **Layer separation:** UI state (Zustand store) ↔ localStorage/IndexedDB ↔ Backend (ends in Postgres).
+- **Double verification:** Every E2E test also verifies the actual API response/database row.
 
-**البنية:**
+**Structure:**
 - `frontend/e2e/helpers.ts` — harness: `loginViaApi`, `waitForEditor`, `editorState`, `addTextLayer`, `addImageLayer`, `assertNoCriticalErrors`, `attachQaListeners`
 - `frontend/e2e/playwright.config.ts` — testDir `./e2e`, workers 1, baseURL `http://localhost:3001`
-- `frontend/e2e/editor-flow.spec.ts` — المحرر (2D/3D، حفظ، إعادة تحميل، فتح من جديد)
-- `frontend/e2e/cart-checkout.spec.ts` — السلة → الدفع → الطلب (Stripe test card)
+- `frontend/e2e/editor-flow.spec.ts` — Editor (2D/3D, save, reload, reopen)
+- `frontend/e2e/cart-checkout.spec.ts` — Cart → Checkout → Order (Stripe test card)
 - `frontend/e2e/site-flows.spec.ts` — home, auth, catalog, search, templates, profile, responsive
 
 ---
 
-## 2. المحرر 2D/3D | Editor End-to-End (Design → Save → Reload → Reopen)
+## 2. Editor 2D/3D | Editor End-to-End (Design → Save → Reload → Reopen)
 
-### الاختبار 1: فتح قالب، إضافة طبقات، تحويل، حفظ إلى الخلفية ✅ (14.8s)
+### Test 1: Open template, add layers, transform, save to backend ✅ (14.8s)
 
-1. فتح `/editor?sku=box--mailer-box--23--cardboard-natural--print-monochrome--foil-none&quantity=50`
-2. `waitForEditor` (يتم تفعيل `__editorState`) — نموذج SKU متوقع: **mailer_box / cardboard-kraft / 200×150×100mm**
-3. إضافة طبقة **Heading** عبر زر واجهة المستخدم الحقيقي في `EditorLeftSidebar` (accordion Text)
-4. إضافة طبقات نص EN (`Hello Seal`) و AR (`مرحبا`) عبر harness
-5. إضافة طبقة **صورة** (data-URL 1×1 PNG مُصدَّق عليه)
-6. تحويلات: **move** (position x/y)، **rotate** (45°)، **scale** (1.5×) — تم التحقق في store (`__editorState`)
-7. تكبير/تصغير عبر `__editorZoom`
-8. **معاينة 3D** عبر زر footer (`.lucide-box`)
-9. **Save** → يظهر `sessionId=…` في URL → `GET /designs/session/:id` يعيد الطبقات + الصورة + التحويلات من Postgres
+1. Open `/editor?sku=box--mailer-box--23--cardboard-natural--print-monochrome--foil-none&quantity=50`
+2. `waitForEditor` (`__editorState` activated) — expected SKU model: **mailer_box / cardboard-kraft / 200×150×100mm**
+3. Add **Heading** layer via the real UI button in `EditorLeftSidebar` (accordion Text)
+4. Add English text (`Hello Seal`) and Arabic text (`مرحبا`) layers via harness
+5. Add **image** layer (data-URL 1×1 PNG authenticated)
+6. Transformations: **move** (position x/y), **rotate** (45°), **scale** (1.5×) — verified in store (`__editorState`)
+7. Zoom via `__editorZoom`
+8. **3D Preview** via footer button (`.lucide-box`)
+9. **Save** → `sessionId=…` appears in URL → `GET /designs/session/:id` returns layers + image + transforms from Postgres
 
-### الاختبار 2: إعادة التحميل + الفتح من جديد يستعيد التصميم المحفوظ من الخلفية ✅ (32.8s)
+### Test 2: Reload + Reopen recovers the saved design from backend ✅ (32.8s)
 
-1. **Reload** بنفس `sessionId` → جميع الطبقات (نص ×3 + صورة) والتحويلات (position/rotation/scale) مستعادة تماماً في `__editorState`
-2. **Tab جديد** يُفتح بنفس `sessionId` → نفس التحقق: Same layers, same transforms, same model
+1. **Reload** with same `sessionId` → all layers (text ×3 + image) and transforms (position/rotation/scale) fully restored in `__editorState`
+2. **New tab** opened with same `sessionId` → same verification: Same layers, same transforms, same model
 3. Screenshot `playwright-report/editor-reopen.png`
 
-### التحقق من قاعدة البيانات (Postgres) — صف التصميم الفعلي:
+### Database Verification (Postgres) — Actual Design Row:
 
 ```
 id:        cmtvo50u6001jdgvjdemssikj
@@ -87,136 +87,136 @@ sessionId: bd4e6ae3-47ad-4bac-af5a-cac5961ae867
 ownerId:   620679e6-a71e-4bd2-a4c0-3c77f2bf2f0f   (FK → users ✅)
 name:      mailer box 200×150×100mm
 lifecycleStatus: DRAFT
-designData.layers → 4 طبقات:
+designData.layers → 4 layers:
   - text  "Heading"    (fontSize 36, weight 700, align center)
-  - text  "Hello Seal" (scale 1.5×1.5, rotation 45)   ← التحويلات محفوظة
+  - text  "Hello Seal" (scale 1.5×1.5, rotation 45)   ← transforms saved
   - text  "مرحبا"      (Arabic, RTL ✓)
   - image "qa-image.png" (src dataURL ✓)
 ```
 
-**الخلاصة:** المحرر 2D/3D يعمل من طرف إلى طرف — التصميم محفوظ في PostgreSQL ضمن صف `Design` مربوط بـ `ownerId` و`sessionId`، ويُستعاد على إعادة التحميل وفي تبويب جديد.
+**Summary:** The 2D/3D editor works end-to-end — the design is saved in PostgreSQL in a `Design` row linked to `ownerId` and `sessionId`, and is restored on reload and in a new tab.
 
 ---
 
-## 3. السلة → الدفع → الطلب | Cart → Checkout → Order
+## 3. Cart → Checkout → Order
 
-### الاختبار 3: إضافة إلى السلة من المحرر، التحقق من العنصر والسعر من الخادم ✅ (30.7s)
+### Test 3: Add to cart from editor, verify item and server-side pricing ✅ (30.7s)
 
-1. حفظ التصميم → الحصول على `sessionId`
-2. التبديل إلى 2D → فرض زر **"Add to Cart"** في header المحرر
-3. حوار إضافة إلى السلة: **اسم التصميم + الكمية + لسعر محسوب من الخادم** (`data-price`)
-4. إرسال → تحويل إلى `/cart`
-5. **تحقق مزدوج:**
-   - صفحة `/cart` تعرض "Shopping Cart" مع "Items (N)" و"Order Summary" و"Total"
-   - `GET /cart` (backend) → `items.find(i => i.sessionId === sessionId)` موجود، مع `unitPrice` و `totalPrice` و `quantity ≥ 1`
+1. Save the design → obtain `sessionId`
+2. Switch to 2D → trigger the **"Add to Cart"** button in the editor header
+3. Add-to-cart dialog: **design name + quantity + server-calculated price** (`data-price`)
+4. Submit → redirect to `/cart`
+5. **Double verification:**
+   - `/cart` page displays "Shopping Cart" with "Items (N)", "Order Summary", and "Total"
+   - `GET /cart` (backend) → `items.find(i => i.sessionId === sessionId)` exists, with `unitPrice` and `totalPrice` and `quantity ≥ 1`
 
-نموذج استجابة السلة (من الخلفية، لا يوجد mock):
+Cart response sample (from backend, no mock):
 ```
-BOX · cardboard-kraft | 43.88 USD | sessionId بادئة التصميم المحفوظ ✅
+BOX · cardboard-kraft | 43.88 USD | sessionId prefixed with saved design ✅
 ```
 
-### الاختبار 4: إتمام الطلب ببطاقة Stripe الاختبارية ✅ (11.0s)
+### Test 4: Complete order with Stripe test card ✅ (11.0s)
 
-1. `loginViaApi` → التحقق من بقاء عنصر التصميم في السلة عبر API
-2. `/checkout` — تعبئة حقول الشحن (name/email/address/city) إذا كانت ظاهرة
-3. Stripe iframe (`iframe[name*="__privateStripeFrame"]`) — تعبئة `4242 4242 4242 4242 / 12/34 / 123` إن أمكن
-4. `Place Order` → `GET /orders` → `orderId` غير فارغ، و**التحقق أن السلة أُفرغت** (لا يوجد `sessionId` متبقي)
+1. `loginViaApi` → verify design item persists in cart via API
+2. `/checkout` — fill shipping fields (name/email/address/city) if visible
+3. Stripe iframe (`iframe[name*="__privateStripeFrame"]`) — fill `4242 4242 4242 4242 / 12/34 / 123` if possible
+4. `Place Order` → `GET /orders` → `orderId` is non-empty, and **verify cart was emptied** (no remaining `sessionId`)
 5. Screenshot `playwright-report/checkout-complete.png`
 
-**الحالة في PostgreSQL:**
+**State in PostgreSQL:**
 ```
-orders:     PP-20260910-DE4AF088  status=pending_review  total=22.89   (الجلسة الحالية)
-            PP-20260908-D628F2A2  status=completed       total=96.70   (جلسة سابقة)
+orders:     PP-20260910-DE4AF088  status=pending_review  total=22.89   (current session)
+            PP-20260908-D628F2A2  status=completed       total=96.70   (previous session)
 order_items: 2
-payments:    0   ← مخطط لأن STRIPE_PUBLISHABLE_KEY فارغة في .env (وضع الاختبار؛ يتم إنشاء الـ Order لكن عملية Stripe تتطلب مفتاحاً حقيقياً/tests key)
+payments:    0   ← planned because STRIPE_PUBLISHABLE_KEY is empty in .env (test mode; Order is created but Stripe processing requires a real/test key)
 ```
 
-**الخلاصة:** التدفق الكامل يعمل — السلة موجودة في قاعدة البيانات ومربوطة بـ `sessionId`، التسعير من الخادم، والطلب يُنشأ في Postgres.
+**Summary:** The full flow works — the cart exists in the database and is linked to `sessionId`, pricing is server-side, and the order is created in Postgres.
 
 ---
 
-## 4. الأدوار العامة للموقع | Site-wide Flows ✅ (8/8)
+## 4. Site-wide Flows ✅ (8/8)
 
-### الصفحة الرئيسية
-- يظهر "PackagePro" + روابط التنقل (Products/Design Editor/Templates…) ✅
-- تبديل اللغة EN/AR يعمل وتصبح الصفحة RTL ✅ (يحفظ pref عبر LanguageProvider)
+### Homepage
+- Displays "PackagePro" + navigation links (Products/Design Editor/Templates…) ✅
+- Language toggle EN/AR works and the page switches to RTL ✅ (preference saved via LanguageProvider)
 
-### المصادقة
-- **Login page** (`#email`/`#password` → submit) → يشير العودة من `/login`, `accessToken` في localStorage ✅
-- **غير مصادَق** → `/checkout` يوجّه إلى `/login?redirect=` ✅
+### Authentication
+- **Login page** (`#email`/`#password` → submit) → redirects back from `/login`, `accessToken` in localStorage ✅
+- **Unauthenticated** → `/checkout` redirects to `/login?redirect=` ✅
 
-### الكتالوج والبحث
-- `/products` يعرّض قوائم منتجات/مواد، و`search` يصنف النتائج ✅
-- `/templates` يعرض معرض القوالب ✅
+### Catalog and Search
+- `/products` displays product/material lists, and `search` categorizes results ✅
+- `/templates` shows the template gallery ✅
 
-### الملف الشخصي
-- `/profile` بعد تسجيل الدخول يعرض معلومات الحساب (`qa-tester`) ✅
+### Profile
+- `/profile` after login displays account information (`qa-tester`) ✅
 
-### استجابة الشاشات
-- Mobile 375×812: home + محرر بدون انهيار ✅
-- Tablet 768×1024: home بدون انهيار ✅
+### Responsive Layouts
+- Mobile 375×812: home + editor without crashes ✅
+- Tablet 768×1024: home without crashes ✅
 
 ---
 
-## 5. مثابرة قاعدة البيانات | Database Persistence Verification (Postgres)
+## 5. Database Persistence Verification (Postgres)
 
-| الجدول | العدد | تفاصيل التحقق |
+| Table | Count | Verification Details |
 |---|---|---|
-| `designs` | 23 | 5+ مهدودة بمعرف `sessionId` و`ownerId` (FK → users)، `designData` JSONB يحتوي الطبقات |
-| `cart_items` | 12 | `sessionId` مملوء (لا FK عمداً — عناصر السلة المؤقتة)، مرتبطة بطلب QA |
-| `orders` | 2 | `PP-2026...` بأرقام فريدة، `status`، `total` ، `shippingAddress` JSONB |
-| `order_items` | 2 | لمنتج QA |
-| `payments` | 0 | يتطلب Stripe key — غير مطلوب لتشغيل Order flow في الاختبار |
+| `designs` | 23 | 5+ linked with `sessionId` and `ownerId` (FK → users), `designData` JSONB contains layers |
+| `cart_items` | 12 | `sessionId` populated (no FK intentionally — temporary cart items), linked to QA order |
+| `orders` | 2 | `PP-2026...` with unique numbers, `status`, `total`, `shippingAddress` JSONB |
+| `order_items` | 2 | For QA product |
+| `payments` | 0 | Requires Stripe key — not needed to run Order flow in testing |
 
-المخطط الكامل يضم 26 جدولاً (users, customers, vendors, orders, order_items, carts, cart_items, designs, design_files, prepress_checks, purchase_orders, handshakes, productions, samples, shipments, payments, settlements, reviews, notifications, materials, pricing_rules, templates, audit_logs, tokens…).
-
----
-
-## 6. الأخطاء المكتشفة والمُصلحة خلال الجلسة | Bugs Found & Fixed
-
-### Bug 1 [HIGH] — CORS على SSE إشعارات (`/api/notifications/stream`)
-- **العَرَض:** `Access to fetch ... blocked by CORS policy` لكل مستخدم مسجل الدخول على أي صفحة تستضيء `NotificationBell`.
-- **السبب الجذري:** الـ controller يستخدم `reply.hijack()` ويستدعي `raw.writeHead` يدوياً — الأمر الذي يتجاوز @fastify/cors الوسيط؛ لذلك الاستجابة `text/event-stream` تفتقر إلى `Access-Control-Allow-Origin`.
-- **الإصلاح:** `raw.writeHead(200, {...})` يُضيف الآن `Access-Control-Allow-Origin: <origin>`، `Access-Control-Allow-Credentials: true`، `Vary: Origin` (backend/src/modules/notifications/notifications.controller.ts).
-- **التأكيد:** اختبار profile الذي كان يفشل بهذا الخطأ يمر الآن.
-
-### Bug 2 [HIGH] — انهيار NotificationBell (`Cannot read properties of undefined (reading 'length')`)
-- **العَرَض:** أي صفحة تسجل الدخول ترمي TypeError يعطل React (أحد تأثيرات التلوّث CORS أعلى).
-- **السبب الجذري:** `NotificationBell` reads `notifications.length` بينما يُعيد الـ hook قيّماً غير مؤكدة المضمون عند فشل الاستدعاءات.
-- **الإصلاح:** الحرس الدفاعي `!notifications || notifications.length === 0` + `(notifications ?? []).map(...)` (frontend/components/notifications/notification-bell.tsx).
-
-### تحسينات استقرار Playwright
-- `assertNoCriticalErrors` يتجاهل بشكل صحيح: 404 اختياري، وRSC `_rsc=` fetches، وStripe config warnings، وSSE CORS (في بيئة الاختبار) — بينما يظل يفشل على الأخطاء الحقيقية.
-- اختبار login يستخدم `waitForURL` بدل timeout ثابت.
+The full schema includes 26 tables (users, customers, vendors, orders, order_items, carts, cart_items, designs, design_files, prepress_checks, purchase_orders, handshakes, productions, samples, shipments, payments, settlements, reviews, notifications, materials, pricing_rules, templates, audit_logs, tokens…).
 
 ---
 
-## 7. الثغرات المتبقية | Remaining Gaps & Notes
+## 6. Bugs Found & Fixed During the Session
 
-| البند | الحالة | الملاحظة |
+### Bug 1 [HIGH] — CORS on SSE notifications (`/api/notifications/stream`)
+- **Symptom:** `Access to fetch ... blocked by CORS policy` for any logged-in user on any page that renders `NotificationBell`.
+- **Root Cause:** The controller uses `reply.hijack()` and calls `raw.writeHead` manually — which bypasses the @fastify/cors middleware; therefore the `text/event-stream` response lacks `Access-Control-Allow-Origin`.
+- **Fix:** `raw.writeHead(200, {...})` now adds `Access-Control-Allow-Origin: <origin>`, `Access-Control-Allow-Credentials: true`, `Vary: Origin` (backend/src/modules/notifications/notifications.controller.ts).
+- **Confirmation:** The profile test that previously failed with this error now passes.
+
+### Bug 2 [HIGH] — NotificationBell crash (`Cannot read properties of undefined (reading 'length')`)
+- **Symptom:** Any logged-in page throws a TypeError that breaks React (one of the effects of the CORS pollution above).
+- **Root Cause:** `NotificationBell` reads `notifications.length` while the hook returns an undefined value when calls fail.
+- **Fix:** Defensive guard `!notifications || notifications.length === 0` + `(notifications ?? []).map(...)` (frontend/components/notifications/notification-bell.tsx).
+
+### Playwright Stability Improvements
+- `assertNoCriticalErrors` correctly ignores: optional 404s, RSC `_rsc=` fetches, Stripe config warnings, and SSE CORS (in test environment) — while still failing on real errors.
+- Login test uses `waitForURL` instead of fixed timeout.
+
+---
+
+## 7. Remaining Gaps & Notes
+
+| Item | Status | Note |
 |---|---|---|
-| Stripe payment complete | ⚠️ الجزئي | يتم إنشاء الـ Order والتصميم يرتبط به، لكن دورة Stripe الأخيرة تتطلب `STRIPE_PUBLISHABLE_KEY`/secret صالحين في backend `.env`. الاختبار يتعامل مع هذا بأمان. |
-| Signup E2E | ➖ لم يُختبر | تم تسجيل مستخدم QA عبر API seed؛ اختبار واجهة تسجيل مستخدم جديد لم يُدرج في عمليات التشغيل هذه (التسجيل يتطلب إعادةCAPTCHA قد تتغير سلوكها تحت headless). |
-| Vendor/Admin portals | ➖ لم يُختبر هذا العمق | تم عرضها مسبقاً؛ خارج تدفق المتجر الأساسي. |
-| Notification SSE end-to-end | ✅ أُصلح CORS | الرسائل الفعلية realtime تتطلب إرسال notification من الخلفية — البنية سليمة، الـ stream الآن قابل للاتصال. |
-| Redis | ✅ متصل | في هذه الجلسة؛ متوقع أن تعمل الجلسات الاختيارية والتقييد الكامل. |
+| Stripe payment complete | ⚠️ Partial | Order and design are created and linked, but the final Stripe cycle requires valid `STRIPE_PUBLISHABLE_KEY`/secret in backend `.env`. The test handles this gracefully. |
+| Signup E2E | ➖ Not tested | QA user was seeded via API; a new user signup UI test was not included in these runs (signup requires reCAPTCHA which may behave differently under headless). |
+| Vendor/Admin portals | ➖ Not tested at this depth | Previously displayed; outside the core storefront flow. |
+| Notification SSE end-to-end | ✅ CORS fixed | Real-time message delivery requires sending a notification from the backend — the infrastructure is sound, the stream is now connectable. |
+| Redis | ✅ Connected | During this session; expected to work for optional sessions and full rate limiting. |
 
 ---
 
-## 8. التوصيات والحُكم النهائي | Verdict & Recommendations
+## 8. Verdict & Recommendations
 
-### الحُكم النهائي
+### Final Verdict
 
-> **PASS** — تدفق Design → Save → Reload → Reopen → Cart (server pricing) → Checkout → Order يعمل بشكل كامل في متصفح حقيقي مع مثابرة من طرف إلى طرف في PostgreSQL. المحرر 2D/3D قوي، والتسعير حقيقي، والسلة معرّفة، والطلب يُنشأ.
+> **PASS** — The Design → Save → Reload → Reopen → Cart (server pricing) → Checkout → Order flow works fully in a real browser with end-to-end persistence in PostgreSQL. The 2D/3D editor is robust, pricing is real, the cart is identifiable, and orders are created.
 
-### التوصيات (مرتبة)
+### Recommendations (Ranked)
 
-1. **صِف مفتاح Stripe الحقيقي/util في backend `.env`** حتى تكتمل دورة الدفع النهائية (بانتظار `payments` في Postgres).
-2. **منع تراكم عناصر السلة في الاختبار:** اختبار cart أضاف عناصر بشكل متكرر أثناء الـ retries (12 CartItem لـ sessionIds قديمة). اقتراح: مسح السلة (`DELETE /cart` أو `clearCart`) في بداية اختبار السلة.
-3. **اختبار signup E2E** منفصل بعد تأكيد سلوك reCAPTCHA/dev لمستخدم جديد (خطوة لاحقة، منطقة غير حرجة للتطبيق الأساسي).
-4. **محو التصاميم المكررة لـ QA** (23 Design بنفس الاسم) أو جعل اسم التصميم فريداً بعلامة زمنية لسهولة الـ triage المستقبلي.
-5. غطّ اختبار Admin/Vendor portals باختبارات دخول الخريطة السريعة إذا كانا في نطاق تسليم هذه الفترة (حالياً خارجياً).
+1. **Set a real Stripe key/util in backend `.env`** so the final payment cycle is complete (pending `payments` in Postgres).
+2. **Prevent cart item accumulation in tests:** The cart test added items repeatedly during retries (12 CartItems for old sessionIds). Suggestion: clear the cart (`DELETE /cart` or `clearCart`) at the start of the cart test.
+3. **Separate signup E2E test** after confirming reCAPTCHA/dev behavior for new users (next step, non-critical zone for the core application).
+4. **Clean up duplicate QA designs** (23 Designs with the same name) or make design names unique with a timestamp for easier future triage.
+5. Cover Admin/Vendor portal testing with quick smoke tests if they are within scope for this delivery period (currently out of scope).
 
 ---
 
-*أُنشئ هذا التقرير في 10 سبتمبر 2026. Playwright (Chromium headless) + تحقق مباشر من قاعدة بيانات PostgreSQL. الـ 14 اختباراً كلها تنجح؛ التقرير الوثائقي للمرحلة السابقة (2 يونيو 2026) استُبدل لأن جميع ملاحظات HIGH/MEDIUM هذه أُصلحت منذ ذلك الحين.*
+*This report was generated on September 10, 2026. Playwright (Chromium headless) + direct verification against the PostgreSQL database. All 14 tests pass; the documentation report from the previous phase (June 2, 2026) was replaced because all HIGH/MEDIUM findings listed here have been fixed since then.*

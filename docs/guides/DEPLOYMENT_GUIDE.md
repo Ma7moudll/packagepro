@@ -1,63 +1,63 @@
-# 🚀 دليل النشر - PackagePro Deployment Guide
+# 🚀 Deployment Guide - PackagePro
 
-## نظرة عامة
+## Overview
 
-هذا الدليل يشرح كيفية نشر PackagePro على بيئات مختلفة.
+This guide explains how to deploy PackagePro to different environments.
 
 ---
 
-## 📋 المتطلبات الأساسية
+## 📋 Prerequisites
 
-### للإنتاج
+### For production
 - ✅ Node.js 20+
 - ✅ PostgreSQL 15+
 - ✅ Redis 7+
-- ✅ Docker & Docker Compose (اختياري)
-- ✅ Domain name مع SSL certificate
-- ✅ CDN (CloudFlare R2 أو AWS S3)
+- ✅ Docker & Docker Compose (optional)
+- ✅ Domain name with an SSL certificate
+- ✅ CDN (CloudFlare R2 or AWS S3)
 
-### الخدمات الخارجية
-- ✅ Stripe Account (للمدفوعات)
-- ✅ SendGrid Account (للبريد الإلكتروني)
-- ✅ Sentry Account (للمراقبة)
-- ✅ DHL API Access (للشحن)
+### External services
+- ✅ Stripe Account (for payments)
+- ✅ SendGrid Account (for email)
+- ✅ Sentry Account (for monitoring)
+- ✅ DHL API Access (for shipping)
 
 ---
 
-## 🐳 النشر باستخدام Docker
+## 🐳 Deploying with Docker
 
-### 1. إعداد Environment Variables
+### 1. Set Up Environment Variables
 
 ```bash
-# إنشاء ملف .env للإنتاج
+# Create a .env file for production
 cp backend/env.example backend/.env.production
 
-# تعديل القيم:
+# Adjust the values:
 # - DATABASE_URL
-# - JWT_SECRET (استخدم قيمة قوية)
+# - JWT_SECRET (use a strong value)
 # - STRIPE_SECRET_KEY
 # - SENDGRID_API_KEY
-# - إلخ...
+# - Etc...
 ```
 
-### 2. بناء Docker Images
+### 2. Build Docker Images
 
 ```bash
-# بناء Backend
+# Build the Backend
 docker build -t packagepro-backend:latest -f backend/Dockerfile .
 
-# بناء Frontend
+# Build the Frontend
 docker build -t packagepro-frontend:latest -f frontend/Dockerfile .
 ```
 
-### 3. تشغيل باستخدام Docker Compose
+### 3. Run with Docker Compose
 
 ```bash
-# إنشاء docker-compose.prod.yml
+# Create docker-compose.prod.yml
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
-### 4. تطبيق Database Migrations
+### 4. Apply Database Migrations
 
 ```bash
 docker exec -it packagepro-backend npx prisma migrate deploy
@@ -66,7 +66,7 @@ docker exec -it packagepro-backend npx prisma db seed
 
 ---
 
-## ☁️ النشر على AWS
+## ☁️ Deploying on AWS
 
 ### Architecture
 ```
@@ -94,10 +94,10 @@ docker exec -it packagepro-backend npx prisma db seed
 └────────┘
 ```
 
-### 1. إعداد RDS (PostgreSQL)
+### 1. Set Up RDS (PostgreSQL)
 
 ```bash
-# إنشاء RDS instance
+# Create an RDS instance
 aws rds create-db-instance \
   --db-instance-identifier packagepro-db \
   --db-instance-class db.t3.medium \
@@ -110,10 +110,10 @@ aws rds create-db-instance \
   --db-subnet-group-name packagepro-subnet-group
 ```
 
-### 2. إعداد ElastiCache (Redis)
+### 2. Set Up ElastiCache (Redis)
 
 ```bash
-# إنشاء Redis cluster
+# Create a Redis cluster
 aws elasticache create-cache-cluster \
   --cache-cluster-id packagepro-redis \
   --cache-node-type cache.t3.micro \
@@ -122,17 +122,17 @@ aws elasticache create-cache-cluster \
   --security-group-ids sg-xxxxx
 ```
 
-### 3. إعداد ECS
+### 3. Set Up ECS
 
 ```bash
-# إنشاء ECS cluster
+# Create an ECS cluster
 aws ecs create-cluster --cluster-name packagepro-cluster
 
-# إنشاء task definitions
+# Create task definitions
 aws ecs register-task-definition --cli-input-json file://backend-task-def.json
 aws ecs register-task-definition --cli-input-json file://frontend-task-def.json
 
-# إنشاء services
+# Create services
 aws ecs create-service \
   --cluster packagepro-cluster \
   --service-name packagepro-backend \
@@ -141,13 +141,13 @@ aws ecs create-service \
   --load-balancers targetGroupArn=arn:aws:...,containerName=backend,containerPort=3000
 ```
 
-### 4. إعداد S3 للملفات
+### 4. Set Up S3 for Files
 
 ```bash
-# إنشاء S3 bucket
+# Create an S3 bucket
 aws s3 mb s3://packagepro-files
 
-# إعداد CORS
+# Set up CORS
 aws s3api put-bucket-cors \
   --bucket packagepro-files \
   --cors-configuration file://s3-cors.json
@@ -155,56 +155,56 @@ aws s3api put-bucket-cors \
 
 ---
 
-## 🌐 النشر على Vercel (Frontend فقط)
+## 🌐 Deploying on Vercel (Frontend only)
 
-### 1. تثبيت Vercel CLI
+### 1. Install the Vercel CLI
 
 ```bash
 npm install -g vercel
 ```
 
-### 2. النشر
+### 2. Deploy
 
 ```bash
 cd frontend
 vercel --prod
 ```
 
-### 3. إعداد Environment Variables
+### 3. Set Up Environment Variables
 
-في Vercel Dashboard:
-- `NEXT_PUBLIC_API_URL`: URL للـ Backend
-- `NEXTAUTH_URL`: URL للـ Frontend
-- `NEXTAUTH_SECRET`: Secret key قوي
+In the Vercel Dashboard:
+- `NEXT_PUBLIC_API_URL`: URL of the Backend
+- `NEXTAUTH_URL`: URL of the Frontend
+- `NEXTAUTH_SECRET`: Strong secret key
 
 ---
 
-## 🔧 النشر على VPS (Ubuntu)
+## 🔧 Deploying on a VPS (Ubuntu)
 
-### 1. إعداد السيرفر
+### 1. Set Up the Server
 
 ```bash
-# تحديث النظام
+# Update the system
 sudo apt update && sudo apt upgrade -y
 
-# تثبيت Node.js
+# Install Node.js
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# تثبيت PostgreSQL
+# Install PostgreSQL
 sudo apt install -y postgresql postgresql-contrib
 
-# تثبيت Redis
+# Install Redis
 sudo apt install -y redis-server
 
-# تثبيت Nginx
+# Install Nginx
 sudo apt install -y nginx
 
-# تثبيت PM2
+# Install PM2
 sudo npm install -g pm2
 ```
 
-### 2. إعداد PostgreSQL
+### 2. Set Up PostgreSQL
 
 ```bash
 sudo -u postgres psql
@@ -215,10 +215,10 @@ GRANT ALL PRIVILEGES ON DATABASE packagepro TO packagepro;
 \q
 ```
 
-### 3. رفع الكود
+### 3. Upload the Code
 
 ```bash
-# استنساخ المشروع
+# Clone the project
 git clone https://github.com/your-repo/packagepro.git
 cd packagepro
 
@@ -226,7 +226,7 @@ cd packagepro
 cd backend
 npm install
 cp env.example .env
-# عدّل .env
+# Edit .env
 npm run prisma:generate
 npm run prisma:migrate
 npm run build
@@ -237,7 +237,7 @@ npm install
 npm run build
 ```
 
-### 4. تشغيل باستخدام PM2
+### 4. Run with PM2
 
 ```bash
 # Backend
@@ -248,12 +248,12 @@ pm2 start npm --name "packagepro-backend" -- start
 cd frontend
 pm2 start npm --name "packagepro-frontend" -- start
 
-# حفظ التكوين
+# Save the configuration
 pm2 save
 pm2 startup
 ```
 
-### 5. إعداد Nginx
+### 5. Set Up Nginx
 
 ```nginx
 # /etc/nginx/sites-available/packagepro
@@ -293,22 +293,22 @@ server {
 ```
 
 ```bash
-# تفعيل الموقع
+# Enable the site
 sudo ln -s /etc/nginx/sites-available/packagepro /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl restart nginx
 ```
 
-### 6. إعداد SSL (Let's Encrypt)
+### 6. Set Up SSL (Let's Encrypt)
 
 ```bash
-# تثبيت Certbot
+# Install Certbot
 sudo apt install -y certbot python3-certbot-nginx
 
-# الحصول على SSL certificate
+# Get an SSL certificate
 sudo certbot --nginx -d packagepro.com -d www.packagepro.com -d api.packagepro.com
 
-# التجديد التلقائي
+# Automatic renewal
 sudo certbot renew --dry-run
 ```
 
@@ -316,28 +316,28 @@ sudo certbot renew --dry-run
 
 ## 📊 Monitoring & Logging
 
-### 1. إعداد Sentry
+### 1. Set Up Sentry
 
 ```bash
 # Backend
 npm install @sentry/node @sentry/profiling-node
 
 # Frontend
-# Sentry موجود بالفعل
+# Sentry is already present
 ```
 
-في `.env`:
+In `.env`:
 ```
 SENTRY_DSN=your-sentry-dsn
 ```
 
-### 2. إعداد Logging
+### 2. Set Up Logging
 
 ```bash
-# إنشاء مجلد Logs
+# Create a Logs folder
 mkdir -p /var/log/packagepro
 
-# إعداد Log rotation
+# Set up log rotation
 sudo nano /etc/logrotate.d/packagepro
 ```
 
@@ -356,10 +356,10 @@ sudo nano /etc/logrotate.d/packagepro
 }
 ```
 
-### 3. إعداد Monitoring
+### 3. Set Up Monitoring
 
 ```bash
-# تثبيت monitoring tools
+# Install monitoring tools
 pm2 install pm2-logrotate
 pm2 set pm2-logrotate:max_size 10M
 pm2 set pm2-logrotate:retain 30
@@ -369,17 +369,17 @@ pm2 set pm2-logrotate:retain 30
 
 ## 🔄 CI/CD Pipeline
 
-### GitHub Actions (موجود بالفعل)
+### GitHub Actions (already present)
 
-الملف `.github/workflows/ci.yml` يحتوي على:
+The file `.github/workflows/ci.yml` contains:
 - ✅ Automated testing
 - ✅ Linting
 - ✅ Building
 - ✅ Security scanning
 
-### إضافة Deployment
+### Add Deployment
 
-أضف إلى `.github/workflows/ci.yml`:
+Add to `.github/workflows/ci.yml`:
 
 ```yaml
 deploy:
@@ -407,18 +407,18 @@ deploy:
 
 ## 🔐 Security Checklist
 
-قبل النشر، تأكد من:
+Before deploying, make sure to:
 
-- [ ] تغيير جميع Secrets و Passwords
-- [ ] تفعيل HTTPS
-- [ ] إعداد Firewall
-- [ ] تحديث Dependencies
-- [ ] تفعيل Rate Limiting
-- [ ] إعداد Backup التلقائي
-- [ ] تفعيل Monitoring
-- [ ] مراجعة Environment Variables
-- [ ] إعداد CORS بشكل صحيح
-- [ ] تفعيل Security Headers
+- [ ] Change all Secrets and Passwords
+- [ ] Enable HTTPS
+- [ ] Set up a Firewall
+- [ ] Update Dependencies
+- [ ] Enable Rate Limiting
+- [ ] Set up automatic Backup
+- [ ] Enable Monitoring
+- [ ] Review Environment Variables
+- [ ] Configure CORS correctly
+- [ ] Enable Security Headers
 
 ---
 
@@ -427,17 +427,17 @@ deploy:
 ### Database Backup
 
 ```bash
-# Backup يومي
+# Daily backup
 0 2 * * * pg_dump -U packagepro packagepro | gzip > /backups/packagepro-$(date +\%Y\%m\%d).sql.gz
 
-# الاحتفاظ بآخر 30 backup
+# Keep the last 30 backups
 find /backups -name "packagepro-*.sql.gz" -mtime +30 -delete
 ```
 
 ### Files Backup
 
 ```bash
-# Backup الملفات المرفوعة
+# Backup uploaded files
 0 3 * * * tar -czf /backups/files-$(date +\%Y\%m\%d).tar.gz /var/www/packagepro/uploads
 ```
 
@@ -445,26 +445,26 @@ find /backups -name "packagepro-*.sql.gz" -mtime +30 -delete
 
 ## 🆘 Troubleshooting
 
-### Backend لا يعمل
+### Backend is not working
 
 ```bash
-# التحقق من Logs
+# Check the Logs
 pm2 logs packagepro-backend
 
-# إعادة التشغيل
+# Restart
 pm2 restart packagepro-backend
 
-# التحقق من قاعدة البيانات
+# Check the database
 psql -U packagepro -d packagepro -c "SELECT 1"
 ```
 
-### Frontend لا يعمل
+### Frontend is not working
 
 ```bash
-# التحقق من Logs
+# Check the Logs
 pm2 logs packagepro-frontend
 
-# إعادة البناء
+# Rebuild
 cd frontend
 npm run build
 pm2 restart packagepro-frontend
@@ -473,23 +473,23 @@ pm2 restart packagepro-frontend
 ### Database Issues
 
 ```bash
-# التحقق من الاتصال
+# Check the connection
 psql -U packagepro -d packagepro
 
-# إعادة تطبيق Migrations
+# Re-apply Migrations
 cd backend
 npm run prisma:migrate deploy
 ```
 
 ---
 
-## 📞 الدعم
+## 📞 Support
 
-للمساعدة في النشر:
-- راجع `PROJECT_REVIEW.md`
-- راجع `ACTION_PLAN.md`
-- تحقق من Logs في `/var/log/packagepro`
+For help with deployment:
+- Review `PROJECT_REVIEW.md`
+- Review `ACTION_PLAN.md`
+- Check the Logs in `/var/log/packagepro`
 
 ---
 
-**ملاحظة:** هذا الدليل يغطي السيناريوهات الأساسية. قد تحتاج إلى تخصيص حسب بيئتك.
+**Note:** This guide covers the basic scenarios. You may need to customize it for your environment.

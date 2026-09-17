@@ -1,14 +1,14 @@
-# 🤝 المساهمة في PackagePro - Contributing Guidelines
+# 🤝 Contributing to PackagePro - Contributing Guidelines
 
-شكراً لاهتمامك بالمساهمة في PackagePro! هذا الدليل يشرح كيفية المساهمة في المشروع.
+Thank you for your interest in contributing to PackagePro! This guide explains how to contribute to the project.
 
 ---
 
-## 📋 جدول المحتويات
+## 📋 Table of Contents
 
 - [Code of Conduct](#code-of-conduct)
-- [كيفية المساهمة](#كيفية-المساهمة)
-- [معايير الكود](#معايير-الكود)
+- [How to Contribute](#how-to-contribute)
+- [Code Standards](#code-standards)
 - [Commit Messages](#commit-messages)
 - [Pull Request Process](#pull-request-process)
 - [Development Workflow](#development-workflow)
@@ -17,73 +17,73 @@
 
 ## 📜 Code of Conduct
 
-### قواعدنا
+### Our Rules
 
-- 🤝 كن محترماً ومهذباً
-- 💡 شارك الأفكار البناءة
-- 🎯 ركز على الحلول
-- 🌍 احترم التنوع
-- 📚 ساعد الآخرين على التعلم
+- 🤝 Be respectful and polite
+- 💡 Share constructive ideas
+- 🎯 Focus on solutions
+- 🌍 Respect diversity
+- 📚 Help others learn
 
 ---
 
-## 🚀 كيفية المساهمة
+## 🚀 How to Contribute
 
-### 1. Fork المشروع
+### 1. Fork the Project
 
 ```bash
-# Fork على GitHub ثم:
+# Fork on GitHub then:
 git clone https://github.com/your-username/packagepro.git
 cd packagepro
 git remote add upstream https://github.com/original/packagepro.git
 ```
 
-### 2. إنشاء Branch جديد
+### 2. Create a New Branch
 
 ```bash
-# استخدم naming convention واضح:
+# Use a clear naming convention:
 git checkout -b feature/add-new-feature
 git checkout -b fix/fix-bug-name
 git checkout -b docs/update-readme
 git checkout -b refactor/improve-performance
 ```
 
-### 3. إجراء التغييرات
+### 3. Make Changes
 
 ```bash
-# اعمل على التغييرات
-# اختبر التغييرات
+# Work on the changes
+# Test the changes
 npm test
 
-# تأكد من Linting
+# Ensure Linting passes
 npm run lint
 
-# تأكد من Formatting
+# Ensure Formatting passes
 npm run format
 ```
 
-### 4. Commit التغييرات
+### 4. Commit Changes
 
 ```bash
 git add .
 git commit -m "feat: add new feature"
 ```
 
-### 5. Push و Pull Request
+### 5. Push and Pull Request
 
 ```bash
 git push origin feature/add-new-feature
-# ثم افتح Pull Request على GitHub
+# Then open a Pull Request on GitHub
 ```
 
 ---
 
-## 💻 معايير الكود
+## 💻 Code Standards
 
 ### TypeScript
 
 ```typescript
-// ✅ جيد
+// ✅ Good
 interface User {
   id: string;
   email: string;
@@ -95,7 +95,7 @@ function getUserById(id: string): Promise<User | null> {
   // Implementation
 }
 
-// ❌ سيء
+// ❌ Bad
 function getUser(id: any): any {
   // Implementation
 }
@@ -146,12 +146,12 @@ export async function createUser(data: CreateUserDto) {
 ### Comments
 
 ```typescript
-// ✅ جيد - توضيح للمنطق المعقد
+// ✅ Good - explaining complex logic
 // Calculate price with quantity discount
 // Discount tiers: 100-499: 5%, 500-999: 10%, 1000+: 15%
 const discount = calculateQuantityDiscount(quantity);
 
-// ❌ سيء - توضيح للواضح
+// ❌ Bad - explaining the obvious
 // Set user name
 const userName = user.name;
 ```
@@ -160,7 +160,7 @@ const userName = user.name;
 
 ## 📝 Commit Messages
 
-نستخدم [Conventional Commits](https://www.conventionalcommits.org/)
+We use [Conventional Commits](https://www.conventionalcommits.org/)
 
 ### Format
 
@@ -174,15 +174,15 @@ const userName = user.name;
 
 ### Types
 
-- `feat`: ميزة جديدة
-- `fix`: إصلاح bug
-- `docs`: تحديث التوثيق
-- `style`: تنسيق الكود (لا يؤثر على المنطق)
-- `refactor`: إعادة هيكلة الكود
-- `perf`: تحسين الأداء
-- `test`: إضافة أو تحديث اختبارات
-- `chore`: مهام صيانة
-- `ci`: تحديثات CI/CD
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation update
+- `style`: Code formatting (does not affect logic)
+- `refactor`: Code restructuring
+- `perf`: Performance improvement
+- `test`: Add or update tests
+- `chore`: Maintenance tasks
+- `ci`: CI/CD updates
 
 ### Examples
 
@@ -209,20 +209,20 @@ BREAKING CHANGE: /api/auth/login now requires email instead of username"
 
 ## 🔄 Pull Request Process
 
-### 1. قبل فتح PR
+### 1. Before Opening a PR
 
-- [ ] تأكد من أن الكود يعمل
-- [ ] أضف/حدّث الاختبارات
-- [ ] تأكد من نجاح جميع الاختبارات
-- [ ] تأكد من Linting
-- [ ] حدّث التوثيق إذا لزم الأمر
-- [ ] تأكد من عدم وجود conflicts
+- [ ] Ensure the code works
+- [ ] Add/update tests
+- [ ] Ensure all tests pass
+- [ ] Ensure Linting passes
+- [ ] Update documentation if needed
+- [ ] Ensure there are no conflicts
 
 ### 2. PR Template
 
 ```markdown
 ## Description
-وصف موجز للتغييرات
+Brief description of the changes
 
 ## Type of Change
 - [ ] Bug fix
@@ -231,7 +231,7 @@ BREAKING CHANGE: /api/auth/login now requires email instead of username"
 - [ ] Documentation update
 
 ## Testing
-كيف تم اختبار التغييرات؟
+How were the changes tested?
 
 ## Checklist
 - [ ] Code follows style guidelines
@@ -245,11 +245,11 @@ BREAKING CHANGE: /api/auth/login now requires email instead of username"
 
 ### 3. Review Process
 
-1. **Automated Checks**: يجب أن تنجح جميع CI checks
-2. **Code Review**: مراجعة من maintainer واحد على الأقل
-3. **Testing**: اختبار التغييرات
-4. **Approval**: موافقة من maintainer
-5. **Merge**: دمج في main branch
+1. **Automated Checks**: All CI checks must pass
+2. **Code Review**: Review from at least one maintainer
+3. **Testing**: Testing the changes
+4. **Approval**: Approval from a maintainer
+5. **Merge**: Merge into main branch
 
 ---
 
@@ -325,25 +325,25 @@ npm run prisma:seed
 
 ### High Priority 🔴
 
-- [ ] إكمال TODOs في Authentication
-- [ ] إضافة Unit Tests
-- [ ] إضافة Integration Tests
-- [ ] تحسين Error Handling
-- [ ] إضافة API Documentation (Swagger)
+- [ ] Complete TODOs in Authentication
+- [ ] Add Unit Tests
+- [ ] Add Integration Tests
+- [ ] Improve Error Handling
+- [ ] Add API Documentation (Swagger)
 
 ### Medium Priority 🟡
 
-- [ ] تحسين Performance
-- [ ] إضافة Caching
-- [ ] تحسين Security
-- [ ] إضافة Monitoring
-- [ ] تحسين UI/UX
+- [ ] Improve Performance
+- [ ] Add Caching
+- [ ] Improve Security
+- [ ] Add Monitoring
+- [ ] Improve UI/UX
 
 ### Low Priority 🟢
 
-- [ ] إضافة ميزات جديدة
-- [ ] تحسين Documentation
-- [ ] إضافة Examples
+- [ ] Add new features
+- [ ] Improve Documentation
+- [ ] Add Examples
 - [ ] Refactoring
 
 ---
@@ -365,18 +365,18 @@ npm run prisma:seed
 
 ## ❓ Questions?
 
-إذا كان لديك أي أسئلة:
+If you have any questions:
 
-1. تحقق من [README.md](./README.md)
-2. راجع [PROJECT_REVIEW.md](./PROJECT_REVIEW.md)
-3. راجع [ACTION_PLAN.md](./ACTION_PLAN.md)
-4. افتح Issue على GitHub
+1. Check [README.md](./README.md)
+2. Review [PROJECT_REVIEW.md](./PROJECT_REVIEW.md)
+3. Review [ACTION_PLAN.md](./ACTION_PLAN.md)
+4. Open an Issue on GitHub
 
 ---
 
-## 🙏 شكراً
+## 🙏 Thank You
 
-شكراً لمساهمتك في PackagePro! كل مساهمة، مهما كانت صغيرة، تساعد في تحسين المشروع.
+Thank you for contributing to PackagePro! Every contribution, no matter how small, helps improve the project.
 
 ---
 

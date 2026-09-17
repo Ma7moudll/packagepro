@@ -1,45 +1,45 @@
-# دعم معاملات URL في المحرر - Packhelp Style
+# URL Parameter Support in the Editor - Packhelp Style
 
-تم إضافة دعم معاملات URL في محرر التصميم ليكون مشابهاً لـ [Packhelp Editor](https://packhelp.com/editor/).
+URL parameter support was added to the design editor, similar to the [Packhelp Editor](https://packhelp.com/editor/).
 
-## 📋 معاملات URL المدعومة
+## 📋 Supported URL Parameters
 
 ### 1. SKU (Stock Keeping Unit)
-**المعامل**: `sku`
+**Parameter**: `sku`
 
-**الصيغة**: `category--type--size--material--print--foil`
+**Format**: `category--type--size--material--print--foil`
 
-**مثال**: 
+**Example**: 
 ```
 box--mailer-box--23--cardboard-natural--print-monochrome--foil-none
 ```
 
-**الأجزاء**:
-- `category`: نوع المنتج (box, bag, cup, tube)
-- `type`: نوع التغليف (mailer-box, gift-box, etc.)
-- `size`: الحجم (23, 32, etc.)
-- `material`: المادة (cardboard-natural, cardboard-white, kraft, corrugated)
-- `print`: نوع الطباعة (print-monochrome, print-full-color, print-none)
-- `foil`: نوع الفويل (foil-none, foil-gold, foil-silver, foil-rose)
+**Parts**:
+- `category`: Product type (box, bag, cup, tube)
+- `type`: Packaging type (mailer-box, gift-box, etc.)
+- `size`: Size (23, 32, etc.)
+- `material`: Material (cardboard-natural, cardboard-white, kraft, corrugated)
+- `print`: Print type (print-monochrome, print-full-color, print-none)
+- `foil`: Foil type (foil-none, foil-gold, foil-silver, foil-rose)
 
 ### 2. Source
-**المعامل**: `source`
+**Parameter**: `source`
 
-**القيم المحتملة**: `editor`, `product-page`, etc.
+**Possible values**: `editor`, `product-page`, etc.
 
-**الاستخدام**: لتتبع مصدر دخول المستخدم للمحرر
+**Usage**: To track how the user entered the editor
 
 ### 3. Composed Product ID
-**المعامل**: `composed_product_id`
+**Parameter**: `composed_product_id`
 
-**القيم**: رقم معرف المنتج المركب
+**Values**: The ID of the composed product
 
-**الاستخدام**: لتحديد المنتج المكون مسبقاً
+**Usage**: To identify the pre-configured product
 
-## 🔧 التطبيق
+## 🔧 Implementation
 
-### قراءة المعاملات
-يتم قراءة معاملات URL تلقائياً عند تحميل الصفحة:
+### Reading the Parameters
+URL parameters are read automatically when the page loads:
 
 ```typescript
 const searchParams = useSearchParams()
@@ -48,8 +48,8 @@ const sourceParam = searchParams.get("source")
 const composedProductId = searchParams.get("composed_product_id")
 ```
 
-### تحليل SKU
-يتم تحليل SKU إلى مكوناته:
+### Parsing the SKU
+The SKU is parsed into its components:
 
 ```typescript
 function parseSKU(sku: string) {
@@ -65,8 +65,8 @@ function parseSKU(sku: string) {
 }
 ```
 
-### تطبيق الإعدادات
-عند وجود SKU في URL، يتم تطبيق الإعدادات تلقائياً:
+### Applying the Settings
+When an SKU is present in the URL, the settings are applied automatically:
 
 ```typescript
 useEffect(() => {
@@ -83,56 +83,55 @@ useEffect(() => {
 }, [skuParam, skuData])
 ```
 
-## 📝 أمثلة على الروابط
+## 📝 URL Examples
 
-### مثال 1: صندوق بريد عادي
+### Example 1: Plain Mailer Box
 ```
 /editor?sku=box--mailer-box--23--cardboard-natural--print-monochrome--foil-none&source=editor&composed_product_id=1
 ```
 
-### مثال 2: صندوق هدايا مع فويل ذهبي
+### Example 2: Gift Box with Gold Foil
 ```
 /editor?sku=box--gift-box--32--cardboard-white--print-full-color--foil-gold
 ```
 
-### مثال 3: كيس مع طباعة ملونة
+### Example 3: Bag with Full-Color Print
 ```
 /editor?sku=bag--shopping-bag--large--kraft--print-full-color--foil-none
 ```
 
-## 🎨 خيارات التصميم
+## 🎨 Design Options
 
-### المواد (Materials)
-- `cardboard-natural` - كرتون طبيعي
-- `cardboard-white` - كرتون أبيض
-- `kraft` - كرافت
-- `corrugated` - مموج
+### Materials
+- `cardboard-natural` - natural cardboard
+- `cardboard-white` - white cardboard
+- `kraft` - kraft
+- `corrugated` - corrugated
 
-### الطباعة (Print)
-- `print-monochrome` - طباعة أحادية اللون
-- `print-full-color` - طباعة ملونة كاملة
-- `print-none` - بدون طباعة
+### Print
+- `print-monochrome` - monochrome printing
+- `print-full-color` - full-color printing
+- `print-none` - no printing
 
-### الفويل (Foil)
-- `foil-none` - بدون فويل
-- `foil-gold` - فويل ذهبي
-- `foil-silver` - فويل فضي
-- `foil-rose` - فويل وردي
+### Foil
+- `foil-none` - no foil
+- `foil-gold` - gold foil
+- `foil-silver` - silver foil
+- `foil-rose` - rose foil
 
-## 🔄 التحديث التلقائي
+## 🔄 Automatic Updates
 
-عند تغيير معاملات URL:
-1. يتم تحليل SKU الجديد
-2. يتم تحديث نوع المنتج
-3. يتم تحديث إعدادات التصميم
-4. يتم تحديث الواجهة تلقائياً
+When URL parameters change:
+1. The new SKU is parsed
+2. The product type is updated
+3. The design settings are updated
+4. The interface updates automatically
 
-## 📚 الملفات المُعدلة
+## 📚 Modified Files
 
-- `frontend/app/editor/page.tsx` - إضافة دعم معاملات URL
+- `frontend/app/editor/page.tsx` - added URL parameter support
 
 ---
 
-**تاريخ الإضافة**: الآن  
-**الحالة**: ✅ جاهز للاستخدام
-
+**Date added**: Now  
+**Status**: ✅ Ready to use

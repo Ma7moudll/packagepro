@@ -1,109 +1,108 @@
-# ميزات Packhelp المضافة إلى PackagePro
+# Packhelp Features Added to PackagePro
 
-تم إضافة الميزات الرئيسية من [Packhelp](https://packhelp.com/) إلى مشروع PackagePro بنجاح.
+The main features from [Packhelp](https://packhelp.com/) were successfully added to the PackagePro project.
 
-## ✅ الميزات المضافة
+## ✅ Added Features
 
-### 1. محرر تصميم 3D محسّن
-- **الملف**: `frontend/components/design-editor/DesignEditor.tsx`
-- **الوصف**: محرر تصميم تفاعلي باستخدام Three.js لعرض معاينة ثلاثية الأبعاد مباشرة
-- **المميزات**:
-  - معاينة 3D مباشرة باستخدام React Three Fiber
-  - تحكم في الألوان (أساسي وثانوي)
-  - رفع الشعار والصور
-  - إضافة نص مخصص
-  - تعديل الأبعاد (الطول × العرض × الارتفاع)
-  - تحميل التصميم
+### 1. Enhanced 3D Design Editor
+- **File**: `frontend/components/design-editor/DesignEditor.tsx`
+- **Description**: An interactive design editor using Three.js for direct 3D preview
+- **Features**:
+  - Direct 3D preview using React Three Fiber
+  - Color control (primary and secondary)
+  - Upload logos and images
+  - Add custom text
+  - Edit dimensions (length × width × height)
+  - Download the design
 
-### 2. نظام BRIEF (إرسال طلب مخصص)
-- **الملف**: `frontend/app/brief/page.tsx`
-- **الوصف**: صفحة لإرسال طلبات تصميم مخصصة خطوة بخطوة
-- **المميزات**:
-  - نموذج متعدد الخطوات (3 خطوات)
-  - معلومات الشركة والاتصال
-  - وصف متطلبات التغليف
-  - رفع الملفات (PDF, AI, EPS, JPG, PNG)
-  - مراجعة قبل الإرسال
+### 2. BRIEF System (Send a Custom Request)
+- **File**: `frontend/app/brief/page.tsx`
+- **Description**: A page for submitting custom design requests step by step
+- **Features**:
+  - Multi-step form (3 steps)
+  - Company and contact information
+  - Packaging requirements description
+  - File upload (PDF, AI, EPS, JPG, PNG)
+  - Review before submitting
 
-### 3. نظام Samples محسّن
-- **الملف**: `frontend/app/samples/page.tsx`
-- **الوصف**: صفحة لطلب عينة التعبئة (حتى 8 عينات)
-- **المميزات**:
-  - اختيار حتى 8 منتجات للعينة
-  - سعر ثابت 50 جنيه للعينة
-  - استرداد نقدي عند الطلب التالي
-  - شحن سريع (3-5 أيام عمل)
-  - عرض المنتجات المستدامة
+### 3. Enhanced Samples System
+- **File**: `frontend/app/samples/page.tsx`
+- **Description**: A page for ordering packaging samples (up to 8 samples)
+- **Features**:
+  - Select up to 8 products for sampling
+  - Fixed price of 50 EGP per sample
+  - Cash refund on the next order
+  - Fast shipping (3-5 business days)
+  - Display sustainable products
 
-### 4. معرض Inspirations
-- **الملف**: `frontend/app/inspirations/page.tsx`
-- **الوصف**: معرض للأعمال السابقة وعروض التغليف المميزة
-- **المميزات**:
-  - عرض أعمال عملاء سابقين
-  - تصفية حسب الفئة (مشروبات، أزياء، صحة وجمال، إلخ)
-  - بحث في المعرض
-  - عرض تفاصيل كل عمل
+### 4. Inspirations Gallery
+- **File**: `frontend/app/inspirations/page.tsx`
+- **Description**: A gallery of previous work and standout packaging designs
+- **Features**:
+  - Display previous client work
+  - Filter by category (Beverages, Fashion, Health and Beauty, etc.)
+  - Search within the gallery
+  - View details of each piece
 
 ### 5. Sustainability Hub
-- **الملف**: `frontend/app/sustainable/page.tsx`
-- **الوصف**: مركز للاستدامة والمسؤولية البيئية
-- **المميزات**:
-  - شفافية في المواد
-  - مصادر مسؤولة
-  - تقليل الكربون
-  - برنامج إعادة التشجير (35,000+ شجرة)
-  - إحصائيات الاستدامة
-  - خصائص بيئية للمنتجات
+- **File**: `frontend/app/sustainable/page.tsx`
+- **Description**: A hub for sustainability and environmental responsibility
+- **Features**:
+  - Material transparency
+  - Responsible sourcing
+  - Carbon reduction
+  - Reforestation program (35,000+ trees)
+  - Sustainability statistics
+  - Eco-friendly product attributes
 
-### 6. نظام Warehousing (التخزين)
-- **الملف**: `frontend/app/warehousing/page.tsx`
-- **الوصف**: خدمة تخزين التغليف في مستودعات مكيفة
-- **المميزات**:
-  - تخزين خاضع للتحكم في درجة الحرارة
-  - توصيل سريع عند الحاجة
-  - توفير في التكاليف مع الطلبات الكبيرة
-  - نموذج طلب الخدمة
+### 6. Warehousing System
+- **File**: `frontend/app/warehousing/page.tsx`
+- **Description**: A packaging storage service in climate-controlled warehouses
+- **Features**:
+  - Temperature-controlled storage
+  - Fast delivery on demand
+  - Cost savings with large orders
+  - Service request form
 
-### 7. تحديثات Navbar
-- **الملف**: `frontend/app/components/navbar.tsx`
-- **التحديثات**:
-  - إضافة رابط "Send Brief"
-  - إضافة رابط "Samples"
-  - إضافة رابط "Inspirations"
+### 7. Navbar Updates
+- **File**: `frontend/app/components/navbar.tsx`
+- **Updates**:
+  - Added "Send Brief" link
+  - Added "Samples" link
+  - Added "Inspirations" link
 
-## 🎨 المكونات الإضافية
+## 🎨 Additional Components
 
 ### 3D Preview Component
-- **الملف**: `frontend/components/design-editor/3DPreview.tsx`
-- **الوصف**: مكون لعرض معاينة ثلاثية الأبعاد باستخدام Three.js
-- **الاستخدام**: يمكن استخدامه في صفحات التخصيص والتصميم
+- **File**: `frontend/components/design-editor/3DPreview.tsx`
+- **Description**: A component for displaying a 3D preview using Three.js
+- **Usage**: Can be used in customization and design pages
 
-## 📝 ملاحظات
+## 📝 Notes
 
-1. **Three.js Integration**: تم استخدام `@react-three/fiber` و `@react-three/drei` لعرض 3D
-2. **RTL Support**: جميع الصفحات تدعم العربية (RTL)
-3. **Responsive Design**: جميع الصفحات متجاوبة مع الأجهزة المختلفة
-4. **Toast Notifications**: استخدام نظام التنبيهات للرسائل
+1. **Three.js Integration**: `@react-three/fiber` and `@react-three/drei` were used for 3D rendering
+2. **RTL Support**: All pages support Arabic (RTL)
+3. **Responsive Design**: All pages are responsive across different devices
+4. **Toast Notifications**: Toast notification system is used for messages
 
-## 🔗 الروابط
+## 🔗 Links
 
-- `/brief` - إرسال طلب مخصص
-- `/samples` - طلب عينة التعبئة
-- `/inspirations` - معرض الإلهام
-- `/sustainable` - مركز الاستدامة
-- `/warehousing` - خدمة التخزين
-- `/customization` - محرر التصميم
+- `/brief` - send a custom request
+- `/samples` - order a packaging sample
+- `/inspirations` - inspiration gallery
+- `/sustainable` - sustainability hub
+- `/warehousing` - storage service
+- `/customization` - design editor
 
-## 🚀 الخطوات التالية
+## 🚀 Next Steps
 
-1. إضافة نظام Wholesale Pricing (تسعير الجملة)
-2. إضافة صفحات Industry-specific solutions
-3. تحسين محرر التصميم 3D بمزيد من الميزات
-4. إضافة تكامل مع Backend API للميزات الجديدة
+1. Add a Wholesale Pricing system
+2. Add industry-specific solution pages
+3. Enhance the 3D design editor with more features
+4. Add integration with the backend API for the new features
 
-## 📚 المراجع
+## 📚 References
 
 - [Packhelp Website](https://packhelp.com/)
 - [React Three Fiber Documentation](https://docs.pmnd.rs/react-three-fiber)
 - [Three.js Documentation](https://threejs.org/docs/)
-

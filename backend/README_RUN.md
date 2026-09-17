@@ -1,27 +1,27 @@
-# 🚀 تشغيل PackagePro Backend
+# 🚀 Running PackagePro Backend
 
-## الخطوات السريعة
+## Quick Steps
 
-### 1. تثبيت Dependencies (تم ✅)
+### 1. Install Dependencies (done ✅)
 ```bash
 npm install
 ```
 
-### 2. توليد Prisma Client (تم ✅)
+### 2. Generate Prisma Client (done ✅)
 ```bash
 npm run prisma:generate
 ```
 
-### 3. تشغيل الخادم
+### 3. Start the Server
 ```bash
 npm run dev
 ```
 
-الخادم سيعمل على: **http://localhost:3000**
+The server will run at: **http://localhost:3000**
 
-## اختبار سريع
+## Quick Test
 
-### في Terminal جديد:
+### In a new terminal:
 
 ```bash
 # Health Check
@@ -34,16 +34,16 @@ curl http://localhost:3000/api
 curl http://localhost:3000/api/pricing/materials
 ```
 
-## الملفات المتاحة
+## Available Files
 
-- `src/index.ts` - Server الرئيسي
-- `QUICK_START.md` - دليل شامل
-- `env.example` - مثال على ملف البيئة
+- `src/index.ts` - Main server
+- `QUICK_START.md` - Comprehensive guide
+- `env.example` - Example environment file
 
-## ملاحظات
+## Notes
 
-- **قاعدة البيانات**: يحتاج PostgreSQL أو SQLite
-- **Redis**: اختياري - النظام سيعمل بدونه
-- **Port**: افتراضي 3000 (يمكن تغييره في .env)
+- **Database**: Requires PostgreSQL or SQLite
+- **Redis**: Optional - the system will work without it
+- **Port**: Default 3000 (can be changed in .env)
 
-**جاهز للعمل! 🎉**
+**Ready to go! 🎉**

@@ -1,43 +1,43 @@
-# تجربة PackagePro - Try It! 🚀
+# Try PackagePro - Try It! 🚀
 
-## خطوات التشغيل السريع
+## Quick Start Steps
 
-### 1. تثبيت Dependencies ✅
-تم تثبيتها بنجاح!
+### 1. Install Dependencies ✅
+Installed successfully!
 
-### 2. توليد Prisma Client ✅
-تم توليده بنجاح!
+### 2. Generate Prisma Client ✅
+Generated successfully!
 
-### 3. تشغيل الخادم
+### 3. Run the Server
 
-#### الطريقة السريعة:
+#### Quick method:
 ```bash
 cd backend
 npm run dev
 ```
 
-الخادم سيعمل على: `http://localhost:3000`
+The server will run on: `http://localhost:3000`
 
-### 4. اختبار النظام
+### 4. Test the System
 
-افتح Terminal جديد واختبار:
+Open a new terminal and test:
 
-#### أ) اختبار Health Check:
+#### a) Test the Health Check:
 ```bash
 curl http://localhost:3000/health
 ```
 
-#### ب) اختبار API Info:
+#### b) Test API Info:
 ```bash
 curl http://localhost:3000/api
 ```
 
-#### ج) اختبار Pricing:
+#### c) Test Pricing:
 ```bash
 curl http://localhost:3000/api/pricing/materials
 ```
 
-#### د) تسجيل حساب جديد:
+#### d) Register a new account:
 ```bash
 curl -X POST http://localhost:3000/api/auth/register \
   -H "Content-Type: application/json" \
@@ -49,7 +49,7 @@ curl -X POST http://localhost:3000/api/auth/register \
   }'
 ```
 
-#### هـ) تسجيل الدخول:
+#### e) Log in:
 ```bash
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
@@ -59,39 +59,39 @@ curl -X POST http://localhost:3000/api/auth/login \
   }'
 ```
 
-## ملاحظات مهمة
+## Important Notes
 
-⚠️ **قاعدة البيانات**: 
-- النظام يحتاج قاعدة بيانات (PostgreSQL أو SQLite)
-- يمكنك تعديل `prisma/schema.prisma` لاستخدام SQLite للتجربة السريعة
+⚠️ **Database**: 
+- The system needs a database (PostgreSQL or SQLite)
+- You can edit `prisma/schema.prisma` to use SQLite for a quick trial
 
 ⚠️ **Redis**: 
-- اختياري - النظام سيعمل بدونه (بعض الميزات قد لا تعمل)
+- Optional - the system will run without it (some features may not work)
 
-⚠️ **الخدمات الخارجية**:
-- Stripe, DHL, SendGrid اختيارية للتجربة
-- النظام سيعمل بدونها لكن بعض الميزات محدودة
+⚠️ **External services**:
+- Stripe, DHL, and SendGrid are optional for testing
+- The system will work without them, but some features will be limited
 
-## الخطوات التالية
+## Next Steps
 
-1. **تشغيل الخادم**: `cd backend && npm run dev`
-2. **اختبار Health Check**: افتح `http://localhost:3000/health` في المتصفح
-3. **تجربة APIs**: استخدم curl أو Postman
+1. **Run the server**: `cd backend && npm run dev`
+2. **Test the Health Check**: open `http://localhost:3000/health` in your browser
+3. **Try the APIs**: use curl or Postman
 
-## المشاكل المتوقعة
+## Expected Issues
 
-### خطأ في قاعدة البيانات
-- قم بتعديل `DATABASE_URL` في `.env` أو استخدم SQLite
+### Database error
+- Edit `DATABASE_URL` in `.env` or use SQLite
 
-### خطأ في Redis
-- لا بأس! النظام سيعمل بدون Redis
+### Redis error
+- No problem! The system will work without Redis
 
-### Port 3000 مستخدم
-- غيّر PORT في `.env` إلى رقم آخر
+### Port 3000 is in use
+- Change PORT in `.env` to another number
 
-## ملفات مساعدة
+## Helpful Files
 
-- `backend/test-api.js` - سكريبت اختبار بسيط
-- `backend/QUICK_START.md` - دليل التشغيل الكامل
+- `backend/test-api.js` - A simple test script
+- `backend/QUICK_START.md` - The complete startup guide
 
-**جاهز للبدء! 🎉**
+**Ready to start! 🎉**

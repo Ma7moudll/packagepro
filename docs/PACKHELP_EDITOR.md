@@ -1,89 +1,89 @@
-# محرر التصميم المتقدم - Packhelp Editor Style
+# Advanced Design Editor - Packhelp Editor Style
 
-تم إنشاء محرر تصميم متقدم مشابه لمحرر [Packhelp Editor](https://packhelp.com/editor/) بالكامل.
+A fully-featured advanced design editor similar to the [Packhelp Editor](https://packhelp.com/editor/) was created.
 
-## 📋 الميزات الرئيسية
+## 📋 Key Features
 
-### 1. محرر Canvas 2D تفاعلي
-- **التقنية**: Fabric.js
-- **المميزات**:
-  - سحب وإفلات العناصر
-  - تحرير مباشر للنصوص
-  - إضافة الصور والشعارات
-  - Grid System للمحاذاة
+### 1. Interactive 2D Canvas Editor
+- **Technology**: Fabric.js
+- **Features**:
+  - Drag and drop elements
+  - Direct text editing
+  - Add images and logos
+  - Grid system for alignment
   - Zoom In/Out
   - Reset Camera
 
-### 2. معاينة 3D محسنة
-- **التقنية**: Three.js + React Three Fiber
-- **المميزات**:
-  - معاينة ثلاثية الأبعاد فورية
-  - تدوير وإمالة الكاميرا
-  - إضاءة محسنة
+### 2. Enhanced 3D Preview
+- **Technology**: Three.js + React Three Fiber
+- **Features**:
+  - Instant 3D preview
+  - Camera rotate and tilt
+  - Enhanced lighting
   - Shadow Effects
-  - تطبيق العناصر على المنتج 3D
+  - Apply elements to the 3D product
 
-### 3. أدوات التحرير
-- إضافة نص قابل للتعديل
-- إضافة صور من الملفات
-- نسخ وحذف العناصر
-- Undo/Redo (قيد التطوير)
-- تحميل التصميم (PNG)
+### 3. Editing Tools
+- Add editable text
+- Add images from files
+- Copy and delete elements
+- Undo/Redo (under development)
+- Download the design (PNG)
 
-### 4. قوالب جاهزة
-- قالب أعمال (Business Template)
-- قالب مناسبات (Event Template)
-- قالب احتفالي (Celebration Template)
+### 4. Ready-Made Templates
+- Business Template
+- Event Template
+- Celebration Template
 
-### 5. خصائص التصميم
-- اختيار الألوان (أساسي وثانوي)
-- مكتبة الخطوط
-- تحكم في الأبعاد
-- تحكم في الشفافية
+### 5. Design Properties
+- Color selection (primary and secondary)
+- Font library
+- Dimension control
+- Opacity control
 
-## 📁 الملفات المُنشأة
+## 📁 Created Files
 
-### الصفحة الرئيسية
-- `frontend/app/editor/page.tsx` - صفحة المحرر الكاملة
+### Main Page
+- `frontend/app/editor/page.tsx` - full editor page
 
-### المكونات
-- `frontend/components/design-editor/PackhelpEditor.tsx` - مكون المحرر المتقدم
-- `frontend/components/design-editor/AdvancedDesignEditor.tsx` - محرر متقدم (نسخة بديلة)
+### Components
+- `frontend/components/design-editor/PackhelpEditor.tsx` - advanced editor component
+- `frontend/components/design-editor/AdvancedDesignEditor.tsx` - advanced editor (alternative version)
 
-### التحديثات
-- تم إضافة رابط "محرر التصميم" في Navbar
+### Updates
+- Added a "Design Editor" link in the Navbar
 
-## 🚀 الاستخدام
+## 🚀 Usage
 
-### الوصول للمحرر
+### Accessing the Editor
 ```
 http://localhost:3001/editor
 ```
 
-### الميزات الأساسية
+### Core Features
 
-#### إضافة نص
-1. انقر على زر "نص" في الشريط الجانبي
-2. سيتم إضافة نص قابل للتعديل على Canvas
-3. انقر نقراً مزدوجاً على النص للتعديل
+#### Adding Text
+1. Click the "Text" button in the sidebar
+2. Editable text will be added to the canvas
+3. Double-click the text to edit it
 
-#### إضافة صورة
-1. انقر على زر "صورة" في الشريط الجانبي
-2. اختر الصورة من الملفات
-3. سيتم إضافة الصورة على Canvas
+#### Adding an Image
+1. Click the "Image" button in the sidebar
+2. Choose an image from your files
+3. The image will be added to the canvas
 
-#### التبديل بين 2D و 3D
-- استخدم زر التبديل في شريط الأدوات العلوي
-- عرض 2D للتحرير المباشر
-- عرض 3D للمعاينة الفورية
+#### Switching Between 2D and 3D
+- Use the toggle button in the top toolbar
+- 2D view for direct editing
+- 3D view for instant preview
 
-#### تحميل التصميم
-- انقر على زر "تحميل" في شريط الأدوات
-- سيتم تحميل التصميم كصورة PNG
+#### Downloading the Design
+- Click the "Download" button in the toolbar
+- The design will be downloaded as a PNG image
 
-## 🎨 الواجهة
+## 🎨 Interface
 
-### التخطيط
+### Layout
 ```
 ┌─────────────────────────────────────────────────┐
 │  Header (Product Type, View Toggle, Save)      │
@@ -99,47 +99,47 @@ http://localhost:3001/editor
 └──────────┴──────────────────────────┴──────────┘
 ```
 
-### الشريط الجانبي الأيسر
-- **عناصر**: إضافة نص، صور، أشكال، خلفيات
-- **تصميم**: الألوان، الخطوط
-- **قوالب**: قوالب جاهزة للاستخدام
+### Left Sidebar
+- **Elements**: Add text, images, shapes, backgrounds
+- **Design**: Colors, fonts
+- **Templates**: Ready-to-use templates
 
-### الشريط الجانبي الأيمن
-- **خصائص العنصر**: الموضع، الحجم، الشفافية
-- **النص**: Bold, Italic, Underline, Alignment
-- **الإجراءات**: نسخ، حذف
+### Right Sidebar
+- **Element Properties**: Position, size, opacity
+- **Text**: Bold, Italic, Underline, Alignment
+- **Actions**: Copy, delete
 
-## 🔧 التقنيات المستخدمة
+## 🔧 Technologies Used
 
-- **Fabric.js** - محرر Canvas 2D تفاعلي
-- **Three.js** - معاينة 3D
-- **React Three Fiber** - React wrapper لـ Three.js
-- **@react-three/drei** - أدوات مساعدة لـ Three.js
-- **Tailwind CSS** - التصميم والأنماط
+- **Fabric.js** - interactive 2D canvas editor
+- **Three.js** - 3D preview
+- **React Three Fiber** - React wrapper for Three.js
+- **@react-three/drei** - helper utilities for Three.js
+- **Tailwind CSS** - design and styling
 
-## 📝 ملاحظات التطوير
+## 📝 Development Notes
 
-### الميزات القادمة
-- [ ] Undo/Redo كامل
-- [ ] مزيد من القوالب
-- [ ] حفظ التصميم في قاعدة البيانات
-- [ ] مشاركة التصميم
-- [ ] تصدير PDF
-- [ ] دعم المزيد من أنواع المنتجات (Bags, Cups, Tubes)
+### Upcoming Features
+- [ ] Full Undo/Redo
+- [ ] More templates
+- [ ] Save designs to the database
+- [ ] Design sharing
+- [ ] PDF export
+- [ ] Support more product types (Bags, Cups, Tubes)
 
-### التحسينات المخطط لها
-- تحسين الأداء
-- إضافة المزيد من الخطوط
-- دعم SVG
-- تحرير متقدم للنصوص
+### Planned Improvements
+- Improve performance
+- Add more fonts
+- SVG support
+- Advanced text editing
 
-## 🌐 دعم اللغات
+## 🌐 Language Support
 
-المحرر يدعم كلاً من:
-- العربية (RTL)
-- الإنجليزية (LTR)
+The editor supports both:
+- Arabic (RTL)
+- English (LTR)
 
-## 📚 المراجع
+## 📚 References
 
 - [Packhelp Editor](https://packhelp.com/editor/)
 - [Fabric.js Documentation](http://fabricjs.com/)
@@ -148,6 +148,5 @@ http://localhost:3001/editor
 
 ---
 
-**تاريخ الإنشاء**: الآن  
-**الحالة**: ✅ جاهز للاستخدام
-
+**Created**: Now  
+**Status**: ✅ Ready to use

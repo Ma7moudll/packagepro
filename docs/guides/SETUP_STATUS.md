@@ -1,34 +1,34 @@
-# 🎉 تم إكمال الإعداد الأولي!
+# 🎉 Initial Setup Complete!
 
-## ✅ ما تم إنجازه
+## ✅ What Was Accomplished
 
-- ✅ تم إنشاء ملف `.env` للـ Backend
-- ✅ تم إنشاء ملف `.env.local` للـ Frontend
-- ✅ تم تثبيت جميع Dependencies
-- ✅ تم توليد Prisma Client
+- ✅ The `.env` file for the Backend has been created
+- ✅ The `.env.local` file for the Frontend has been created
+- ✅ All dependencies have been installed
+- ✅ The Prisma Client has been generated
 
-## ⚠️ ما يحتاج إلى عمل
+## ⚠️ What Still Needs to Be Done
 
-### قاعدة البيانات غير جاهزة
+### The database is not ready
 
-لديك خياران:
+You have two options:
 
 ---
 
-## 🐳 الخيار 1: استخدام Docker (موصى به)
+## 🐳 Option 1: Use Docker (recommended)
 
-### 1. تشغيل Docker Desktop
+### 1. Run Docker Desktop
 
-افتح تطبيق Docker Desktop على Mac
+Open the Docker Desktop app on your Mac
 
-### 2. تشغيل قاعدة البيانات
+### 2. Run the Database
 
 ```bash
 cd /Users/mac/packagepro
 docker-compose up -d postgres redis
 ```
 
-### 3. تطبيق Migrations
+### 3. Apply Migrations
 
 ```bash
 cd backend
@@ -36,7 +36,7 @@ npm run prisma:migrate
 npm run prisma:seed
 ```
 
-### 4. تشغيل المشروع
+### 4. Run the Project
 
 ```bash
 # Terminal 1: Backend
@@ -48,42 +48,42 @@ cd frontend && npm run dev
 
 ---
 
-## 💻 الخيار 2: PostgreSQL محلي
+## 💻 Option 2: Local PostgreSQL
 
-### 1. تثبيت PostgreSQL (إذا لم يكن مثبتاً)
+### 1. Install PostgreSQL (if not already installed)
 
 ```bash
 brew install postgresql@15
 ```
 
-### 2. تشغيل PostgreSQL
+### 2. Run PostgreSQL
 
 ```bash
 brew services start postgresql@15
 ```
 
-### 3. إنشاء قاعدة البيانات
+### 3. Create the Database
 
 ```bash
-# الاتصال بـ PostgreSQL
+# Connect to PostgreSQL
 psql postgres
 
-# إنشاء قاعدة البيانات
+# Create the database
 CREATE DATABASE packagepro;
 CREATE USER packagepro WITH PASSWORD 'packagepro123';
 GRANT ALL PRIVILEGES ON DATABASE packagepro TO packagepro;
 \q
 ```
 
-### 4. تحديث DATABASE_URL
+### 4. Update DATABASE_URL
 
-عدّل ملف `backend/.env`:
+Edit the `backend/.env` file:
 
 ```env
 DATABASE_URL="postgresql://packagepro:packagepro123@localhost:5432/packagepro?schema=public"
 ```
 
-### 5. تطبيق Migrations
+### 5. Apply Migrations
 
 ```bash
 cd backend
@@ -91,7 +91,7 @@ npm run prisma:migrate
 npm run prisma:seed
 ```
 
-### 6. تشغيل المشروع
+### 6. Run the Project
 
 ```bash
 # Terminal 1: Backend
@@ -103,16 +103,16 @@ cd frontend && npm run dev
 
 ---
 
-## 🚀 بعد الإعداد
+## 🚀 After Setup
 
-### الوصول إلى التطبيق
+### Accessing the Application
 
 - **Frontend**: http://localhost:3001
 - **Backend API**: http://localhost:3000
 - **API Docs**: http://localhost:3000/api
 - **Database Studio**: `cd backend && npm run prisma:studio`
 
-### اختبار Backend
+### Test the Backend
 
 ```bash
 # Health Check
@@ -127,71 +127,71 @@ curl http://localhost:3000/api/pricing/materials
 
 ---
 
-## 📚 المراجع
+## 📚 References
 
-- **PROJECT_REVIEW.md** - مراجعة شاملة
-- **ACTION_PLAN.md** - خطة العمل
-- **QUICK_SUMMARY.md** - ملخص سريع
-- **DEPLOYMENT_GUIDE.md** - دليل النشر
+- **PROJECT_REVIEW.md** - Comprehensive review
+- **ACTION_PLAN.md** - Action plan
+- **QUICK_SUMMARY.md** - Quick summary
+- **DEPLOYMENT_GUIDE.md** - Deployment guide
 
 ---
 
-## 🆘 استكشاف الأخطاء
+## 🆘 Troubleshooting
 
-### مشكلة: Backend لا يعمل
+### Issue: Backend is not working
 
 ```bash
-# تحقق من Logs
+# Check the Logs
 cd backend
 npm run dev
 
-# تحقق من قاعدة البيانات
+# Check the database
 psql -U packagepro -d packagepro -c "SELECT 1"
 ```
 
-### مشكلة: Frontend لا يعمل
+### Issue: Frontend is not working
 
 ```bash
-# تحقق من Environment Variables
+# Check the Environment Variables
 cat frontend/.env.local
 
-# أعد البناء
+# Rebuild
 cd frontend
 rm -rf .next
 npm run dev
 ```
 
-### مشكلة: Database Connection
+### Issue: Database Connection
 
 ```bash
-# تحقق من PostgreSQL
+# Check PostgreSQL
 psql --version
 psql -U packagepro -d packagepro
 
-# أو تحقق من Docker
+# Or check Docker
 docker ps | grep postgres
 ```
 
 ---
 
-## 💡 نصائح
+## 💡 Tips
 
-1. **استخدم Docker** للتطوير (أسهل وأسرع)
-2. **راجع Logs** إذا واجهت مشاكل
-3. **تحقق من Environment Variables** في `.env`
-4. **استخدم Prisma Studio** لعرض البيانات
-
----
-
-## 🎯 الخطوات التالية
-
-بعد تشغيل المشروع:
-
-1. ✅ اختبر جميع Endpoints
-2. ✅ راجع التوثيق
-3. ✅ ابدأ بإكمال TODOs
-4. ✅ أضف Tests
+1. **Use Docker** for development (easier and faster)
+2. **Check the Logs** if you run into issues
+3. **Check the Environment Variables** in `.env`
+4. **Use Prisma Studio** to view the data
 
 ---
 
-**حظاً موفقاً! 🚀**
+## 🎯 Next Steps
+
+After running the project:
+
+1. ✅ Test all endpoints
+2. ✅ Review the documentation
+3. ✅ Start completing the TODOs
+4. ✅ Add tests
+
+---
+
+**Good luck! 🚀**
