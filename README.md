@@ -1,12 +1,26 @@
-# PackagePro - Complete System
+# PackagePro
 
-منصة PackagePro الكاملة لإدارة الطلبات والتغليف المخصص.
+**PackagePro — حلول التغليف المخصصة | Custom Packaging Marketplace.**
 
-[![CI/CD](https://github.com/packagepro/packagepro/workflows/CI/CD%20Pipeline/badge.svg)](https://github.com/packagepro/packagepro/actions)
+A full-stack packaging marketplace: a **custom packaging marketplace** that
+connects factories with traders — catalog + search, custom design editor,
+dynamic quoting, Stripe payments, vendor routing, production & QA workflow,
+DHL fulfilment, settlements and analytics — implemented as a monorepo with a
+Fastify + PostgreSQL backend and a Next.js frontend.
+
+[![CI](https://github.com/Ma7moudll/packagepro/workflows/CI/badge.svg)](https://github.com/Ma7moudll/packagepro/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org/)
 [![Fastify](https://img.shields.io/badge/Fastify-4-green)](https://www.fastify.io/)
+
+## Screenshots
+
+| Home | Catalog | Design editor |
+|---|---|---|
+| ![Home](screenshots/home.png) | ![Catalog](screenshots/catalog.png) | ![Design editor](screenshots/design-editor.png) |
+
+> Screenshots show the frontend run locally against its seed data.
 
 ## 🚀 Quick Start
 
@@ -14,7 +28,7 @@
 
 ```bash
 # 1. Clone المشروع
-git clone https://github.com/your-repo/packagepro.git
+git clone https://github.com/Ma7moudll/packagepro.git
 cd packagepro
 
 # 2. تشغيل Setup Script
@@ -25,7 +39,7 @@ chmod +x scripts/setup.sh
 # Terminal 1: Backend
 cd backend && npm run dev
 
-# Terminal 2: Frontend  
+# Terminal 2: Frontend
 cd frontend && npm run dev
 ```
 
@@ -51,7 +65,7 @@ cd frontend && npm run dev
 ```
 packagepro/
 ├── backend/          # Fastify + TypeScript Backend
-├── frontend/         # Next.js 14 Frontend
+├── frontend/         # Next.js 15 Frontend
 ├── shared/           # Shared types and utilities
 ├── docs/             # Documentation
 ├── .github/          # GitHub Actions & Workflows
@@ -64,7 +78,7 @@ packagepro/
 - PostgreSQL 15+
 - Redis 7+
 - Docker & Docker Compose (optional)
-- npm or yarn
+- npm or pnpm
 
 ### Backend Setup
 
@@ -80,7 +94,7 @@ npm install
 
 3. Set up environment variables:
 ```bash
-cp .env.example .env
+cp env.example .env
 # Edit .env with your configuration
 ```
 
@@ -123,151 +137,91 @@ npm run dev
 
 Frontend will run on `http://localhost:3001`
 
-## API Documentation
+## API Overview
 
 API endpoints are available at `/api`. Main endpoints:
 
 ### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login
-- `POST /api/auth/refresh` - Refresh token
+- `POST /api/auth/register` - Register new user · `POST /api/auth/login` - Login · `POST /api/auth/refresh` - Refresh token
 
 ### Pricing
-- `POST /api/pricing/calculate` - Calculate price
-- `GET /api/pricing/materials` - Get materials
+- `POST /api/pricing/calculate` - Calculate price · `GET /api/pricing/materials` - Get materials
 
 ### Orders
-- `POST /api/orders` - Create order
-- `GET /api/orders/:id` - Get order
-- `GET /api/orders` - List orders
-- `PATCH /api/orders/:id/status` - Update order status
+- `POST /api/orders` - Create order · `GET /api/orders/:id` - Get order · `GET /api/orders` - List orders · `PATCH /api/orders/:id/status` - Update status
 
 ### Designs
-- `POST /api/designs/session` - Create design session
-- `POST /api/designs/save` - Save design
-- `GET /api/designs/:id` - Get design
+- `POST /api/designs/session` - Create design session · `POST /api/designs/save` - Save design · `GET /api/designs/:id` - Get design
 
 ### Payments
-- `POST /api/payments/create-intent` - Create payment intent
-- `POST /api/payments/confirm` - Confirm payment
-- `POST /api/webhooks/stripe` - Stripe webhook
+- `POST /api/payments/create-intent` · `POST /api/payments/confirm` · `POST /api/webhooks/stripe`
 
 ### Pre-Press & Approval
-- `POST /api/orders/:id/prepress-check` - Run pre-press check
-- `GET /api/orders/:id/prepress-results` - Get check results
-- `POST /api/orders/:id/request-approval` - Request approval
-- `POST /api/orders/:id/approve` - Approve order
+- `POST /api/orders/:id/prepress-check` · `GET /api/orders/:id/prepress-results` · `POST /api/orders/:id/request-approval` · `POST /api/orders/:id/approve`
 
 ### Purchase Orders
-- `POST /api/orders/:id/create-po` - Create purchase order
-- `GET /api/purchase-orders/:id` - Get PO details
-- `POST /api/purchase-orders/:id/confirm` - Confirm PO
+- `POST /api/orders/:id/create-po` · `GET /api/purchase-orders/:id` · `POST /api/purchase-orders/:id/confirm`
 
 ### Production
-- `POST /api/production/start/:poId` - Start production
-- `POST /api/production/:id/progress` - Update progress
-- `GET /api/production/:id` - Get production details
+- `POST /api/production/start/:poId` · `POST /api/production/:id/progress` · `GET /api/production/:id`
 
 ### Samples & QA
-- `POST /api/production/:productionId/samples` - Upload samples
-- `POST /api/samples/:id/approve` - Approve sample
-- `POST /api/samples/:id/reject` - Reject sample
+- `POST /api/production/:productionId/samples` · `POST /api/samples/:id/approve` · `POST /api/samples/:id/reject`
 
 ### Shipping
-- `POST /api/shipments/create/:id` - Create shipment
-- `GET /api/shipments/:id/tracking` - Get tracking info
-- `POST /api/webhooks/dhl` - DHL webhook
+- `POST /api/shipments/create/:id` · `GET /api/shipments/:id/tracking` · `POST /api/webhooks/dhl`
 
 ### Reviews
-- `POST /api/reviews` - Create review
-- `GET /api/reviews/order/:orderId` - Get order review
-- `GET /api/vendors/:id/reviews` - Get vendor reviews
+- `POST /api/reviews` · `GET /api/reviews/order/:orderId` · `GET /api/vendors/:id/reviews`
 
 ### Settlements & Finance
-- `POST /api/settlements/process/:id` - Process settlement
-- `GET /api/vendors/:id/payments` - Get vendor payments
-- `GET /api/finance/reports` - Financial reports
+- `POST /api/settlements/process/:id` · `GET /api/vendors/:id/payments` · `GET /api/finance/reports`
 
 ## Key Features
 
-### ✅ Phase 1-2: Foundation
-- Comprehensive Prisma Database Schema
-- Fastify Backend Infrastructure
-- JWT Authentication & Authorization
-- Redis & PostgreSQL Setup
-
-### ✅ Phase 3: Customer Journey
-- Dynamic Pricing Engine with Real-time Calculations
-- Design Session Management
-- Order Creation & Management
-- Stripe Payment Integration with Webhooks
-
-### ✅ Phase 4: Intelligent Processing
-- Pre-Press Quality Checker (Resolution, Color Mode, etc.)
-- Soft Proof Generation (PDF with Watermark)
-- Approval Workflow with Email Reminders
-- Auto-cancel after 7 days
-
-### ✅ Phase 5: Routing & Procurement
-- Smart Vendor Router with Multi-criteria Scoring
-- Handshake System (4-hour response window)
-- Purchase Order Generation (PDF)
-- Vendor Confirmation Tracking
-
-### ✅ Phase 6: Production & QA
-- Production Management & Progress Tracking
-- Sample Upload & Approval Workflow
-- Quality Assurance Checklist System
-
-### ✅ Phase 7: Fulfillment & Logistics
-- DHL Express API Integration
-- Automated Shipping Label Generation
-- Real-time Tracking System
-- Webhook-based Status Updates
-
-### ✅ Phase 8: Financial Closure
-- Settlement System (72-hour verification)
-- Customer Review System (Multi-criteria Ratings)
-- Financial Reporting & Analytics
-
-### ✅ Phase 9: Continuous Improvement
-- Analytics & Data Collection
-- Marketing Automation (Email Sequences)
-- System Optimization Service
-
-### ✅ Phase 11-12: Services
-- Email Service (SendGrid/SES) with Templates
-- File Upload & Processing (S3/R2)
-- RGB to CMYK Conversion
-- Image Optimization
-
-### ✅ Phase 13-14: Testing & Documentation
-- Testing Setup (Vitest)
-- Comprehensive Documentation
+- **Marketplace catalog** — search, categories, verified factories, featured products, sample requests.
+- **Dynamic Pricing Engine** — real-time quoting over materials and specs (`/api/pricing/calculate`).
+- **Custom Design Editor** — design sessions, save/session API, 200+ templates.
+- **Order lifecycle** — orders → pre-press quality check → soft-proof approval → vendor router (multi-criteria scoring + 4h handshake) → PO (PDF) → production/QA → DHL shipment → settlement (72h) → reviews.
+- **Payments** — Stripe payment intents + webhooks (also PayPal/COD scaffolding).
+- **Security baseline** — JWT (15 min access + 7d refresh), bcrypt cost 12, Redis rate limiting with exponential backoff + reCAPTCHA v3, persistent AuditLog.
+- **Jobs & integrations** — BullMQ workers (email, settlement, reminders, marketing, export), SendGrid/SES email service, S3/R2 file storage + image optimization, DHL tracking.
 
 ## Technology Stack
 
 ### Backend
-- Fastify (web framework)
-- Prisma (ORM)
-- PostgreSQL (database)
-- Redis (caching/sessions)
-- BullMQ (job queues)
-- Stripe (payments)
-- AWS S3 / CloudFlare R2 (file storage)
+- Fastify 4 (web framework) · Prisma 5 ORM · PostgreSQL · Redis
+- BullMQ (job queues) · Stripe (payments) · AWS S3 / CloudFlare R2 (files)
+- JWT auth · bcrypt (cost 12) · reCAPTCHA v3 · nodemailer (SendGrid/SES)
+- pdfkit / pdf-lib (PO & reports)
 
 ### Frontend
-- Next.js 14 (App Router)
-- React 18
-- TypeScript
-- Tailwind CSS
-- Three.js (3D preview)
-- Fabric.js (design editor)
+- Next.js 15 (App Router) · React 19 · TypeScript 5.3
+- Tailwind CSS · 3D package preview · design editor
+
+## CI/CD
+
+- `.github/workflows/ci.yml` — lint, type-check, tests and build on push/PR.
+- `.github/workflows/deploy.yml` — deployment pipeline stub.
+- `.github/dependabot.yml` — dependency updates.
 
 ## Environment Variables
 
-See `backend/.env.example` for all required environment variables.
+See `backend/env.example` for all required environment variables
+(database, Redis, JWT, S3/R2, Stripe, DHL, email providers, analytics).
+
+## Status & Known Limitations
+
+- **Backend is the most complete part** — 17 modules, 11 services, 18 Prisma
+  tables, 5 BullMQ workers, Stripe/DHL/SES wired (per `docs/guides/COMPLETION_SUMMARY.md`). The **frontend marketplace is the active focus** (connecting real APIs per `SPEC-029`); several pages currently render seed/fixture data.
+- **Third-party credentials are required, not bundled** — Stripe, DHL,
+  SendGrid/SES, S3/R2, reCAPTCHA and analytics keys come from `backend/.env`
+  (`cp env.example .env`). None are committed (`.env` is gitignored).
+- **Not deployed** — `deploy.yml` is a pipeline stub; production hosting and
+  environment provisioning are the operator's responsibility.
+- Backend tests run with Vitest; both packages expose `npm run lint`.
+- The FAQ/statistics on the landing page show seed figures until wired to the live API.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

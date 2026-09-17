@@ -27,6 +27,10 @@ yarn-error.log*
 # Local env files
 .env
 .env*.local
+.env.development
+.env.test
+.env.staging
+.env.production
 .env.development.local
 .env.test.local
 .env.production.local
@@ -61,6 +65,7 @@ backend/database/backups/*.sql.gz
 *.tmp
 *.bak
 *.old
+*.pid
 
 
 # Playwright / QA artifacts
