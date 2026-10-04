@@ -8,7 +8,8 @@ export class SampleService {
    */
   async uploadSamples(
     productionId: string,
-    files: Array<{ buffer: Buffer; fileName: string; mimeType: string }>
+    files: Array<{ buffer: Buffer; fileName: string; mimeType: string }>,
+    notes?: string
   ): Promise<any> {
     const production = await prisma.production.findUnique({
       where: { id: productionId },
@@ -44,6 +45,7 @@ export class SampleService {
         data: {
           photoUrls,
           status: 'pending',
+          notes: notes ?? existingSample.notes,
           updatedAt: new Date(),
         },
       });
@@ -53,6 +55,7 @@ export class SampleService {
           productionId,
           photoUrls,
           status: 'pending',
+          notes,
         },
       });
     }

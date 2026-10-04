@@ -1,9 +1,17 @@
 # SPEC-029: End-to-End Marketplace Implementation Plan
 
 > **Project:** PackagePro  
-> **Status:** Planning  
+> **Status:** In Progress — Phases 1-4 shipped; Phase 5 polish (k6 load testing, monitoring alerts) remaining  
 > **Priority:** P0 — Critical Path  
 > **Dependencies:** All prior SPECs (001-028)
+
+> **Progress log (2026-10-04):**
+> - Phase 1 ✅ — `frontend/lib/api/*` integration layer (client with auth/refresh/retry, products, pricing, orders, payments, shipments, vendors, approvals).
+> - Phase 2 ✅ — cart/checkout with Stripe, customer orders + timeline, designs, billing, notifications, reorder (`(customer)` route group).
+> - Phase 3 ✅ — vendor portal `(business)/manufacturer`: dashboard, orders, handshake accept/reject with ownership checks, production progress, **samples page + SampleUploader (real upload → QA queue)**, settings (GET/PATCH `/vendors/me`).
+> - Phase 4 ✅ — admin console `app/admin`: overview KPIs, orders (search/filter), vendors (activate/deactivate), customers (LTV), finance P&L, **QA sample review queue** — all backed by the new ADMIN-gated `/api/admin/*` module.
+> - Security hardening ✅ — `requireRoles/requireAdmin/requireVendorProfile` RBAC middleware wired across vendor/admin/finance/settlements/analytics/templates routes; sample upload implemented (base64 JSON → S3 or local disk + `/api/files/*` serving with traversal guard); background workers (email/settlement/reminder/marketing/export) now actually start in `src/index.ts`.
+> - Verification ✅ — backend vitest 118/118 (incl. new `admin/rbac.test.ts`), frontend units 99/99, Playwright cart-checkout + phase2-approval 8/8, production builds pass, RBAC/smoke flows verified live.
 
 ---
 

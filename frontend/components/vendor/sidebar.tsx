@@ -13,14 +13,18 @@ import {
   LogOut,
   ChevronRight,
   Factory,
+  Camera,
+  Settings,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 const NAV_ITEMS = [
   { href: "/manufacturer", icon: LayoutDashboard, labelEn: "Dashboard", labelAr: "لوحة التحكم" },
   { href: "/manufacturer/orders", icon: ShoppingCart, labelEn: "Orders", labelAr: "الطلبات" },
+  { href: "/manufacturer/samples", icon: Camera, labelEn: "Samples", labelAr: "العينات" },
   { href: "/manufacturer/quotes", icon: FileText, labelEn: "Quotes", labelAr: "عروض الأسعار" },
   { href: "/manufacturer/products", icon: Package, labelEn: "Products", labelAr: "المنتجات" },
+  { href: "/manufacturer/settings", icon: Settings, labelEn: "Settings", labelAr: "الإعدادات" },
 ]
 
 export function VendorSidebar() {

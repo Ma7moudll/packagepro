@@ -122,6 +122,23 @@ export default function ManufacturerOrderDetailPage() {
     }
   }
 
+  const handleUploadSample = async (file: File) => {
+    if (!po?.production?.id) return
+    const dataBase64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = reader.result as string
+        resolve(result.slice(result.indexOf(",") + 1))
+      }
+      reader.onerror = () => reject(new Error("Failed to read file"))
+      reader.readAsDataURL(file)
+    })
+    await vendorsApi.uploadSamples(po.production.id, [
+      { fileName: file.name, mimeType: file.type || "image/jpeg", dataBase64 },
+    ])
+    await fetchData()
+  }
+
   const handleMarkReadyToShip = async () => {
     setProductionStatus("ready_to_ship")
     if (orderId) {
@@ -363,16 +380,29 @@ export default function ManufacturerOrderDetailPage() {
 
           {/* Production Progress */}
           {po && (po.handshake?.status === "accepted" || productionStatus !== "not_started" || po.production) && (
-            <ProductionProgress
-              orderId={order.id}
-              currentStatus={productionStatus}
-              progress={productionProgress}
-              samplePhotos={[]}
-              onStartProduction={handleStartProduction}
-              onUpdateProgress={handleUpdateProgress}
-              onUploadSample={async () => {}}
-              onMarkReadyToShip={handleMarkReadyToShip}
-            />
+            <>
+              {po.production?.samples?.[0]?.status === "rejected" && po.production.samples[0].revisionNotes && (
+                <Alert className="border-rose-200 bg-rose-50 text-rose-800">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <span className="font-semibold">
+                      {language === "ar" ? "تعديلات مطلوبة على العينة: " : "Sample revisions requested: "}
+                    </span>
+                    {po.production.samples[0].revisionNotes}
+                  </AlertDescription>
+                </Alert>
+              )}
+              <ProductionProgress
+                orderId={order.id}
+                currentStatus={productionStatus}
+                progress={productionProgress}
+                samplePhotos={po.production?.samples?.[0]?.photoUrls ?? []}
+                onStartProduction={handleStartProduction}
+                onUpdateProgress={handleUpdateProgress}
+                onUploadSample={handleUploadSample}
+                onMarkReadyToShip={handleMarkReadyToShip}
+              />
+            </>
           )}
 
           {/* Order Summary */}

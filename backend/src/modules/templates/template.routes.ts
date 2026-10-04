@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { templateController } from './template.controller';
+import { requireAdmin } from '../../middleware/rbac';
 
 export const templateRoutes: FastifyPluginAsync = async (fastify) => {
   // List templates (public)
@@ -17,19 +18,19 @@ export const templateRoutes: FastifyPluginAsync = async (fastify) => {
     return templateController.getTemplate(request, reply);
   });
 
-  // Create template (authenticated)
+  // Template authoring is a platform (ADMIN) capability.
   fastify.post('/templates', async (request, reply) => {
+    await requireAdmin(request, reply);
     return templateController.createTemplate(request, reply);
   });
 
-  // Update template (authenticated)
   fastify.patch('/templates/:id', async (request, reply) => {
+    await requireAdmin(request, reply);
     return templateController.updateTemplate(request, reply);
   });
 
-  // Delete template (authenticated)
   fastify.delete('/templates/:id', async (request, reply) => {
+    await requireAdmin(request, reply);
     return templateController.deleteTemplate(request, reply);
   });
 };
-

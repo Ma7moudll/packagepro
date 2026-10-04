@@ -1,12 +1,23 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../../lib/prisma';
-import { authenticate, AuthenticatedRequest } from '../../middleware/auth.middleware';
+import {
+  requireVendorProfile,
+} from '../../middleware/rbac';
 import { NotFoundError } from '../../utils/errors';
+import { z } from 'zod';
+
+export const updateVendorProfileSchema = z.object({
+  companyName: z.string().min(2).max(200).optional(),
+  phone: z.string().max(30).optional(),
+  address: z.string().max(500).optional(),
+  city: z.string().max(100).optional(),
+  country: z.string().max(100).optional(),
+  postalCode: z.string().max(20).optional(),
+});
 
 export class VendorController {
   async getVendorDashboard(request: FastifyRequest, reply: FastifyReply) {
-    await authenticate(request, reply);
-    const user = (request as AuthenticatedRequest).user;
+    const { user } = await requireVendorProfile(request, reply);
 
     const vendor = await prisma.vendor.findUnique({
       where: { userId: user.userId },
@@ -99,12 +110,7 @@ export class VendorController {
   }
 
   async getVendorOrders(request: FastifyRequest, reply: FastifyReply) {
-    await authenticate(request, reply);
-    const user = (request as AuthenticatedRequest).user;
-
-    const vendor = await prisma.vendor.findUnique({
-      where: { userId: user.userId },
-    });
+    const { vendor } = await requireVendorProfile(request, reply);
 
     if (!vendor) {
       throw new NotFoundError('Vendor');
@@ -142,7 +148,14 @@ export class VendorController {
               rejectionReason: true,
             },
           },
-          production: true,
+          production: {
+            include: {
+              samples: {
+                orderBy: { updatedAt: 'desc' },
+                take: 1,
+              },
+            },
+          },
         },
       }),
       prisma.purchaseOrder.count({ where }),
@@ -157,6 +170,45 @@ export class VendorController {
         total,
         totalPages: Math.ceil(total / limit),
       },
+    });
+  }
+
+  async getVendorProfile(request: FastifyRequest, reply: FastifyReply) {
+    const { vendor } = await requireVendorProfile(request, reply);
+
+    return reply.send({
+      success: true,
+      data: {
+        id: vendor.id,
+        companyName: vendor.companyName,
+        taxId: vendor.taxId,
+        address: vendor.address,
+        city: vendor.city,
+        country: vendor.country,
+        postalCode: vendor.postalCode,
+        phone: vendor.phone,
+        email: vendor.email,
+        isActive: vendor.isActive,
+        qualityRating: vendor.qualityRating,
+        averageLeadTime: vendor.averageLeadTime,
+        minOrderQuantity: vendor.minOrderQuantity,
+        createdAt: vendor.createdAt,
+      },
+    });
+  }
+
+  async updateVendorProfile(request: FastifyRequest, reply: FastifyReply) {
+    const { vendor } = await requireVendorProfile(request, reply);
+    const body = updateVendorProfileSchema.parse(request.body);
+
+    const updated = await prisma.vendor.update({
+      where: { id: vendor.id },
+      data: body,
+    });
+
+    return reply.send({
+      success: true,
+      data: updated,
     });
   }
 }

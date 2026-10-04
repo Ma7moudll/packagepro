@@ -1,4 +1,30 @@
-import { apiGet, apiPost } from './client'
+import { apiGet, apiPost, apiPatch } from './client'
+
+export interface VendorProfile {
+  id: string
+  companyName: string
+  taxId?: string | null
+  address: string
+  city: string
+  country: string
+  postalCode?: string | null
+  phone?: string | null
+  email?: string | null
+  isActive: boolean
+  qualityRating?: number | null
+  averageLeadTime?: number | null
+  minOrderQuantity?: number | null
+  createdAt?: string
+}
+
+export interface ProductionSample {
+  id: string
+  status: 'pending' | 'approved' | 'rejected'
+  photoUrls: string[]
+  notes?: string | null
+  revisionNotes?: string | null
+  updatedAt: string
+}
 
 export interface VendorDashboard {
   vendor: {
@@ -43,6 +69,7 @@ export interface PurchaseOrder {
     notes: string | null
     startedAt: string | null
     estimatedCompletionDate: string | null
+    samples?: ProductionSample[]
   } | null
   order?: {
     id: string
@@ -139,6 +166,27 @@ export const vendorsApi = {
 
   updateProductionProgress: (productionId: string, progressPercent: number, notes?: string) =>
     apiPost<{ id: string; status: string; progressPercent: number }>(`/production/${productionId}/progress`, { progressPercent, notes }),
+
+  /**
+   * Upload QA sample photos for a production (SPEC-029 Week 8).
+   * Photos are sent base64-encoded in JSON; the backend stores them via the
+   * file-upload service (S3 or local disk) and resets the sample to `pending`.
+   */
+  uploadSamples: (
+    productionId: string,
+    photos: { fileName: string; mimeType: string; dataBase64: string }[],
+    notes?: string
+  ) =>
+    apiPost<{ id: string; status: string; photoUrls: string[]; notes?: string | null }>(
+      `/production/${productionId}/samples`,
+      { photos, notes }
+    ),
+
+  getVendorProfile: () =>
+    apiGet<VendorProfile>('/vendors/me'),
+
+  updateVendorProfile: (data: Partial<VendorProfile>) =>
+    apiPatch<VendorProfile>('/vendors/me', data),
 
   getReviews: (vendorId: string) =>
     apiGet<unknown[]>(`/vendors/${vendorId}/reviews`),

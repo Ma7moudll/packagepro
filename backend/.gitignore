@@ -43,3 +43,6 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+
+# Local file storage (S3 fallback in dev)
+.data/

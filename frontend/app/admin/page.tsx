@@ -177,6 +177,36 @@ export default function AdminDashboard() {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Button variant="outline" className="h-20 flex-col" asChild>
+                <Link href="/admin/orders">
+                  <ShoppingCart className="h-6 w-6 mb-2" />
+                  Orders
+                </Link>
+              </Button>
+              <Button variant="outline" className="h-20 flex-col" asChild>
+                <Link href="/admin/samples">
+                  <AlertCircle className="h-6 w-6 mb-2" />
+                  QA Samples
+                </Link>
+              </Button>
+              <Button variant="outline" className="h-20 flex-col" asChild>
+                <Link href="/admin/vendors">
+                  <Users className="h-6 w-6 mb-2" />
+                  Vendors
+                </Link>
+              </Button>
+              <Button variant="outline" className="h-20 flex-col" asChild>
+                <Link href="/admin/customers">
+                  <Users className="h-6 w-6 mb-2" />
+                  Customers
+                </Link>
+              </Button>
+              <Button variant="outline" className="h-20 flex-col" asChild>
+                <Link href="/admin/finance">
+                  <DollarSign className="h-6 w-6 mb-2" />
+                  Finance
+                </Link>
+              </Button>
+              <Button variant="outline" className="h-20 flex-col" asChild>
                 <Link href="/admin/analytics">
                   <TrendingUp className="h-6 w-6 mb-2" />
                   Analytics

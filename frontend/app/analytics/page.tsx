@@ -23,6 +23,11 @@ export default function AnalyticsDashboard() {
       return
     }
     if (!user) return
+    // Platform funnel metrics are ADMIN-gated on the backend.
+    if (user.role !== "ADMIN") {
+      router.push("/dashboard")
+      return
+    }
 
     const load = async () => {
       try {

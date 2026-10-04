@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useLanguage } from "@/providers/language-provider"
-import { analyticsApi } from "@/lib/api/analytics"
 import { Star, ThumbsUp, MessageSquare, Search, Loader2 } from "lucide-react"
 
 interface Review {
@@ -51,38 +50,15 @@ export default function ReviewsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchReviews = async () => {
-      try {
-        const res = await analyticsApi.getProductPopularity()
-        if (res.success && res.data && res.data.length > 0) {
-          setReviews(
-            res.data.slice(0, 5).map((p, i) => ({
-              id: String(i + 1),
-              productName: p.productType,
-              productId: i + 1,
-              rating: Math.min(5, Math.max(1, 5 - (i % 3))),
-              title: language === "ar" ? "تقييم جيد" : "Good Review",
-              comment: language === "ar" ? "منتج ممتاز وجودة عالية" : "Excellent product with high quality",
-              author: language === "ar" ? "عميل" : "Customer",
-              date: new Date(Date.now() - i * 86400000),
-              verified: true,
-              helpful: Math.floor(Math.random() * 30) + 5,
-              status: "approved" as const,
-            }))
-          )
-          return
-        }
-      } catch {
-        // Fall through to fallback
-      }
-      setReviews(FALLBACK_REVIEWS_EN.map((r) => ({
+    // Community showcase: localized sample content. Real per-order reviews
+    // surface on the vendor profile (vendors/:id/reviews) instead.
+    setReviews(
+      FALLBACK_REVIEWS_EN.map((r) => ({
         ...r,
         productName: language === "ar" ? PRODUCT_NAMES[r.productName as keyof typeof PRODUCT_NAMES]?.ar || r.productName : r.productName,
-      })))
-      setLoading(false)
-    }
-
-    fetchReviews()
+      }))
+    )
+    setLoading(false)
   }, [language])
 
   const filteredReviews = reviews

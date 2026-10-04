@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { connectRedis, isRedisEnabled, getRedisClient } from './lib/redis';
 import { logger } from './utils/logger';
 import { AppError } from './utils/errors';
+import { startWorkers } from './workers';
 
 import rawBody from 'fastify-raw-body';
 
@@ -233,6 +234,8 @@ async function registerRoutes() {
   const { catalogRoutes } = await import('./modules/catalog/catalog.routes');
   const { checkoutRoutes } = await import('./modules/checkout/checkout.routes');
   const { publicRoutes } = await import('./modules/public/public.routes');
+  const { fileRoutes } = await import('./modules/files/files.routes');
+  const { adminRoutes } = await import('./modules/admin/admin.routes');
 
   await server.register(authRoutes, { prefix: '/api' });
   await server.register(pricingRoutes, { prefix: '/api' });
@@ -257,6 +260,8 @@ async function registerRoutes() {
   await server.register(catalogRoutes, { prefix: '/api' });
   await server.register(checkoutRoutes, { prefix: '/api' });
   await server.register(publicRoutes, { prefix: '/api' });
+  await server.register(fileRoutes, { prefix: '/api' });
+  await server.register(adminRoutes, { prefix: '/api' });
 
   logger.info('Routes registered');
 }
@@ -288,6 +293,9 @@ async function start() {
 
     await server.listen({ port, host });
     logger.info(`Server listening on http://${host}:${port}`);
+
+    // Start background workers after the HTTP surface is up.
+    await startWorkers();
   } catch (err) {
     logger.error('Failed to start server', err);
     process.exit(1);
