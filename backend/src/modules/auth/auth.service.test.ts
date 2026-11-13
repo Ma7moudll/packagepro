@@ -1,6 +1,18 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { authService } from './auth.service';
 import { prisma } from '../../lib/prisma';
+
+// register() fires real SMTP through a dummy credential (sendEmail rethrows)
+// → tests intermittently cross their 5s timeout under full-suite parallelism.
+// No test here asserts on mail content — mocked for determinism (4b found;
+// identical fix to auth.login.test.ts; the class export keeps AuthEmailService
+// importable at module-init time).
+vi.mock('../../services/email/email.service', () => ({
+  EmailService: class {
+    async sendEmail() {}
+  },
+  emailService: { sendEmail: vi.fn().mockResolvedValue(undefined) },
+}));
 
 const TEST_EMAILS = [
   'test@example.com',

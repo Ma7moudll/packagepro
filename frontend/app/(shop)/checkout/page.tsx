@@ -12,6 +12,7 @@ import { Loader2, CreditCard, AlertCircle, ShoppingCart, ArrowRight, ArrowLeft }
 import { useLanguage } from "@/providers/language-provider"
 import { useAuth } from "@/providers/auth-provider"
 import { StripePayment } from "@/components/ecommerce/StripePayment"
+import { shippingSplitRows } from "@/lib/ecommerce/shipping-split"
 import type { ShippingAddress } from "@/lib/ecommerce/types"
 
 export default function CheckoutPage() {
@@ -87,6 +88,11 @@ export default function CheckoutPage() {
   const currency = cart?.currency || "USD"
   const formatMoney = (n: number) =>
     `${n.toFixed(2)} ${currency}`
+
+  // 4c: one shipping row per vendor group when the cart spans multiple
+  // productTypes (multiple purchase orders will ship separately); the flat
+  // row stays for single-group carts.
+  const splitRows = shippingSplitRows(summary, items)
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -249,14 +255,27 @@ export default function CheckoutPage() {
                       <span className="text-slate-600">{language === "ar" ? "الضريبة" : "Tax"}</span>
                       <span>{formatMoney(summary.tax)}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-600">{language === "ar" ? "الشحن" : "Shipping"}</span>
-                      <span>
-                        {summary.shipping === 0
-                          ? language === "ar" ? "مجاني" : "Free"
-                          : formatMoney(summary.shipping)}
-                      </span>
-                    </div>
+                    {splitRows.length > 1 ? (
+                      splitRows.map((row) => (
+                        <div key={row.productType} className="flex justify-between text-sm">
+                          <span className="text-slate-600">
+                            {language === "ar"
+                              ? `الشحن — ${row.productType}`
+                              : `Shipping — ${row.productType.charAt(0).toUpperCase()}${row.productType.slice(1)}`}
+                          </span>
+                          <span>{formatMoney(row.shipping)}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-600">{language === "ar" ? "الشحن" : "Shipping"}</span>
+                        <span>
+                          {summary.shipping === 0
+                            ? language === "ar" ? "مجاني" : "Free"
+                            : formatMoney(summary.shipping)}
+                        </span>
+                      </div>
+                    )}
                     <div className="border-t pt-2 flex justify-between font-semibold">
                       <span>{language === "ar" ? "الإجمالي" : "Total"}</span>
                       <span>{formatMoney(summary.total)}</span>

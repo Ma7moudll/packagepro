@@ -196,6 +196,34 @@ export function estimateShippingCost(
   return Math.round(baseShipping * 100) / 100;
 }
 
+export interface ShippingLine {
+  productType: string;
+  /** Per-line shipping estimate (already rounded by the pricing engine). */
+  shipping: number;
+}
+
+/**
+ * Pure shipping split (Step-4 Piece 4c): one entry per productType group —
+ * the same grouping that multi-vendor purchase orders use (4b) — so a
+ * mixed-vendor cart can show shipping per vendor group. The sum of the
+ * groups equals the original total by construction. First-seen group
+ * order; each group rounded to the cent.
+ */
+export function groupShippingByProductType(
+  lines: ShippingLine[]
+): Array<{ productType: string; shipping: number }> {
+  const groups = new Map<string, number>();
+
+  for (const line of lines) {
+    groups.set(line.productType, (groups.get(line.productType) ?? 0) + line.shipping);
+  }
+
+  return Array.from(groups.entries()).map(([productType, shipping]) => ({
+    productType,
+    shipping: Math.round(shipping * 100) / 100,
+  }));
+}
+
 /**
  * Calculate tax (simplified - adjust based on business logic)
  */

@@ -6,8 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/providers/auth-provider"
-import { analyticsApi, type DashboardSummary } from "@/lib/api/analytics"
+import { analyticsApi, subscribeToAdminAnalytics, type DashboardSummary } from "@/lib/api/analytics"
 import { ordersApi } from "@/lib/api/orders"
+import { API_BASE } from "@/lib/api/client"
 import { Package, Users, ShoppingCart, DollarSign, TrendingUp, AlertCircle, Plus, Eye, Loader2 } from "lucide-react"
 import Link from "next/link"
 import type { Order } from "@shared/types"
@@ -49,6 +50,18 @@ export default function AdminDashboard() {
 
     fetchData()
   }, [user, router])
+
+  useEffect(() => {
+    if (!user || user.role !== "ADMIN") return
+
+    // Live KPI updates over SSE (backend GET /analytics/stream). The fetch
+    // effect above stays as the initial load + fallback; both write the same
+    // stats state, so once the stream connects the console updates live.
+    const unsubscribe = subscribeToAdminAnalytics(API_BASE, {
+      onSummary: (summary) => setStats(summary),
+    })
+    return unsubscribe
+  }, [user])
 
   if (!user || user.role !== "ADMIN") {
     return null

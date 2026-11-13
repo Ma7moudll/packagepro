@@ -22,7 +22,7 @@ export class ReviewService {
     const order = await prisma.order.findUnique({
       where: { id: data.orderId },
       include: {
-        purchaseOrder: {
+        purchaseOrders: {
           include: {
             vendor: true,
           },
@@ -52,7 +52,9 @@ export class ReviewService {
       data: {
         orderId: data.orderId,
         customerId: data.customerId,
-        vendorId: order.purchaseOrder!.vendorId,
+        // 4a bridge: order reviews target the first (primary) PO's vendor;
+        // 4b will review per-PO once orders spawn several.
+        vendorId: order.purchaseOrders[0]!.vendorId,
         rating: data.rating,
         qualityRating: data.qualityRating,
         speedRating: data.speedRating,
@@ -82,7 +84,7 @@ export class ReviewService {
     });
 
     // Update vendor rating
-    await this.updateVendorRating(order.purchaseOrder!.vendorId);
+    await this.updateVendorRating(order.purchaseOrders[0]!.vendorId);
 
     return review;
   }

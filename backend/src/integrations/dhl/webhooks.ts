@@ -106,7 +106,7 @@ async function createSettlementForOrder(orderId: string): Promise<void> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
-      purchaseOrder: {
+      purchaseOrders: {
         include: {
           vendor: true,
         },
@@ -114,7 +114,11 @@ async function createSettlementForOrder(orderId: string): Promise<void> {
     },
   });
 
-  if (!order || !order.purchaseOrder) {
+  // 4a bridge: an order routes through one PO per vendor item-group once
+  // multi-vendor splitting lands (4b); the first PO is the settlement vendor.
+  const primaryPO = order?.purchaseOrders[0] ?? null;
+
+  if (!order || !primaryPO) {
     return;
   }
 
@@ -125,9 +129,9 @@ async function createSettlementForOrder(orderId: string): Promise<void> {
   await prisma.settlement.create({
     data: {
       orderId,
-      vendorId: order.purchaseOrder.vendorId,
-      amount: order.purchaseOrder.vendorCost,
-      currency: order.purchaseOrder.currency,
+      vendorId: primaryPO.vendorId,
+      amount: primaryPO.vendorCost,
+      currency: primaryPO.currency,
       verificationPeriodEndsAt,
       status: 'pending',
     },

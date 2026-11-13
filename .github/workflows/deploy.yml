@@ -1,55 +1,100 @@
 name: Deploy to Production
 
+# Target: Vercel (Next.js 15 frontend) + Railway (Fastify backend + managed
+# PostgreSQL + Redis). Both hosts are wired in one pipeline; each job deploys
+# only when its own paths changed.
+#
+# Required repository SECRETS / VARIABLES:
+#   RAILWAY_TOKEN          — Railway project token (Project Settings → Tokens)
+#   VERCEL_TOKEN           — Vercel token (Account Settings → Tokens)
+#   VERCEL_ORG_ID          — Vercel org id (frontend project settings → .vercel/project.json)
+#   VERCEL_PROJECT_ID      — Vercel project id for the frontend
+#   NEXT_PUBLIC_API_URL    — var: public backend URL, e.g. https://packagepro-api-production.up.railway.app
+#
+# One-time infrastructure setup (Railway dashboard):
+#   1. Create project "packagepro" → add services: "backend" (deploy from repo
+#      is NOT needed — this workflow ships code via `railway up`),
+#      provision "PostgreSQL" and "Redis" add-ons.
+#   2. Backend service variables ← copy from backend/env.example
+#      (DATABASE_URL and REDIS_URL come from the add-ons).
+#   3. Run this workflow once; then point the webhooks at the Railway domain:
+#      Stripe → ${NEXT_PUBLIC_API_URL}/api/webhooks/stripe (also create the
+#      webhook secret and set STRIPE_WEBHOOK_SECRET in Railway),
+#      DHL    → ${NEXT_PUBLIC_API_URL}/api/webhooks/dhl
+#   4. Vercel frontend env: NEXT_PUBLIC_API_URL (var above).
+
 on:
   push:
     branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/deploy.yml"
     tags:
-      - 'v*'
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy
+  backend:
+    name: Backend → Railway (migrate + ship)
     runs-on: ubuntu-latest
+    environment: production
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-    
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Login to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.REGISTRY_URL }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
-      
-      - name: Build and push backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./backend/Dockerfile
-          push: true
-          tags: ${{ secrets.REGISTRY_URL }}/packagepro-backend:latest
-          cache-from: type=registry,ref=${{ secrets.REGISTRY_URL }}/packagepro-backend:buildcache
-          cache-to: type=registry,ref=${{ secrets.REGISTRY_URL }}/packagepro-backend:buildcache,mode=max
-      
-      - name: Build and push frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./frontend/Dockerfile
-          push: true
-          tags: ${{ secrets.REGISTRY_URL }}/packagepro-frontend:latest
-          build-args: |
-            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
-          cache-from: type=registry,ref=${{ secrets.REGISTRY_URL }}/packagepro-frontend:buildcache
-          cache-to: type=registry,ref=${{ secrets.REGISTRY_URL }}/packagepro-frontend:buildcache,mode=max
-      
-      - name: Deploy to production
-        run: |
-          echo "Deployment would happen here"
-          echo "Backend image: ${{ secrets.REGISTRY_URL }}/packagepro-backend:latest"
-          echo "Frontend image: ${{ secrets.REGISTRY_URL }}/packagepro-frontend:latest"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Run database migrations (prisma migrate deploy)
+        working-directory: backend
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway run --service backend -- npx prisma migrate deploy
+
+      - name: Deploy backend to Railway
+        working-directory: backend
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service backend --production
+        # `railway up` packages backend/ and ships it to the "backend" service.
+        # Start command in Railway should be: npm start (runs src/index.ts prod build)
+
+  frontend:
+    name: Frontend → Vercel
+    runs-on: ubuntu-latest
+    environment: production
+    needs: backend
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Vercel (production)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          npx vercel@latest deploy --prod --yes \
+            --cwd frontend \
+            --build-env NEXT_PUBLIC_API_URL="${{ vars.NEXT_PUBLIC_API_URL }}" \
+            --token "$VERCEL_TOKEN"
+
+      - name: Smoke-check deployed frontend
+        run: |
+          curl -fsS -o /dev/null --max-time 30 "${{ vars.NEXT_PUBLIC_API_URL }}/api/health" || \
+          echo "::warning::Backend /api/health did not answer within 30s — check Railway logs"

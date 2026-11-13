@@ -1,4 +1,14 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+
+// Same determinism fix as auth.login.test.ts / auth.service.test.ts: register
+// paths would hit real SMTP with dummy credentials inside hooks/tests whose
+// 5s timeouts trip under full-suite parallelism. No assertion needs mail.
+vi.mock('../../services/email/email.service', () => ({
+  EmailService: class {
+    async sendEmail() {}
+  },
+  emailService: { sendEmail: vi.fn().mockResolvedValue(undefined) },
+}));
 import { prisma } from '../../lib/prisma';
 import { authService } from './auth.service';
 

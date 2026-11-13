@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma';
 import { NotFoundError, ValidationError } from '../../utils/errors';
 import { OrderStatus } from '../../types';
 import { pricingService } from '../../services/pricing-engine/pricing.service';
+import { groupShippingByProductType } from '../../services/pricing-engine/calculations';
 import { notificationService } from '../notifications/notifications.service';
 import { randomUUID } from 'crypto';
 
@@ -38,6 +39,15 @@ export function serializeOrder<T extends Record<string, any>>(order: T): T {
       order.shipment?.dhlTrackingNumber ??
       order.shipment?.trackingNumber ??
       null,
+    // 4a bridge: keep the legacy singular `purchaseOrder` on the wire (the
+    // admin console and portal mappers still read it). It is now the FIRST
+    // PO of the order; consumers move to `purchaseOrders[]` over time.
+    purchaseOrder: Array.isArray(order.purchaseOrders)
+      ? (order.purchaseOrders[0] ?? null)
+      : (order.purchaseOrder ?? null),
+    // 4c: per-group shipping split persisted at order creation (metadata).
+    shippingBreakdown:
+      ((order.metadata as any)?.shippingBreakdown as any) ?? null,
   };
 }
 
@@ -161,6 +171,16 @@ export class OrderService {
     );
     const total = subtotal + tax + shippingCost;
 
+    // 4c: persist the per-group shipping split (one group per productType,
+    // the same grouping multi-vendor POs use) so order views can show
+    // vendor-split shipping without recomputation. Sums to shippingCost.
+    const shippingBreakdown = groupShippingByProductType(
+      orderItems.map((item) => ({
+        productType: item.productType,
+        shipping: item.shippingEstimate,
+      }))
+    );
+
     // Create order
     const order = await prisma.order.create({
       data: {
@@ -176,6 +196,9 @@ export class OrderService {
         shippingPhone: data.shippingAddress.phone,
         shippingEmail: data.shippingAddress.email,
         notes: data.notes,
+        // 4c: stored under metadata; approval.service spreads-and-extends
+        // this object, so the breakdown survives the approval transition.
+        metadata: { shippingBreakdown },
         items: {
           create: orderItems.map((item) => ({
             productType: item.productType,
@@ -261,7 +284,7 @@ export class OrderService {
             },
           },
         },
-        purchaseOrder: {
+        purchaseOrders: {
           include: {
             vendor: true,
           },
@@ -287,7 +310,8 @@ export class OrderService {
       if (
         user?.role === 'ADMIN' ||
         order.customer.user.id === userId ||
-        order.purchaseOrder?.vendor.userId === userId
+        // 4a: a vendor may now own several POs of one order.
+        order.purchaseOrders.some((po: any) => po.vendor.userId === userId)
       ) {
         return serializeOrder(order);
       }

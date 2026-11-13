@@ -5,7 +5,7 @@ interface SSEEvent {
   data?: string
 }
 
-function parseSSE(raw: string): SSEEvent {
+export function parseSSE(raw: string): SSEEvent {
   let type = 'message'
   const dataLines: string[] = []
 

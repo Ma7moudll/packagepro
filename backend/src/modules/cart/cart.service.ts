@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma';
 import { NotFoundError, ValidationError } from '../../utils/errors';
 import { pricingService } from '../../services/pricing-engine/pricing.service';
+import { groupShippingByProductType } from '../../services/pricing-engine/calculations';
 
 export interface CartItemInput {
   productType: 'box' | 'bag' | 'label';
@@ -297,6 +298,12 @@ export class CartService {
     const shipping = round2(items.reduce((sum, item) => sum + item.shipping, 0));
     const total = round2(subtotal + tax + shipping);
 
+    // 4c: per productType-group shipping (the multi-vendor PO grouping) so
+    // checkout can show shipping per vendor group; sums to `shipping`.
+    const shippingByGroup = groupShippingByProductType(
+      items.map((item) => ({ productType: item.productType, shipping: item.shipping }))
+    );
+
     return {
       cartId,
       currency,
@@ -308,6 +315,7 @@ export class CartService {
         total,
         currency,
         itemsCount: items.reduce((sum, item) => sum + item.quantity, 0),
+        shippingByGroup,
       },
     };
   }

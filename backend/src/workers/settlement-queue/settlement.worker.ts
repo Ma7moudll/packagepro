@@ -17,7 +17,7 @@ export const settlementWorker = redis && isRedisEnabled() ? new Worker(
         include: {
           order: {
             include: {
-              purchaseOrder: {
+              purchaseOrders: {
                 include: {
                   vendor: true,
                 },

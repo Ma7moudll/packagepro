@@ -22,6 +22,11 @@ export interface RoutingRequest {
     maxQuantity?: number;
     deadline?: Date;
   };
+  /**
+   * Optional explicit quantity, e.g. the size of ONE item-group in a
+   * multi-PO order (4b). Falls back to the whole order's item quantity.
+   */
+  quantity?: number;
 }
 
 export class VendorRouterService {
@@ -92,7 +97,8 @@ export class VendorRouterService {
       throw new NotFoundError('Order');
     }
 
-    const totalQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    // Optional quantity override (one item-group of a multi-PO order).
+    const totalQuantity = request.quantity ?? order.items.reduce((sum, item) => sum + item.quantity, 0);
 
     // Get active vendors
     const vendors = await prisma.vendor.findMany({

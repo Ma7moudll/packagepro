@@ -92,7 +92,7 @@ export class AdminController {
           customer: { include: { user: { select: { email: true, firstName: true, lastName: true } } } },
           items: true,
           payment: { select: { id: true, status: true, amount: true } },
-          purchaseOrder: { select: { id: true, poNumber: true, status: true } },
+          purchaseOrders: { select: { id: true, poNumber: true, status: true } },
           shipment: { select: { id: true, status: true, dhlTrackingNumber: true } },
         },
       }),
@@ -101,7 +101,12 @@ export class AdminController {
 
     return reply.send({
       success: true,
-      data: orders,
+      // 4a bridge: keep the legacy singular `purchaseOrder` payload shape for
+      // the admin console (primary = first PO); 4d will expose all POs.
+      data: orders.map((order) => ({
+        ...order,
+        purchaseOrder: order.purchaseOrders[0] ?? null,
+      })),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   }

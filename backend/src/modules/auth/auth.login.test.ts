@@ -4,6 +4,21 @@ import { authService } from './auth.service';
 import { authRedisService } from './services/redis.service';
 import { jwtService } from './services/jwt.service';
 
+// register() sends a verification email through the real SMTP transport —
+// with dev credentials that raises a live network round-trip inside
+// beforeAll, which intermittently exceeds vitest's 5s hook timeout under
+// full-suite parallelism (suite flake: all tests pending). Nothing here
+// asserts on email, so it is mocked out for determinism (Step-4 4b found).
+vi.mock('../../services/email/email.service', () => ({
+  // AuthEmailService (auth/services/email.service, consumed at import time
+  // via auth.service.ts) constructs this class itself — the mock must
+  // provide it, not just the singleton, or the module chain dies on import.
+  EmailService: class {
+    async sendEmail() {}
+  },
+  emailService: { sendEmail: vi.fn().mockResolvedValue(undefined) },
+}));
+
 /**
  * Auth Login & Logout Tests - Phase 4 (US2)
  * Tests login with exponential backoff, logout with blacklist, and token refresh
@@ -42,7 +57,7 @@ describe('Auth Login & Logout Tests', () => {
         token: verToken.token,
       });
     }
-  });
+  }, 30000);
 
   afterAll(async () => {
     // Cleanup

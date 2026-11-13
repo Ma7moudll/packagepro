@@ -7,9 +7,54 @@ import { vendorRouterService } from '../../services/vendor-router/router.service
 import { handshakeService } from '../handshakes/handshake.service';
 import { randomUUID } from 'crypto';
 
+/** Minimal shape of an order line needed for grouping and routing. */
+export interface RoutedItem {
+  productType: string;
+  quantity: number;
+  totalPrice: any; // Prisma Decimal
+  material?: string | null;
+}
+
+export interface ItemGroup {
+  productType: string;
+  items: RoutedItem[];
+  /** Sum of quantities in the group (drives router MOQ scoring). */
+  quantity: number;
+  /** Sum of line totals (drives the per-PO vendor cost). */
+  subtotal: number;
+}
+
+/**
+ * Pure grouping: one item-group per productType, in first-seen order.
+ * A mixed-vendor cart becomes several purchase orders — exactly one PO per
+ * group (Step-4 Piece 4b).
+ */
+export function groupOrderItemsByProductType(items: RoutedItem[]): ItemGroup[] {
+  const groups = new Map<string, ItemGroup>();
+
+  for (const item of items) {
+    let group = groups.get(item.productType);
+    if (!group) {
+      group = { productType: item.productType, items: [], quantity: 0, subtotal: 0 };
+      groups.set(item.productType, group);
+    }
+    group.items.push(item);
+    group.quantity += item.quantity;
+    group.subtotal += Number(item.totalPrice ?? 0);
+  }
+
+  return Array.from(groups.values());
+}
+
 export class POService {
   /**
-   * Create Purchase Order for an order
+   * Create Purchase Order(s) for an order.
+   *
+   * Multi-vendor (Step-4 Piece 4b): items are grouped by productType and each
+   * group is routed independently, producing ONE PO per group. A single-type
+   * order behaves exactly like the legacy single-PO flow (one PO, plain
+   * poNumber without suffix). Groups are routed BEFORE any write, so an
+   * unroutable group fails the whole operation without partial PO state.
    */
   async createPO(orderId: string): Promise<any> {
     const order = await prisma.order.findUnique({
@@ -32,76 +77,104 @@ export class POService {
       throw new ValidationError('Order is not ready for routing');
     }
 
-    // Route order to vendor
-    const routing = await vendorRouterService.routeOrder({
-      orderId,
-      requirements: {},
-    });
+    if (order.items.length === 0) {
+      throw new ValidationError('Order has no items to route');
+    }
 
-    const vendor = routing.selectedVendor;
+    const groups = groupOrderItemsByProductType(order.items);
 
-    // Calculate vendor cost (simplified - in production use actual vendor pricing)
-    const vendorCost = Number(order.total) * 0.6; // 60% of total (example)
+    // Pre-flight: route every group first — a missing vendor for any group
+    // aborts before a single PO is written (no partial multi-PO state).
+    const routings = await Promise.all(
+      groups.map((group) =>
+        vendorRouterService.routeOrder({
+          orderId,
+          requirements: { material: group.items[0]?.material ?? undefined },
+          quantity: group.quantity,
+        })
+      )
+    );
 
-    // Generate PO number
-    const poNumber = `PO-${new Date().getFullYear()}-${randomUUID().substring(0, 8).toUpperCase()}`;
-
-    // Get production files
+    // Production files are shared across the POs of one order (there is a
+    // single design at launch; per-group file split is a later piece).
     const printFile = order.design?.files.find((f) => f.fileType === 'print_file');
     const dielineFile = order.design?.files.find((f) => f.fileType === 'dieline');
 
-    // Create PO
-    const po = await prisma.purchaseOrder.create({
-      data: {
-        orderId,
-        vendorId: vendor.id,
-        poNumber,
-        vendorCost,
-        printFileUrl: printFile?.fileUrl,
-        dielineFileUrl: dielineFile?.fileUrl,
-        status: 'pending',
-      },
-      include: {
-        vendor: true,
-        order: true,
-      },
-    });
+    const year = new Date().getFullYear();
+    const created: any[] = [];
 
-    // Generate PO PDF
-    const poPDF = await poGenerator.generatePO(po.id);
+    for (let i = 0; i < groups.length; i++) {
+      const group = groups[i];
+      const routing = routings[i];
+      const vendor = routing.selectedVendor;
 
-    // Upload PO PDF
-    const poUpload = await fileUploadService.uploadFile(
-      poPDF,
-      `PO-${poNumber}.pdf`,
-      'application/pdf',
-      `purchase-orders/${po.id}`
-    );
+      // Same simplified cost rule as the legacy flow (60% of the group
+      // subtotal), rounded to the cent; per-PO costs sum to 60% of the order.
+      const vendorCost = Math.round(group.subtotal * 60) / 100;
 
-    // Update PO with document URL
-    await prisma.purchaseOrder.update({
-      where: { id: po.id },
-      data: {
-        poDocumentUrl: poUpload.fileUrl,
-      },
-    });
+      // The suffix keeps poNumbers unique and readable when an order splits.
+      const suffix = groups.length > 1 ? `-${group.productType.toUpperCase()}-${i + 1}` : '';
+      const poNumber = `PO-${year}-${randomUUID().substring(0, 8).toUpperCase()}${suffix}`;
 
-    // Create handshake
-    const handshake = await handshakeService.createHandshake(po.id, vendor.id);
+      const po = await prisma.purchaseOrder.create({
+        data: {
+          orderId,
+          vendorId: vendor.id,
+          poNumber,
+          productType: group.productType,
+          vendorCost,
+          printFileUrl: printFile?.fileUrl,
+          dielineFileUrl: dielineFile?.fileUrl,
+          status: 'pending',
+        },
+        include: {
+          vendor: true,
+          order: true,
+        },
+      });
 
-    // Send PO email to vendor
-    await emailService.sendEmail({
-      to: vendor.user.email,
-      subject: `Purchase Order ${poNumber}`,
-      template: 'po-notification',
-      templateData: {
-        po,
+      // Generate PO PDF
+      const poPDF = await poGenerator.generatePO(po.id);
+
+      // Upload PO PDF
+      const poUpload = await fileUploadService.uploadFile(
+        poPDF,
+        `PO-${poNumber}.pdf`,
+        'application/pdf',
+        `purchase-orders/${po.id}`
+      );
+
+      // Update PO with document URL
+      await prisma.purchaseOrder.update({
+        where: { id: po.id },
+        data: {
+          poDocumentUrl: poUpload.fileUrl,
+        },
+      });
+
+      // Create handshake
+      const handshake = await handshakeService.createHandshake(po.id, vendor.id);
+
+      // Send PO email to vendor
+      await emailService.sendEmail({
+        to: vendor.user.email,
+        subject: `Purchase Order ${poNumber}`,
+        template: 'po-notification',
+        templateData: {
+          po,
+          handshake,
+          vendor,
+        },
+      });
+
+      created.push({
+        ...po,
         handshake,
-        vendor,
-      },
-    });
+        poDocumentUrl: poUpload.fileUrl,
+      });
+    }
 
-    // Update order status
+    // Update order status (same transition as the legacy single-PO flow).
     await prisma.order.update({
       where: { id: orderId },
       data: {
@@ -110,9 +183,10 @@ export class POService {
     });
 
     return {
-      ...po,
-      handshake,
-      poDocumentUrl: poUpload.fileUrl,
+      purchaseOrders: created,
+      // Legacy singular shape for consumers that only read the first PO.
+      purchaseOrder: created[0] ?? null,
+      count: created.length,
     };
   }
 

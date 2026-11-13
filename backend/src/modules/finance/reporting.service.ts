@@ -30,7 +30,7 @@ export class FinanceReportingService {
       },
       include: {
         payment: true,
-        purchaseOrder: true,
+        purchaseOrders: true,
         settlement: true,
       },
     });
@@ -77,7 +77,7 @@ export class FinanceReportingService {
       where: { id: orderId },
       include: {
         payment: true,
-        purchaseOrder: true,
+        purchaseOrders: true,
         settlement: true,
       },
     });
@@ -87,9 +87,12 @@ export class FinanceReportingService {
     }
 
     const revenue = Number(order.total);
-    const vendorCost = order.purchaseOrder
-      ? Number(order.purchaseOrder.vendorCost)
-      : 0;
+    // 4a bridge: vendor cost aggregates over all POs once splitting lands;
+    // today there is at most one PO per order.
+    const vendorCost = order.purchaseOrders.reduce(
+      (sum: number, po: any) => sum + Number(po.vendorCost ?? 0),
+      0
+    );
     const profit = revenue - vendorCost;
     const profitMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
 

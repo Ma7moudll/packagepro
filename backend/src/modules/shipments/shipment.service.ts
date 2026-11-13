@@ -12,7 +12,7 @@ export class ShipmentService {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
-        purchaseOrder: {
+        purchaseOrders: {
           include: {
             vendor: {
               include: {
@@ -50,15 +50,18 @@ export class ShipmentService {
     };
 
     // Create DHL shipment
+    // 4a bridge: shipments are PO-scoped once splitting lands; until 4b the
+    // vendor of the first PO ships the whole order.
+    const poVendor = order.purchaseOrders[0]?.vendor;
     const dhlResult = await dhlService.createShipment({
       orderId,
       pickupAddress: {
-        name: order.purchaseOrder?.vendor?.companyName || '',
-        address: order.purchaseOrder?.vendor?.address || '',
-        city: order.purchaseOrder?.vendor?.city || '',
-        postalCode: order.purchaseOrder?.vendor?.postalCode || '',
-        country: order.purchaseOrder?.vendor?.country || '',
-        phone: order.purchaseOrder?.vendor?.phone || '',
+        name: poVendor?.companyName || '',
+        address: poVendor?.address || '',
+        city: poVendor?.city || '',
+        postalCode: poVendor?.postalCode || '',
+        country: poVendor?.country || '',
+        phone: poVendor?.phone || '',
       },
       deliveryAddress: order.shippingAddress as any,
       weight,
@@ -101,9 +104,9 @@ export class ShipmentService {
     });
 
     // Send label to vendor
-    if (order.purchaseOrder?.vendor?.user?.email) {
+    if (poVendor?.user?.email) {
       await emailService.sendEmail({
-        to: order.purchaseOrder.vendor.user.email,
+        to: poVendor.user.email,
         subject: `Shipping Label for Order ${order.orderNumber}`,
         template: 'shipping-label',
         templateData: {

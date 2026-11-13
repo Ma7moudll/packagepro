@@ -13,7 +13,7 @@ export class SettlementService {
       include: {
         order: {
           include: {
-            purchaseOrder: {
+            purchaseOrders: {
               include: {
                 vendor: true,
               },
@@ -103,7 +103,7 @@ export class SettlementService {
       include: {
         order: {
           include: {
-            purchaseOrder: {
+            purchaseOrders: {
               include: {
                 vendor: true,
               },
@@ -173,10 +173,12 @@ export class SettlementService {
    */
   private async sendSettlementNotification(settlement: any): Promise<void> {
     const { emailService } = await import('../../services/email/email.service');
-    const vendorUserId = settlement.order.purchaseOrder.vendor.user?.id;
+    // 4a bridge: first PO vendor until orders spawn per-vendor settlements.
+    const primaryPO = settlement.order.purchaseOrders[0];
+    const vendorUserId = primaryPO?.vendor.user?.id;
 
     await emailService.sendEmail({
-      to: settlement.order.purchaseOrder.vendor.user?.email || '',
+      to: primaryPO?.vendor.user?.email || '',
       subject: `Payment Received - ${settlement.order.orderNumber}`,
       template: 'settlement-notification',
       templateData: { settlement },

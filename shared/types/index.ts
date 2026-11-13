@@ -79,6 +79,8 @@ export interface Order {
   invoiceId?: string
   /** Backend authoritative field name — BE Prisma returns `shippingCost`. */
   shippingCost?: number
+  /** 4c: per-group shipping split persisted in order metadata at creation. */
+  shippingBreakdown?: ShippingGroup[] | null
   /** Shipment projection included by getOrder and getCustomerOrders. */
   shipment?: Shipment
   /** Payment relation included on order reads (serialized by the backend). */
@@ -381,6 +383,14 @@ export interface CartSummary {
   total: number
   currency: string
   itemsCount: number
+  /** 4c: per productType-group shipping (the multi-vendor PO grouping). */
+  shippingByGroup?: ShippingGroup[]
+}
+
+/** One vendor-group's share of an order's shipping (Step-4 Piece 4c). */
+export interface ShippingGroup {
+  productType: string
+  shipping: number
 }
 
 export interface Cart {

@@ -284,14 +284,16 @@ model Order {
   completedAt DateTime?
 
   // Relations
-  customer      Customer       @relation(fields: [customerId], references: [id])
-  items         OrderItem[]
-  design        Design?
-  purchaseOrder PurchaseOrder?
-  shipment      Shipment?
-  payment       Payment?
-  settlement    Settlement?
-  reviews       Review[]
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  items           OrderItem[]
+  design          Design?
+  // Multi-vendor orders: one order can fulfill through several vendors,
+  // one PurchaseOrder per vendor item-group (Step-4 Piece 4a).
+  purchaseOrders  PurchaseOrder[]
+  shipment        Shipment?
+  payment         Payment?
+  settlement      Settlement?
+  reviews         Review[]
 
   @@map("orders")
 }
@@ -445,7 +447,11 @@ model PrePressCheck {
 
 model PurchaseOrder {
   id       String @id @default(cuid())
-  orderId  String @unique
+  // Multiple POs per order are the rule now (one per vendor item-group);
+  // order-level accessors use order.purchaseOrders and pick their PO(s).
+  // productType records the item-group a PO covers ("box" | "bag" | "label").
+  productType String?
+  orderId  String
   vendorId String
   poNumber String @unique
   status   String @default("pending")
