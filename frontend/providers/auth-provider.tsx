@@ -11,7 +11,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null
-  login: (email: string, password: string) => Promise<boolean>
+  login: (email: string, password: string) => Promise<{ ok: boolean; reason?: string }>
   register: (userData: RegisterData) => Promise<boolean>
   logout: () => void
   isLoading: boolean
@@ -58,7 +58,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false)
   }, [])
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  // SEC-02: returns the backend error code as `reason` so the login page can
+  // distinguish "unverified email" from "wrong credentials" (only caller:
+  // app/(auth)/login/page.tsx).
+  const login = async (
+    email: string,
+    password: string
+  ): Promise<{ ok: boolean; reason?: string }> => {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -68,7 +74,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await res.json()
 
       if (!res.ok || !data.success) {
-        return false
+        return {
+          ok: false,
+          reason: typeof data?.error === "string" ? data.error : undefined,
+        }
       }
 
       if (data.token) {
@@ -100,10 +109,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setUser(userData)
       localStorage.setItem("user", JSON.stringify(userData))
-      return true
+      return { ok: true }
     } catch (error) {
       console.error("Login failed:", error)
-      return false
+      return { ok: false }
     }
   }
 

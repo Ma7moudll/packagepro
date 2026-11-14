@@ -25,6 +25,9 @@ export default function SignInPage() {
   const [rememberMe, setRememberMe] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  // SEC-02: correct credentials but unverified email → offer a resend.
+  const [needsVerification, setNeedsVerification] = useState(false)
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,14 +35,26 @@ export default function SignInPage() {
     setLoading(true)
 
     try {
-      const ok = await login(email, password)
+      const { ok, reason } = await login(email, password)
 
       if (!ok) {
-        setError(
-          language === "ar"
-            ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
-            : "Invalid email or password"
-        )
+        if (reason === "EMAIL_NOT_VERIFIED") {
+          // SEC-02: distinct, actionable message — never lumped in with the
+          // generic credentials error.
+          setNeedsVerification(true)
+          setError(
+            language === "ar"
+              ? "لم يتم التحقق من بريدك الإلكتروني. يرجى التحقق من بريدك قبل تسجيل الدخول."
+              : "Your email is not verified. Please verify your email before signing in."
+          )
+        } else {
+          setNeedsVerification(false)
+          setError(
+            language === "ar"
+              ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+              : "Invalid email or password"
+          )
+        }
       } else {
         router.push(callbackUrl)
         router.refresh()
@@ -50,6 +65,25 @@ export default function SignInPage() {
       )
     } finally {
       setLoading(false)
+    }
+  }
+
+  // SEC-02: resend from the login screen. Success, rate-limit (429), unknown
+  // email and network failure all land on the SAME neutral confirmation — the
+  // resend endpoint's anti-enumeration contract is preserved even on errors,
+  // and nothing throws.
+  const handleResend = async () => {
+    setResendState("sending")
+    try {
+      await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+    } catch {
+      // Intentionally swallowed — see comment above.
+    } finally {
+      setResendState("sent")
     }
   }
 
@@ -72,6 +106,40 @@ export default function SignInPage() {
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
+          )}
+
+          {needsVerification && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+              <p className="text-sm text-emerald-800">
+                {language === "ar"
+                  ? "لم يصلك رابط التحقق؟"
+                  : "Didn't receive the verification email?"}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                disabled={resendState === "sending"}
+                onClick={handleResend}
+              >
+                {resendState === "sending" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Mail className="h-4 w-4" />
+                )}
+                {language === "ar"
+                  ? "إعادة إرسال رابط التحقق"
+                  : "Resend verification email"}
+              </Button>
+              {resendState === "sent" && (
+                <p className="text-xs text-emerald-700">
+                  {language === "ar"
+                    ? "إذا وُجد حساب غير مُوثّق بهذا البريد، فقد أُرسل رابط تحقق جديد. إن لم يصلك، حاول مرة أخرى لاحقًا."
+                    : "If an unverified account exists for this email, a new verification link has been sent. If nothing arrives, try again later."}
+                </p>
+              )}
+            </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">

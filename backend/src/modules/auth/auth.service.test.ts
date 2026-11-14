@@ -96,6 +96,17 @@ describe('AuthService', () => {
         name: 'Test User',
         role: 'CUSTOMER',
       });
+      // SEC-02: login now enforces email verification. Drive the fixture
+      // user through the REAL verification flow (DB token → verifyEmail) so
+      // these tests exercise the verified-login contract. The unverified
+      // matrix lives in auth.email-verification.integration.test.ts.
+      const fixtureUser = await prisma.user.findUnique({
+        where: { email: 'login@example.com' },
+      });
+      const verToken = await prisma.emailVerificationToken.findFirst({
+        where: { userId: fixtureUser!.id },
+      });
+      await authService.verifyEmail({ token: verToken!.token });
     });
 
     it('should login with correct credentials', async () => {

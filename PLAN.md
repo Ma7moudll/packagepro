@@ -4,7 +4,7 @@
 > **plan first, code after** — review, correct in plain words, then one piece at a time
 > (implement → check → test → repeat).
 >
-> **Baseline to protect:** backend `npx vitest run` ≥ **139/139**, frontend
+> **Baseline to protect:** backend `npx vitest run` ≥ **151/151**, frontend
 > `npm run test:units` ≥ **107/107**, Playwright cart-checkout + approval suites green.
 >
 > **Caveat:** this plan was written from PLAN.md and a public look at Packhelp's
@@ -171,7 +171,7 @@ data per product (nice to have, revisit with vendor data).
 | 12 | **Extended E2E journey + k6 + alerts** | report committed to docs |
 | 13 | **E-invoice (ETA) assessment** | written decision doc, not code |
 
-After each piece: read the diff, run its test, confirm baselines (backend ≥139,
+After each piece: read the diff, run its test, confirm baselines (backend ≥151,
 frontend ≥107), then start the next.
 
 ---

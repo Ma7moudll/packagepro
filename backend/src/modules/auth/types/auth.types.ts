@@ -43,7 +43,9 @@ export interface RegisterRequest {
   email: string;
   password: string;
   name?: string;
-  role?: 'CUSTOMER' | 'VENDOR' | 'ADMIN';
+  // SEC-01: public registration creates CUSTOMER (default) or VENDOR only.
+  // ADMIN accounts are provisioned exclusively through scripts/bootstrap-admin.ts.
+  role?: 'CUSTOMER' | 'VENDOR';
 }
 
 /**

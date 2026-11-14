@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -19,11 +19,19 @@ export default function VerifyEmailPage() {
   const [errorMessage, setErrorMessage] = useState("")
   const [resending, setResending] = useState(false)
   const [email, setEmail] = useState("")
+  // SEC-02: the token verification POST must fire exactly once. React Strict
+  // Mode double-invokes effects in dev and the verifyEmail callback re-arms on
+  // language changes — without this guard the second POST hits the consumed
+  // single-use token and flips a verified success into an "already used"
+  // error.
+  const verifyAttempted = useRef(false)
 
   const token = searchParams.get("token")
   const verifiedParam = searchParams.get("verified") === "true"
 
   const verifyEmail = useCallback(async (verificationToken: string) => {
+    if (verifyAttempted.current) return
+    verifyAttempted.current = true
     setState("loading")
     try {
       const res = await fetch("/api/auth/verify-email", {
@@ -55,7 +63,9 @@ export default function VerifyEmailPage() {
       })
       const data = await res.json()
       if (res.ok && data.success) {
-        router.push("/verify-email?resent=true")
+        // Keep the email in the URL so the "check your inbox" view still
+        // offers a resend link after the redirect (?resent=true).
+        router.push(`/verify-email?resent=true&email=${encodeURIComponent(email)}`)
       } else {
         setErrorMessage(data.message || (language === "ar" ? "فشل إعادة إرسال التحقق" : "Failed to resend verification"))
       }
@@ -177,6 +187,23 @@ export default function VerifyEmailPage() {
                   <Alert variant="destructive" role="alert">
                     <AlertDescription>{errorMessage}</AlertDescription>
                   </Alert>
+                )}
+                {/* SEC-02: the ?email= mode offers a resend, not just a
+                    notice — same button/behavior as the error state. */}
+                {email && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleResend}
+                    disabled={resending}
+                  >
+                    {resending ? (
+                      <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 ml-2" />
+                    )}
+                    {language === "ar" ? "إعادة إرسال رابط التحقق" : "Resend verification link"}
+                  </Button>
                 )}
                 <Link href="/">
                   <Button variant="outline" className="w-full">

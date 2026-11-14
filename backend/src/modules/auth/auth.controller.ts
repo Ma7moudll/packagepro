@@ -12,7 +12,11 @@ const registerSchema = z.object({
   email: z.string().email('Invalid email format'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   name: z.string().optional(),
-  role: z.enum(['CUSTOMER', 'VENDOR', 'ADMIN']).optional().default('CUSTOMER'),
+  // SEC-01: public registration may only create CUSTOMER (default) or VENDOR
+  // (pending admin activation via PATCH /admin/vendors/:id). ADMIN accounts
+  // are provisioned exclusively through scripts/bootstrap-admin.ts; the
+  // service applies the same whitelist as defense-in-depth.
+  role: z.enum(['CUSTOMER', 'VENDOR']).optional().default('CUSTOMER'),
 });
 
 const loginSchema = z.object({
@@ -163,6 +167,19 @@ export class AuthController {
             success: false,
             error: code,
             message: 'Invalid email or password',
+          });
+        }
+
+        // SEC-02: correct credentials but unverified email — 403, and the
+        // login page offers a resend option. Only reachable with the right
+        // password, so this leaks nothing beyond what the password check
+        // already proves.
+        if (code === AuthErrorCode.EMAIL_NOT_VERIFIED) {
+          return reply.status(403).send({
+            success: false,
+            error: code,
+            message:
+              'Email address is not verified. Please verify your email before logging in.',
           });
         }
 
@@ -437,6 +454,18 @@ export class AuthController {
             success: false,
             error: code,
             message: 'Refresh token has been revoked. Please login again.',
+          });
+        }
+
+        // SEC-02: session renewal is refused while the account's email is
+        // unverified — the service re-reads this from the database on every
+        // refresh, so pre-enforcement tokens are covered too.
+        if (code === AuthErrorCode.EMAIL_NOT_VERIFIED) {
+          return reply.status(403).send({
+            success: false,
+            error: code,
+            message:
+              'Email address is not verified. Please verify your email and login again.',
           });
         }
 

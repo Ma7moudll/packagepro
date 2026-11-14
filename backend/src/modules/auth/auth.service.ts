@@ -157,6 +157,20 @@ export class AuthService {
         throw new Error(AuthErrorCode.INVALID_CREDENTIALS);
       }
       
+      // SEC-02: credentials are correct, but an unverified email must never
+      // receive an authenticated session. Placed BEFORE the attempt-clearing
+      // block: a correct-password-unverified attempt is audited but neither
+      // increments the failed-attempt counter (it is not a password failure)
+      // nor resets it.
+      if (!user.emailVerified) {
+        await auditLogService.logLoginFailed(user.id, user.email, {
+          ip,
+          userAgent: userAgent || 'unknown',
+          reason: 'EMAIL_NOT_VERIFIED',
+        });
+        throw new Error(AuthErrorCode.EMAIL_NOT_VERIFIED);
+      }
+
       // Success! Clear failed attempts and CAPTCHA requirement
       await Promise.all([
         authRedisService.clearFailedLoginAttempts(data.email, ip),
@@ -241,13 +255,19 @@ export class AuthService {
       // Hash password with bcrypt
       const passwordHash = await bcrypt.hash(data.password, BCRYPT_COST);
 
+      // SEC-01 defense-in-depth: the service may never persist ADMIN (or any
+      // unexpected role) regardless of caller — the controller schema already
+      // rejects it; this whitelist is the second gate. Admin accounts are
+      // provisioned exclusively through scripts/bootstrap-admin.ts.
+      const role = data.role === 'VENDOR' ? 'VENDOR' : 'CUSTOMER';
+
       // Create user
       const user = await prisma.user.create({
         data: {
           email: data.email,
           passwordHash,
           firstName: data.name,
-          role: data.role || 'CUSTOMER',
+          role,
           emailVerified: false,
         },
       });
@@ -271,6 +291,12 @@ export class AuthService {
             postalCode: (data as any).postalCode,
             phone: (data as any).phone,
             email: data.email,
+            // SEC-01 launch policy: self-registered vendors stay PENDING
+            // (isActive=false) until an administrator activates them via
+            // PATCH /admin/vendors/:id. Inactive vendors are never routed
+            // paid orders (router filters isActive), but can still complete
+            // their profile for review (PATCH /vendors/me has no gate).
+            isActive: false,
           },
         });
       }
@@ -352,17 +378,43 @@ export class AuthService {
         throw new Error(AuthErrorCode.VERIFICATION_TOKEN_INVALID);
       }
 
-      // Mark token as used and update user
-      await Promise.all([
-        prisma.emailVerificationToken.update({
-          where: { id: verToken.id },
-          data: { usedAt: new Date() },
-        }),
-        prisma.user.update({
+      // Mark token as used and update user.
+      //
+      // Race safety (SEC-02 review): same conditional-claim pattern as
+      // resetPassword — exactly one concurrent request can consume the
+      // token, and a losing/expired claim throws inside the transaction so
+      // the user update rolls back with it and expiry is re-checked at claim
+      // time. (This was a bare Promise.all: two racers both "succeeded" and
+      // the writes were not atomic.)
+      await prisma.$transaction(async (tx) => {
+        const now = new Date();
+        const claimed = await tx.emailVerificationToken.updateMany({
+          where: {
+            id: verToken.id,
+            usedAt: null,
+            expiresAt: { gt: now },
+          },
+          data: { usedAt: now },
+        });
+
+        if (claimed.count !== 1) {
+          // Classify the loss for the correct API mapping (both → 401):
+          // consumed concurrently → INVALID; expired between the pre-read
+          // and the claim → EXPIRED.
+          const current = await tx.emailVerificationToken.findUnique({
+            where: { id: verToken.id },
+          });
+          if (current && current.expiresAt <= now) {
+            throw new Error(AuthErrorCode.VERIFICATION_TOKEN_EXPIRED);
+          }
+          throw new Error(AuthErrorCode.VERIFICATION_TOKEN_INVALID);
+        }
+
+        await tx.user.update({
           where: { id: verToken.userId },
           data: { emailVerified: true },
-        }),
-      ]);
+        });
+      });
 
       // Audit log
       const user = await prisma.user.findUnique({ where: { id: verToken.userId } });
@@ -556,16 +608,48 @@ export class AuthService {
         throw new Error(AuthErrorCode.USER_NOT_FOUND);
       }
 
-      await Promise.all([
-        prisma.user.update({
+      // SEC-02: a successful reset proves mailbox control — the same control
+      // the verification link proves — so it also marks the email verified.
+      // Password, verification flag and single-use token consumption are
+      // applied in ONE transaction: a partial write can never leave a live
+      // reset token paired with an inconsistent user state.
+      //
+      // Race safety (SEC-02 review): the claim is ONE conditional UPDATE —
+      // exact id + usedAt still null + not expired — so exactly one
+      // concurrent request can consume the token. (The unconditional update
+      // this replaced let two racers both "succeed": last writer won the
+      // password.) A losing claim throws INSIDE the transaction, rolling the
+      // user update back with it; expiry is re-checked at claim time, so an
+      // expired token can never win just because it passed the earlier read.
+      await prisma.$transaction(async (tx) => {
+        const now = new Date();
+        const claimed = await tx.passwordResetToken.updateMany({
+          where: {
+            id: resetToken.id,
+            usedAt: null,
+            expiresAt: { gt: now },
+          },
+          data: { usedAt: now },
+        });
+
+        if (claimed.count !== 1) {
+          // Classify the loss for the correct API mapping (both → 401):
+          // consumed concurrently → INVALID; expired between the pre-read
+          // and the claim → EXPIRED.
+          const current = await tx.passwordResetToken.findUnique({
+            where: { id: resetToken.id },
+          });
+          if (current && current.expiresAt <= now) {
+            throw new Error(AuthErrorCode.PASSWORD_RESET_TOKEN_EXPIRED);
+          }
+          throw new Error(AuthErrorCode.PASSWORD_RESET_TOKEN_INVALID);
+        }
+
+        await tx.user.update({
           where: { id: resetToken.userId },
-          data: { passwordHash },
-        }),
-        prisma.passwordResetToken.update({
-          where: { id: resetToken.id },
-          data: { usedAt: new Date() },
-        }),
-      ]);
+          data: { passwordHash, emailVerified: true },
+        });
+      });
 
       // Invalidate all existing refresh tokens (logout all devices)
       // TODO: Implement when we build session management
@@ -660,6 +744,13 @@ export class AuthService {
       
       if (!user) {
         throw new Error(AuthErrorCode.USER_NOT_FOUND);
+      }
+      
+      // SEC-02: refresh decisions read CURRENT user state from the database —
+      // never JWT claims. An unverified account cannot renew a session, even
+      // with a refresh token minted before verification enforcement shipped.
+      if (!user.emailVerified) {
+        throw new Error(AuthErrorCode.EMAIL_NOT_VERIFIED);
       }
       
       // Generate new access token

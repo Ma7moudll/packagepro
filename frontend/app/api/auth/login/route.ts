@@ -42,7 +42,12 @@ export async function POST(request: NextRequest) {
 
     if (!backendResponse.ok) {
       return NextResponse.json(
-        { message: data.message || "Login failed" },
+        {
+          message: data.message || "Login failed",
+          // SEC-02: preserve the backend error code (e.g. EMAIL_NOT_VERIFIED)
+          // so the UI can branch on it instead of guessing from the message.
+          error: typeof data.error === "string" ? data.error : undefined,
+        },
         { status: backendResponse.status }
       )
     }
