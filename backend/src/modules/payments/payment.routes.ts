@@ -13,7 +13,20 @@ export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Stripe webhook (no auth required)
-  fastify.post('/webhooks/stripe', async (request, reply) => {
-    return paymentController.stripeWebhook(request, reply);
-  });
+  // SEC-03b: rawBody opt-in is REQUIRED — constructEvent() must verify the
+  // signature over the exact original request bytes, not re-serialized JSON.
+  // fastify-raw-body is registered with global: false in src/index.ts, so each
+  // consumer route must opt in. bodyLimit 2 MB (default 1 MB): oversized events
+  // (e.g. charge.disputed evidence) must reach signature verification instead
+  // of being rejected pre-verification by the default body limit.
+  fastify.post(
+    '/webhooks/stripe',
+    {
+      config: { rawBody: true },
+      bodyLimit: 2 * 1024 * 1024,
+    },
+    async (request, reply) => {
+      return paymentController.stripeWebhook(request, reply);
+    }
+  );
 };
