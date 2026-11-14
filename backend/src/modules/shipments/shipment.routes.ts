@@ -14,7 +14,17 @@ export const shipmentRoutes: FastifyPluginAsync = async (fastify) => {
     return shipmentController.getShipmentByOrder(request, reply);
   });
 
-  fastify.post('/webhooks/dhl', async (request, reply) => {
-    return shipmentController.dhlWebhook(request, reply);
-  });
+  // SEC-03a: the DHL webhook is unauthenticated by nature (carrier push).
+  // Throttle it hard — forged floods must not drive DB or DHL Track API load.
+  fastify.post(
+    '/webhooks/dhl',
+    {
+      config: {
+        rateLimit: { max: 30, timeWindow: '1 minute' },
+      },
+    },
+    async (request, reply) => {
+      return shipmentController.dhlWebhook(request, reply);
+    }
+  );
 };

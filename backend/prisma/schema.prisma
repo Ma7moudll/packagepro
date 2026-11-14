@@ -292,7 +292,9 @@ model Order {
   purchaseOrders  PurchaseOrder[]
   shipment        Shipment?
   payment         Payment?
-  settlement      Settlement?
+  // SEC-03a: a delivered order settles every vendor — the relation is
+  // one-to-many on the compound (orderId, vendorId) unique.
+  settlements    Settlement[]
   reviews         Review[]
 
   @@map("orders")
@@ -590,7 +592,9 @@ model Payment {
 
 model Settlement {
   id                       String           @id @default(cuid())
-  orderId                  String           @unique
+  // SEC-03a: one settlement per (order, vendor) — a delivered order settles
+  // every vendor with confirmed POs, so uniqueness is the compound pair.
+  orderId                  String
   vendorId                 String
   amount                   Decimal          @db.Decimal(10, 2)
   currency                 String           @default("USD")
@@ -608,6 +612,7 @@ model Settlement {
   // Relations
   order Order @relation(fields: [orderId], references: [id])
 
+  @@unique([orderId, vendorId])
   @@index([vendorId, status])
   @@index([verificationPeriodEndsAt])
   @@map("settlements")

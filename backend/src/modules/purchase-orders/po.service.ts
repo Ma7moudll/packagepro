@@ -1,5 +1,7 @@
 import { prisma } from '../../lib/prisma';
 import { NotFoundError, ValidationError } from '../../utils/errors';
+import { logger } from '../../utils/logger';
+import { settleVendorForDeliveredOrder } from '../settlements/settlement.service';
 import { poGenerator } from './po-generator';
 import { fileUploadService } from '../../services/file-upload/upload.service';
 import { emailService } from '../../services/email/email.service';
@@ -221,26 +223,41 @@ export class POService {
   }
 
   /**
-   * Confirm PO receipt by vendor
+   * Confirm PO receipt by vendor.
+   *
+   * SEC-03a: transactional with the shared settlement helper — if the order
+   * is already delivered, the vendor's settlement is ensured in the same
+   * transaction (the helper's order-row gate is the serialization point that
+   * closes the PO-confirmation race with the DHL webhook delivery path).
    */
   async confirmPO(poId: string): Promise<any> {
-    const po = await prisma.purchaseOrder.findUnique({
-      where: { id: poId },
+    return prisma.$transaction(async (tx) => {
+      const po = await tx.purchaseOrder.findUnique({
+        where: { id: poId },
+      });
+
+      if (!po) {
+        throw new NotFoundError('Purchase Order');
+      }
+
+      const updated = await tx.purchaseOrder.update({
+        where: { id: poId },
+        data: {
+          status: 'confirmed',
+          confirmedAt: new Date(),
+        },
+      });
+
+      await settleVendorForDeliveredOrder(
+        tx,
+        po.orderId,
+        po.vendorId,
+        'po-confirmed',
+        logger
+      );
+
+      return updated;
     });
-
-    if (!po) {
-      throw new NotFoundError('Purchase Order');
-    }
-
-    const updated = await prisma.purchaseOrder.update({
-      where: { id: poId },
-      data: {
-        status: 'confirmed',
-        confirmedAt: new Date(),
-      },
-    });
-
-    return updated;
   }
 }
 

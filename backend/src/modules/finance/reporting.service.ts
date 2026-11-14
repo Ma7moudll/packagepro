@@ -1,5 +1,20 @@
 import { prisma } from '../../lib/prisma';
 
+/**
+ * SEC-03a — aggregate the order-level settlement status across per-vendor
+ * settlements: completed only when ALL are completed; any failure dominates;
+ * then processing; otherwise pending.
+ */
+function aggregateSettlementStatus(
+  settlements: Array<{ status: string }>
+): string | null {
+  if (settlements.length === 0) return null;
+  if (settlements.every((s) => s.status === 'completed')) return 'completed';
+  if (settlements.some((s) => s.status === 'failed')) return 'failed';
+  if (settlements.some((s) => s.status === 'processing')) return 'processing';
+  return 'pending';
+}
+
 export interface FinancialReport {
   period: {
     start: Date;
@@ -31,7 +46,7 @@ export class FinanceReportingService {
       include: {
         payment: true,
         purchaseOrders: true,
-        settlement: true,
+        settlements: true,
       },
     });
 
@@ -41,12 +56,12 @@ export class FinanceReportingService {
       0
     );
 
-    const vendorPayments = orders.reduce((sum, order) => {
-      if (order.settlement) {
-        return sum + Number(order.settlement.amount);
-      }
-      return sum;
-    }, 0);
+    // SEC-03a: an order settles every vendor — sum ALL of its settlements.
+    const vendorPayments = orders.reduce(
+      (sum, order) =>
+        sum + order.settlements.reduce((s, x) => s + Number(x.amount), 0),
+      0
+    );
 
     const costs = vendorPayments; // Add other costs if needed
     const profit = revenue - costs;
@@ -78,7 +93,7 @@ export class FinanceReportingService {
       include: {
         payment: true,
         purchaseOrders: true,
-        settlement: true,
+        settlements: true,
       },
     });
 
@@ -105,7 +120,8 @@ export class FinanceReportingService {
       tax: Number(order.tax),
       shipping: Number(order.shippingCost),
       paymentStatus: order.payment?.status,
-      settlementStatus: order.settlement?.status,
+      // SEC-03a: aggregate across the order's per-vendor settlements.
+      settlementStatus: aggregateSettlementStatus(order.settlements),
     };
   }
 

@@ -34,6 +34,24 @@ export const settlementRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
+  // SEC-03a — recover a settlement stuck in 'processing' (crashed processor).
+  // The 24h age predicate is INSIDE the atomic updateMany, so a live claim
+  // (whose updatedAt was just bumped by the claim itself) can never be
+  // reverted. Age is a NECESSARY but not sufficient crash signal — before
+  // invoking, the admin must verify from operations evidence that no
+  // processor holds the row: (1) no processSettlement logs for this id after
+  // the row's last update; (2) no open process route call or BullMQ job for
+  // the id (the queue currently has no producers); (3) the row's age predates
+  // the last backend restart; (4) no external transfer exists — trivially
+  // true today, and with a real bank API this becomes the MANDATORY first
+  // check (verify-then-resume, never an automatic rollback).
+  fastify.post('/settlements/recover/:id', async (request, reply) => {
+    const user = await requireAdmin(request, reply);
+    const settlementId = (request.params as { id: string }).id;
+    await settlementService.recoverStaleSettlement(settlementId, user.userId);
+    return reply.send({ success: true });
+  });
+
   fastify.get('/settlements/:id', async (request, reply) => {
     const user = await requireRoles(request, reply, 'VENDOR', 'ADMIN');
     const settlementId = (request.params as { id: string }).id;

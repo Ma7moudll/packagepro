@@ -291,7 +291,7 @@ export class OrderService {
         },
         shipment: true,
         payment: true,
-        settlement: true,
+        settlements: true,
         reviews: true,
       },
     });
