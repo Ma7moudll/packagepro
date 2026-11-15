@@ -34,12 +34,20 @@ export class NotificationService {
     return notification;
   }
 
-  async createIfUnseen(
+  /**
+   * SEC-03c: persist-only variant of createIfUnseen for transactional callers.
+   * Same dedupe semantics (one notification per (userId, type, entityRef)),
+   * but runs on the provided transaction client and NEVER publishes to the
+   * realtime hub — the caller publishes only after its transaction commits,
+   * so a rolled-back transaction can never emit a realtime notification.
+   */
+  async createIfUnseenInTx(
+    tx: Prisma.TransactionClient,
     userId: string,
     entityRef: NotificationEntityRef,
     input: NotificationInput
   ): Promise<{ status: 'created' | 'exists'; notification: any | null }> {
-    const existing = await prisma.notification.findFirst({
+    const existing = await tx.notification.findFirst({
       where: {
         userId,
         type: input.type,
@@ -54,16 +62,36 @@ export class NotificationService {
       return { status: 'exists', notification: existing };
     }
 
-    const notification = await this.create(userId, {
-      ...input,
-      metadata: {
-        ...input.metadata,
-        entityType: entityRef.entityType,
-        entityId: entityRef.entityId,
+    const notification = await tx.notification.create({
+      data: {
+        userId,
+        type: input.type,
+        title: input.title,
+        message: input.message,
+        link: input.link,
+        metadata: {
+          ...(input.metadata ?? {}),
+          entityType: entityRef.entityType,
+          entityId: entityRef.entityId,
+        } as Prisma.InputJsonValue,
       },
     });
 
     return { status: 'created', notification };
+  }
+
+  async createIfUnseen(
+    userId: string,
+    entityRef: NotificationEntityRef,
+    input: NotificationInput
+  ): Promise<{ status: 'created' | 'exists'; notification: any | null }> {
+    const res = await this.createIfUnseenInTx(prisma, userId, entityRef, input);
+
+    if (res.status === 'created' && res.notification) {
+      notificationHub.publish(userId, res.notification);
+    }
+
+    return res;
   }
 
   async listForUser(

@@ -590,6 +590,20 @@ model Payment {
   @@map("payments")
 }
 
+// SEC-03c: Stripe webhook event ledger. One row per verified webhook event;
+// the (eventId) unique constraint is the concurrency arbiter for idempotent
+// processing — a duplicate delivery loses the INSERT race and must not
+// repeat business side effects. Deliberately Stripe-specific for now;
+// provider-neutral event normalization is FIN-05 scope.
+model ProcessedStripeEvent {
+  id         String   @id @default(cuid())
+  eventId    String   @unique
+  type       String
+  receivedAt DateTime @default(now())
+
+  @@map("processed_stripe_events")
+}
+
 model Settlement {
   id                       String           @id @default(cuid())
   // SEC-03a: one settlement per (order, vendor) — a delivered order settles
