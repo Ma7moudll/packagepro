@@ -1,9 +1,17 @@
 import { prisma } from '../../lib/prisma';
-import { NotFoundError, ValidationError } from '../../utils/errors';
+import {
+  AuthorizationError,
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from '../../utils/errors';
 import { OrderStatus } from '../../types';
 import { pricingService } from '../../services/pricing-engine/pricing.service';
 import { groupShippingByProductType } from '../../services/pricing-engine/calculations';
 import { notificationService } from '../notifications/notifications.service';
+import {
+  assertAllowedOrderStatusTransition,
+} from './order-status-transitions';
 import { randomUUID } from 'crypto';
 
 /**
@@ -372,7 +380,17 @@ export class OrderService {
   }
 
   /**
-   * Update order status
+   * Update order status — HTTP-facing admin path (PATCH /orders/:id/status).
+   *
+   * SEC-04A: ADMIN-only, defense in depth behind the route-level
+   * `requireAdmin` gate. A customer (even the order's owner) gets 403; an
+   * unrelated user gets the existing 400 'Access denied' from getOrder.
+   * The requested transition must be in the SEC-04A transition matrix
+   * (order-status-transitions.ts) — illegal transitions are 409.
+   *
+   * The write is a conditional `updateMany` on the observed current status,
+   * so a concurrent transition by another actor fails with 409 instead of
+   * silently overwriting it.
    */
   async updateOrderStatus(
     orderId: string,
@@ -380,10 +398,62 @@ export class OrderService {
     userId?: string
   ): Promise<any> {
     // Verify order exists and user has access
-    await this.getOrder(orderId, userId);
+    const current = await this.getOrder(orderId, userId);
 
-    const updatedOrder = await prisma.order.update({
-      where: { id: orderId },
+    if (!userId) {
+      throw new AuthorizationError('Only admins can change order status');
+    }
+    const actor = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (!actor || actor.role !== 'ADMIN') {
+      throw new AuthorizationError('Only admins can change order status');
+    }
+
+    assertAllowedOrderStatusTransition(current.status as OrderStatus, status);
+
+    return this.applyStatusTransition(orderId, current.status as OrderStatus, status);
+  }
+
+  /**
+   * Update order status — trusted internal callers only (NOT an HTTP route).
+   *
+   * Same matrix enforcement and same conditional write as the admin path,
+   * but no role check: the caller is backend code, not a user. There are
+   * currently NO internal callers of this method — the established flows
+   * (Stripe capture, DHL webhook, handshake accept, production, QA,
+   * shipment creation) move orders through their own guarded direct
+   * updates and were deliberately left untouched by SEC-04A. Use this
+   * method for any future trusted flow instead of calling the admin path
+   * or writing an unguarded `prisma.order.update`.
+   */
+  async updateOrderStatusInternal(
+    orderId: string,
+    status: OrderStatus
+  ): Promise<any> {
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) {
+      throw new NotFoundError('Order');
+    }
+
+    assertAllowedOrderStatusTransition(order.status as OrderStatus, status);
+
+    return this.applyStatusTransition(orderId, order.status as OrderStatus, status);
+  }
+
+  /**
+   * Shared guarded transition: conditional write on the observed current
+   * status (a 0-row claim means the order moved concurrently → 409),
+   * then reload, side-effect timestamps, and status notifications.
+   */
+  private async applyStatusTransition(
+    orderId: string,
+    fromStatus: OrderStatus,
+    status: OrderStatus
+  ): Promise<any> {
+    const claimed = await prisma.order.updateMany({
+      where: { id: orderId, status: fromStatus },
       data: {
         status,
         ...(status === 'awaiting_approval' && { approvedAt: new Date() }),
@@ -391,6 +461,16 @@ export class OrderService {
         ...(status === 'delivered' && { deliveredAt: new Date() }),
         ...(status === 'completed' && { completedAt: new Date() }),
       },
+    });
+
+    if (claimed.count === 0) {
+      throw new ConflictError(
+        `Order status changed concurrently: expected '${fromStatus}'`
+      );
+    }
+
+    const updatedOrder = await prisma.order.findUnique({
+      where: { id: orderId },
       include: {
         customer: {
           include: {
@@ -401,6 +481,10 @@ export class OrderService {
         },
       },
     });
+
+    if (!updatedOrder) {
+      throw new NotFoundError('Order');
+    }
 
     const customerUserId = updatedOrder.customer?.user?.id;
     if (customerUserId) {

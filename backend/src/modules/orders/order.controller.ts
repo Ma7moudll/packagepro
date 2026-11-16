@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { orderService } from './order.service';
 import { z } from 'zod';
 import { authenticate, AuthenticatedRequest } from '../../middleware/auth.middleware';
+import { requireAdmin } from '../../middleware/rbac';
 import { OrderStatus } from '../../types';
 
 const createOrderSchema = z.object({
@@ -103,9 +104,14 @@ export class OrderController {
     });
   }
 
+  /**
+   * SEC-04A: ADMIN-only. Previously any authenticated user (including the
+   * order's owner) could set any status; the service additionally refuses
+   * non-admin callers and enforces the transition matrix (409 on illegal
+   * transitions).
+   */
   async updateOrderStatus(request: FastifyRequest, reply: FastifyReply) {
-    await authenticate(request, reply);
-    const user = (request as AuthenticatedRequest).user;
+    const user = await requireAdmin(request, reply);
     const orderId = (request.params as { id: string }).id;
     const body = z
       .object({
