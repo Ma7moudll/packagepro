@@ -1,56 +1,32 @@
 /**
- * PackagePro Shipping Webhook Handler
- * Receives tracking updates from shipping carriers
- * Note: This should proxy to backend API
+ * PackagePro Shipping Webhook Handler — RETIRED (SEC-03d)
+ *
+ * This legacy frontend webhook endpoint has been decommissioned. Carrier
+ * tracking updates are now handled exclusively by the Fastify backend
+ * webhook (POST /webhooks/dhl), which re-verifies every delivery claim
+ * against the DHL Track API before changing any order state. The old
+ * handler proxied to the backend and returned success even when the
+ * proxy failed, so a delivery could be "acknowledged" without ever
+ * being recorded.
+ *
+ * This route file stays in place only so the URL keeps answering
+ * 410 Gone instead of silently 404ing.
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { z } from "zod"
 
-const trackingUpdateSchema = z.object({
-  trackingNumber: z.string(),
-  status: z.string(),
-  location: z.string().optional(),
-  timestamp: z.string().optional(),
-})
-
-export const POST = async (request: NextRequest) => {
-  try {
-    const body = await request.json()
-    const validated = trackingUpdateSchema.parse(body)
-
-    // Proxy to backend API
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
-    
-    try {
-      const response = await fetch(`${backendUrl}/api/webhooks/dhl`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(validated),
-      })
-
-      if (response.ok) {
-        return NextResponse.json({ received: true })
-      }
-    } catch (e) {
-      // Fallback
-    }
-
-    // Return success anyway
-    return NextResponse.json({ received: true })
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation error", details: error.issues },
-        { status: 400 },
-      )
-    }
-
-    return NextResponse.json(
-      { error: "Webhook processing failed" },
-      { status: 500 },
-    )
-  }
+const GONE_BODY = {
+  error: "GONE",
+  message:
+    "This legacy webhook endpoint has been retired (SEC-03d). Use the backend webhook instead: POST /webhooks/dhl on the Fastify backend.",
 }
+
+function gone() {
+  return NextResponse.json(GONE_BODY, { status: 410 })
+}
+
+export const POST = async (_request: NextRequest) => gone()
+export const GET = async (_request: NextRequest) => gone()
+export const PUT = async (_request: NextRequest) => gone()
+export const DELETE = async (_request: NextRequest) => gone()
+export const PATCH = async (_request: NextRequest) => gone()

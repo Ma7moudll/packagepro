@@ -1,61 +1,32 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { PaymentService } from "@/lib/payment"
-import { DatabaseService } from "@/lib/database"
-import { EmailService } from "@/lib/email"
-import { MonitoringService } from "@/lib/monitoring"
+/**
+ * Payments Webhook Handler — RETIRED (SEC-03d)
+ *
+ * This legacy frontend webhook endpoint has been decommissioned. Payment
+ * events are now handled exclusively by the Fastify backend webhook
+ * (POST /webhooks/stripe), which verifies the Stripe signature against
+ * the raw request body and records events in the ProcessedStripeEvent
+ * ledger. The old handler trusted an unverified payload and changed
+ * order state through mock services, so a forged event could mark an
+ * order PAYMENT_CONFIRMED without any real payment.
+ *
+ * This route file stays in place only so the URL keeps answering
+ * 410 Gone instead of silently 404ing.
+ */
 
-export const POST = async (request: NextRequest) => {
-  try {
-    const provider = request.headers.get("x-payment-provider") || "stripe"
-    const body = await request.json()
+import { NextRequest, NextResponse } from "next/server"
 
-    // Verify webhook
-    const isValid = await PaymentService.handleWebhook(provider, body)
-    if (!isValid) {
-      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
-    }
-
-    // Handle payment success
-    if (body.status === "succeeded" || body.success === true) {
-      const orderId = body.orderId || body.metadata?.orderId
-      const paymentId = body.id
-
-      // Update order status
-      await DatabaseService.updateOrderStatus(orderId, "PAYMENT_CONFIRMED")
-
-      // Send confirmation email
-      const order = await DatabaseService.getOrderById(orderId)
-      if (order) {
-        await EmailService.sendOrderConfirmation({
-          customerEmail: order.customer?.email || "",
-          customerName: order.customer?.name || "",
-          orderNumber: order.orderNumber,
-          items: order.items.map((item) => ({
-            productName: item.productName,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            totalPrice: item.totalPrice,
-          })),
-          totalAmount: order.totalAmount,
-        })
-      }
-
-      MonitoringService.captureMessage(`Payment confirmed: ${paymentId}`, "info")
-    }
-
-    // Handle payment failure
-    if (body.status === "failed" || body.success === false) {
-      const orderId = body.orderId || body.metadata?.orderId
-      await DatabaseService.updateOrderStatus(orderId, "PAYMENT_FAILED")
-
-      MonitoringService.captureMessage(`Payment failed: ${body.id}`, "warning")
-    }
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    MonitoringService.captureException(error as Error, {
-      context: "payment_webhook",
-    })
-    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 })
-  }
+const GONE_BODY = {
+  error: "GONE",
+  message:
+    "This legacy webhook endpoint has been retired (SEC-03d). Use the backend webhook instead: POST /webhooks/stripe on the Fastify backend.",
 }
+
+function gone() {
+  return NextResponse.json(GONE_BODY, { status: 410 })
+}
+
+export const POST = async (_request: NextRequest) => gone()
+export const GET = async (_request: NextRequest) => gone()
+export const PUT = async (_request: NextRequest) => gone()
+export const DELETE = async (_request: NextRequest) => gone()
+export const PATCH = async (_request: NextRequest) => gone()
