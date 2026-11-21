@@ -31,6 +31,7 @@ import { StockImagesPanel } from "@/components/editor/panels/StockImagesPanel"
 import { ElementsLibraryPanel } from "@/components/editor/panels/ElementsLibraryPanel"
 import { TextTemplatesPanel } from "@/components/editor/panels/TextTemplatesPanel"
 import { useDesignStore } from "@/lib/editor/state/store"
+import { useAuth } from "@/providers/auth-provider"
 import {
   Accordion,
   AccordionContent,
@@ -52,8 +53,12 @@ type MainSection = (typeof MAIN_SECTIONS)[number]["id"]
 
 export function EditorLeftSidebar() {
   const { language, isRTL } = useLanguage()
+  const { user } = useAuth()
   const addLayer = useDesignStore((s) => s.addLayer)
   const [activeSection, setActiveSection] = useState<MainSection>("add")
+  // Template authoring is ADMIN-only on the backend; showing the creator to
+  // anyone else is a 403 with extra steps.
+  const canAuthorTemplates = user?.role === "ADMIN"
 
   // Text Panel
   const renderTextPanel = () => (
@@ -351,12 +356,14 @@ export function EditorLeftSidebar() {
             </AccordionContent>
           </AccordionItem>
 
-          {/* Save as Template */}
-          <AccordionItem value="save-template" className="border rounded-lg px-3">
-            <AccordionContent className="pt-3 pb-3">
-              <TemplateCreator />
-            </AccordionContent>
-          </AccordionItem>
+          {/* Save as Template (admin-only; the backend rejects others) */}
+          {canAuthorTemplates && (
+            <AccordionItem value="save-template" className="border rounded-lg px-3">
+              <AccordionContent className="pt-3 pb-3">
+                <TemplateCreator />
+              </AccordionContent>
+            </AccordionItem>
+          )}
         </Accordion>
       </div>
     </ScrollArea>

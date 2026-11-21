@@ -1,6 +1,6 @@
 "use client"
 
-import { Template, TemplateRating, TemplateSearchFilters, TemplateSearchResult } from "@/lib/editor/types/template"
+import { Template, TemplateSearchFilters, TemplateSearchResult } from "@/lib/editor/types/template"
 import { DesignCoreState } from "@/lib/editor/state/types"
 import { apiGet, apiPost, apiPatch, apiDelete, ApiClientError } from "@/lib/api/client"
 import type { Template as BackendTemplate } from "@shared/types"
@@ -148,23 +148,4 @@ export async function updateTemplate(
  */
 export async function deleteTemplate(id: string): Promise<void> {
   await apiDelete(`/templates/${id}`)
-}
-
-/**
- * Template ratings are not implemented in the backend template module yet.
- * Return an empty list so detail pages render instead of failing.
- */
-export async function getTemplateRatings(_templateId: string): Promise<TemplateRating[]> {
-  return []
-}
-
-/**
- * Template ratings are not implemented in the backend template module yet.
- */
-export async function addTemplateRating(
-  _templateId: string,
-  _rating: number,
-  _comment?: string
-): Promise<TemplateRating> {
-  throw new Error("Template ratings are not available yet")
 }

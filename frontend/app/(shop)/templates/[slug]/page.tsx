@@ -5,12 +5,11 @@ import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Textarea } from "@/components/ui/textarea"
-import { Star, ArrowLeft, ArrowRight, Download, Share2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, Download, Share2 } from "lucide-react"
 import { useLanguage } from "@/providers/language-provider"
 import { useToast } from "@/hooks/use-toast"
-import { getTemplateBySlug, addTemplateRating, getTemplateRatings } from "@/lib/editor/services/template-service"
-import { Template, TemplateRating } from "@/lib/editor/types/template"
+import { getTemplateBySlug } from "@/lib/editor/services/template-service"
+import { Template } from "@/lib/editor/types/template"
 import Link from "next/link"
 
 export default function TemplateDetailPage() {
@@ -21,21 +20,11 @@ export default function TemplateDetailPage() {
   const slug = params.slug as string
 
   const [template, setTemplate] = useState<Template | null>(null)
-  const [ratings, setRatings] = useState<TemplateRating[]>([])
   const [loading, setLoading] = useState(true)
-  const [rating, setRating] = useState(0)
-  const [comment, setComment] = useState("")
-  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     loadTemplate()
   }, [slug])
-
-  useEffect(() => {
-    if (template) {
-      loadRatings(template.id).catch(console.error)
-    }
-  }, [template])
 
   const loadTemplate = async () => {
     try {
@@ -48,47 +37,9 @@ export default function TemplateDetailPage() {
     }
   }
 
-  const loadRatings = async (templateId: string) => {
-    try {
-      const data = await getTemplateRatings(templateId)
-      setRatings(data)
-    } catch (error) {
-      console.error("Error loading ratings:", error)
-    }
-  }
-
   const handleUseTemplate = () => {
     if (template) {
       router.push(`/editor?templateId=${template.id}`)
-    }
-  }
-
-  const handleSubmitRating = async () => {
-    if (!template || rating === 0) {
-      toast({
-        title: language === "ar" ? "يرجى اختيار تقييم" : "Please select a rating",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setSubmitting(true)
-    try {
-      await addTemplateRating(template.id, rating, comment)
-      setRating(0)
-      setComment("")
-      await loadRatings(template.id)
-      await loadTemplate() // Refresh to update avgRating
-      toast({
-        title: language === "ar" ? "تم إضافة التقييم بنجاح" : "Rating added successfully",
-      })
-    } catch (error: any) {
-      toast({
-        title: language === "ar" ? `خطأ: ${error.message}` : `Error: ${error.message}`,
-        variant: "destructive",
-      })
-    } finally {
-      setSubmitting(false)
     }
   }
 
@@ -171,129 +122,6 @@ export default function TemplateDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Ratings/Reviews */}
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  {language === "ar" ? "التقييمات والمراجعات" : "Ratings & Reviews"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Average Rating */}
-                <div className="flex items-center gap-4">
-                  <div className="text-center">
-                    <div className="text-4xl font-bold">{template.avgRating.toFixed(1)}</div>
-                    <div className="flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star
-                          key={star}
-                          className={`h-5 w-5 ${star <= Math.round(template.avgRating)
-                              ? "fill-yellow-400 text-yellow-400"
-                              : "text-slate-300"
-                            }`}
-                        />
-                      ))}
-                    </div>
-                    <div className="text-sm text-slate-500 mt-1">
-                      {template.ratingsCount}{" "}
-                      {language === "ar" ? "تقييم" : "ratings"}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Add Rating */}
-                <div className="border-t pt-6">
-                  <h3 className="font-semibold mb-4">
-                    {language === "ar" ? "أضف تقييمك" : "Add Your Rating"}
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">
-                        {language === "ar" ? "التقييم" : "Rating"}
-                      </label>
-                      <div className="flex gap-1">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <button
-                            key={star}
-                            type="button"
-                            onClick={() => setRating(star)}
-                            className="focus:outline-none"
-                          >
-                            <Star
-                              className={`h-6 w-6 ${star <= rating
-                                  ? "fill-yellow-400 text-yellow-400"
-                                  : "text-slate-300 hover:text-yellow-300"
-                                } transition-colors`}
-                            />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">
-                        {language === "ar" ? "تعليق (اختياري)" : "Comment (Optional)"}
-                      </label>
-                      <Textarea
-                        value={comment}
-                        onChange={(e) => setComment(e.target.value)}
-                        placeholder={
-                          language === "ar"
-                            ? "اكتب تعليقك هنا..."
-                            : "Write your comment here..."
-                        }
-                        rows={3}
-                      />
-                    </div>
-                    <Button
-                      onClick={handleSubmitRating}
-                      disabled={submitting || rating === 0}
-                      className="w-full"
-                    >
-                      {submitting
-                        ? language === "ar"
-                          ? "جارٍ الإرسال..."
-                          : "Submitting..."
-                        : language === "ar"
-                          ? "إرسال التقييم"
-                          : "Submit Rating"}
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Reviews List */}
-                {ratings.length > 0 && (
-                  <div className="border-t pt-6 space-y-4">
-                    <h3 className="font-semibold">
-                      {language === "ar" ? "المراجعات" : "Reviews"}
-                    </h3>
-                    {ratings.map((r) => (
-                      <div key={r.id} className="border-b pb-4 last:border-0">
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <p className="font-medium">{r.userName || "Anonymous"}</p>
-                            <p className="text-xs text-slate-500">
-                              {new Date(r.createdAt).toLocaleDateString(language === "ar" ? "ar-SA" : "en-US")}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Star
-                                key={star}
-                                className={`h-4 w-4 ${star <= r.rating
-                                    ? "fill-yellow-400 text-yellow-400"
-                                    : "text-slate-300"
-                                  }`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                        {r.comment && <p className="text-sm text-slate-600 mt-2">{r.comment}</p>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </div>
 
           {/* Sidebar */}
@@ -316,18 +144,6 @@ export default function TemplateDetailPage() {
                     {language === "ar" ? "النمط" : "Style"}
                   </p>
                   <Badge variant="outline">{template.style}</Badge>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-slate-500 mb-1">
-                    {language === "ar" ? "التقييم" : "Rating"}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    <span className="font-semibold">{template.avgRating.toFixed(1)}</span>
-                    <span className="text-sm text-slate-500">
-                      ({template.ratingsCount})
-                    </span>
-                  </div>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-slate-500 mb-1">

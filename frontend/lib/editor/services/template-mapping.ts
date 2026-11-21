@@ -40,8 +40,6 @@ export function toEditorTemplate(t: BackendTemplate): Template {
     createdBy: "",
     isPublic: t.isPublic,
     tags: t.tags ?? [],
-    avgRating: 0,
-    ratingsCount: 0,
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
   }
