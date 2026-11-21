@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { NotFoundError, ValidationError } from '../../utils/errors';
-import { dhlService } from '../../integrations/dhl/dhl.service';
+import { getShippingProvider } from '../../integrations/shipping/registry';
 import { emailService } from '../../services/email/email.service';
 import { notificationService } from '../notifications/notifications.service';
 
@@ -49,11 +49,11 @@ export class ShipmentService {
       height: 10,
     };
 
-    // Create DHL shipment
+    // Create the shipment through the configured carrier (SHIPPING_PROVIDER).
     // 4a bridge: shipments are PO-scoped once splitting lands; until 4b the
     // vendor of the first PO ships the whole order.
     const poVendor = order.purchaseOrders[0]?.vendor;
-    const dhlResult = await dhlService.createShipment({
+    const dhlResult = await getShippingProvider().createShipment({
       orderId,
       pickupAddress: {
         name: poVendor?.companyName || '',
@@ -164,8 +164,8 @@ export class ShipmentService {
       throw new ValidationError('Tracking number not available');
     }
 
-    // Get latest tracking from DHL
-    const trackingData = await dhlService.trackShipment(shipment.dhlTrackingNumber);
+    // Get latest tracking from the configured carrier
+    const trackingData = await getShippingProvider().trackShipment(shipment.dhlTrackingNumber);
 
     return {
       ...shipment,
