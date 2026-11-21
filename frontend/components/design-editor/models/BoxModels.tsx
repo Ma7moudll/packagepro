@@ -225,7 +225,7 @@ function createCorrugatedEdgeTexture(size = 256): THREE.CanvasTexture {
 // ============================================
 // CARDBOARD TEXTURE - لون كرتون طبيعي (ليس خشب)
 // ============================================
-function createPhotoRealisticCardboard(size = 1024, isInside = false, tone: 'kraft' | 'white' | 'white-imported' = 'kraft'): THREE.CanvasTexture {
+function createPhotoRealisticCardboard(size = 1024, isInside = false, tone: 'kraft' | 'white' | 'white-imported' = 'kraft', outOverride?: string): THREE.CanvasTexture {
   const canvas = document.createElement("canvas")
   canvas.width = size
   canvas.height = size
@@ -242,7 +242,7 @@ function createPhotoRealisticCardboard(size = 1024, isInside = false, tone: 'kra
   const t = tones[tone] ?? tones.kraft
   const [lr, lg, lb] = t.line
 
-  ctx.fillStyle = isInside ? t.inn : t.out
+  ctx.fillStyle = isInside ? t.inn : (outOverride ?? t.out)
   ctx.fillRect(0, 0, size, size)
 
   // Fine horizontal flute striations with a slight organic wobble
@@ -543,6 +543,7 @@ interface BoardLook {
   roughness: number
   corrugated: boolean
   fluteTint: string
+  wallBright: string | null
 }
 
 function boardLook(materialType?: string): BoardLook {
@@ -555,6 +556,11 @@ function boardLook(materialType?: string): BoardLook {
     return {
       outsideColor: '#FFFFFF',
       insideColor: '#FFFFFF',
+      // Walls sit in the renderer's saturated mid-tone zone and render warm
+      // while the brighter lid desaturates to neutral. A brighter wall-only
+      // texture pushes the walls into the same neutral zone (measured:
+      // cool color multiplies only darkened and skewed blue).
+      wallBright: '#E4E4E6',
       textureTone: 'white',
       roughness: 0.9,
       corrugated,
@@ -566,6 +572,7 @@ function boardLook(materialType?: string): BoardLook {
     return {
       outsideColor: '#FFFFFF',
       insideColor: '#FFFFFF',
+      wallBright: '#EFEFF1',
       textureTone: 'white-imported',
       roughness: 0.5,
       corrugated,
@@ -576,6 +583,7 @@ function boardLook(materialType?: string): BoardLook {
   return {
     outsideColor: '#FFFFFF',
     insideColor: '#FFFFFF',
+    wallBright: null as string | null,
     textureTone: 'kraft',
     roughness: 0.92,
     corrugated: true,
@@ -637,6 +645,18 @@ export function MailerBox({
     metalness: 0,
   }), [outsideMap, look])
 
+  // Wall-only material with a brighter board texture, so wall faces reach
+  // the same desaturated neutral response as the lid (kraft unchanged).
+  const wallMap = useMemo(
+    () => look.wallBright ? createPhotoRealisticCardboard(512, false, look.textureTone, look.wallBright) : outsideMap,
+    [look.wallBright, look.textureTone, outsideMap]
+  )
+  const wallMaterial = useMemo(() => {
+    const wm = outsideMaterial.clone()
+    wm.map = wallMap
+    return wm
+  }, [outsideMaterial, wallMap])
+
   const insideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     map: insideMap,
     color: look.insideColor,
@@ -648,10 +668,10 @@ export function MailerBox({
   const wall = 0.004 // E-flute corrugated ~4mm
 
   // Per-face art binding — deterministic 2D→3D mapping.
-  const frontMat = resolveFaceMaterial(outsideMaterial, textures, "front")
-  const backMat = resolveFaceMaterial(outsideMaterial, textures, "back")
-  const leftMat = resolveFaceMaterial(outsideMaterial, textures, "left")
-  const rightMat = resolveFaceMaterial(outsideMaterial, textures, "right")
+  const frontMat = resolveFaceMaterial(wallMaterial, textures, "front")
+  const backMat = resolveFaceMaterial(wallMaterial, textures, "back")
+  const leftMat = resolveFaceMaterial(wallMaterial, textures, "left")
+  const rightMat = resolveFaceMaterial(wallMaterial, textures, "right")
   const topMat = resolveFaceMaterial(outsideMaterial, textures, "top")
   const bottomMat = resolveFaceMaterial(insideMaterial, textures, "bottom")
 

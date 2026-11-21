@@ -174,13 +174,13 @@ export function AddToCart({
                   <span className="text-slate-600">
                     {language === "ar" ? "السعر لكل وحدة" : "Price per unit"}
                   </span>
-                  <span>${price.unit.toFixed(2)}</span>
+                  <span>{language === "ar" ? `${price.unit.toFixed(2)} ج.م` : `EGP ${price.unit.toFixed(2)}`}</span>
                 </div>
                 <div className="flex justify-between font-semibold pt-2 border-t">
                   <span>
                     {language === "ar" ? "الإجمالي" : "Total"}
                   </span>
-                  <span>${price.total.toFixed(2)}</span>
+                  <span>{language === "ar" ? `${price.total.toFixed(2)} ج.م` : `EGP ${price.total.toFixed(2)}`}</span>
                 </div>
               </>
             ) : null}

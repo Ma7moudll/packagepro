@@ -38,9 +38,84 @@ export async function exportDesign(options: Partial<ExportOptions> = {}): Promis
     return await exportPDF(layers, model, opts)
   } else if (opts.format === "png" || opts.format === "jpg") {
     return await exportImage(layers, model, opts)
+  } else if (opts.format === "svg") {
+    return await exportSVG(layers, model, opts)
   }
 
+  // ai/eps are not implemented; callers must not offer them
   return null
+}
+
+async function exportSVG(
+  layers: Layer[],
+  model: ModelState,
+  options: ExportOptions
+): Promise<Blob> {
+  const textures = await generateTextureFromLayers(layers, model, {
+    width: (options.resolution / 72) * 800,
+    height: (options.resolution / 72) * 600,
+  })
+
+  const bleed = options.includeBleed ? options.bleedSize : 0
+  const margin = 10 // mm
+  const gap = 20 // mm between faces
+  const markLength = 5 // mm
+
+  // Face artwork is embedded as PNG; crop marks, die lines and labels stay
+  // vector so the file remains editable for print preparation.
+  const parts: string[] = []
+  let y = margin
+  let maxW = 0
+
+  for (const face of model.faces) {
+    const dataUrl = textures[face.id]
+    if (!dataUrl) continue
+
+    const faceWidth = face.id === "front" || face.id === "back" ? model.dimensions.length : model.dimensions.width
+    const faceHeight = model.dimensions.height
+    const totalWidth = faceWidth + bleed * 2
+    const totalHeight = faceHeight + bleed * 2
+    maxW = Math.max(maxW, totalWidth + margin * 2)
+
+    const label = `<text x="${margin}" y="${y - 2}" font-size="3" fill="#000">${escapeXml(face.name)}</text>`
+    const image = `<image href="${dataUrl}" x="${margin}" y="${y}" width="${totalWidth}" height="${totalHeight}" />`
+
+    let marks = ""
+    if (options.includeCropMarks) {
+      const x = margin
+      const stroke = `stroke="#000" stroke-width="0.1"`
+      marks =
+        `<line x1="${x - bleed}" y1="${y - bleed}" x2="${x - bleed}" y2="${y - bleed - markLength}" ${stroke}/>` +
+        `<line x1="${x - bleed}" y1="${y - bleed}" x2="${x - bleed - markLength}" y2="${y - bleed}" ${stroke}/>` +
+        `<line x1="${x + totalWidth + bleed}" y1="${y - bleed}" x2="${x + totalWidth + bleed}" y2="${y - bleed - markLength}" ${stroke}/>` +
+        `<line x1="${x + totalWidth + bleed}" y1="${y - bleed}" x2="${x + totalWidth + bleed + markLength}" y2="${y - bleed}" ${stroke}/>` +
+        `<line x1="${x - bleed}" y1="${y + totalHeight + bleed}" x2="${x - bleed}" y2="${y + totalHeight + bleed + markLength}" ${stroke}/>` +
+        `<line x1="${x - bleed}" y1="${y + totalHeight + bleed}" x2="${x - bleed - markLength}" y2="${y + totalHeight + bleed}" ${stroke}/>` +
+        `<line x1="${x + totalWidth + bleed}" y1="${y + totalHeight + bleed}" x2="${x + totalWidth + bleed}" y2="${y + totalHeight + bleed + markLength}" ${stroke}/>` +
+        `<line x1="${x + totalWidth + bleed}" y1="${y + totalHeight + bleed}" x2="${x + totalWidth + bleed + markLength}" y2="${y + totalHeight + bleed}" ${stroke}/>`
+    }
+
+    let die = ""
+    if (options.includeDieLines) {
+      die =
+        `<rect x="${margin}" y="${y}" width="${totalWidth}" height="${totalHeight}" fill="none" stroke="#FF0000" stroke-width="0.1" stroke-dasharray="2,2"/>` +
+        `<rect x="${margin - bleed}" y="${y - bleed}" width="${totalWidth + bleed * 2}" height="${totalHeight + bleed * 2}" fill="none" stroke="#0000FF" stroke-width="0.1" stroke-dasharray="2,2"/>`
+    }
+
+    parts.push(label + image + marks + die)
+    y += totalHeight + gap
+  }
+
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${maxW}mm" height="${y - gap + margin}mm" viewBox="0 0 ${maxW} ${y - gap + margin}">${parts.join("")}</svg>`
+  return new Blob([svg], { type: "image/svg+xml" })
+}
+
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
 }
 
 async function exportPDF(

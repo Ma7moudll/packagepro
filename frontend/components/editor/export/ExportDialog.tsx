@@ -70,6 +70,10 @@ function ExportDialogInner() {
         }
       }
       const blob = await exportDesign(options)
+      if (!blob) {
+        alert(language === "ar" ? "هذا التنسيق غير متاح بعد" : "This export format is not available yet")
+        return
+      }
       if (blob) {
         const url = URL.createObjectURL(blob)
         const link = document.createElement("a")
@@ -176,9 +180,15 @@ function ExportDialogInner() {
                 <SelectItem value="pdf">PDF (Print-ready)</SelectItem>
                 <SelectItem value="png">PNG (High-res)</SelectItem>
                 <SelectItem value="jpg">JPEG</SelectItem>
-                <SelectItem value="svg">SVG (Vector)</SelectItem>
-                <SelectItem value="ai">Adobe Illustrator (AI)</SelectItem>
-                <SelectItem value="eps">EPS Vector</SelectItem>
+                {/* SVG/AI/EPS disabled: exportDesign reads the legacy editor
+                    store (lib/editor/state/store) whose model.faces are empty
+                    in the live design-editor, so vector export would produce
+                    an empty document. Re-enable once wired to the live state. */}
+                <SelectItem value="svg" disabled>SVG (Vector) — {language === "ar" ? "قريبًا" : "soon"}</SelectItem>
+                {/* AI/EPS export is not implemented (exportDesign returns null
+                    for them); keep disabled instead of failing silently. */}
+                <SelectItem value="ai" disabled>Adobe Illustrator (AI) — {language === "ar" ? "قريبًا" : "soon"}</SelectItem>
+                <SelectItem value="eps" disabled>EPS Vector — {language === "ar" ? "قريبًا" : "soon"}</SelectItem>
               </SelectContent>
             </Select>
           </div>
