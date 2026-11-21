@@ -51,25 +51,28 @@ function FaceHighlight({ selectedFace }: { selectedFace: FaceId }) {
   const layers = useDesignStore((s) => s.layers)
 
   useEffect(() => {
-    const restores: Array<() => void> = []
+    // Outline the selected face instead of tinting it: an amber emissive
+    // clone repainted the whole face tan and masked the real board color.
+    const attached: Array<{ mesh: THREE.Mesh; line: THREE.LineSegments }> = []
     scene.traverse((o) => {
       const mesh = o as THREE.Mesh
       if (!mesh.isMesh) return
       const fid = (mesh.userData as any)?.faceId
       if (!fid || fid !== selectedFace) return
-      const base = mesh.material as THREE.Material
-      if (!base || (base as any).__m7dHighlightClone) return
-      const clone = base.clone()
-      ;(clone as THREE.MeshStandardMaterial).emissive = new THREE.Color("#ffb300")
-      ;(clone as THREE.MeshStandardMaterial).emissiveIntensity = 0.45
-      ;(clone as any).__m7dHighlightClone = true
-      mesh.material = clone
-      restores.push(() => {
-        if (mesh.material === clone) mesh.material = base
-      })
+      const line = new THREE.LineSegments(
+        new THREE.EdgesGeometry(mesh.geometry, 30),
+        new THREE.LineBasicMaterial({ color: "#1d4ed8" })
+      )
+      ;(line as any).__m7dFaceOutline = true
+      mesh.add(line)
+      attached.push({ mesh, line })
     })
     return () => {
-      restores.forEach((r) => r())
+      attached.forEach(({ mesh, line }) => {
+        mesh.remove(line)
+        line.geometry.dispose()
+        ;(line.material as THREE.Material).dispose()
+      })
     }
   }, [scene, selectedFace, model, layers])
 
