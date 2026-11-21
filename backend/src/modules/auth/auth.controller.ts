@@ -104,7 +104,7 @@ export class AuthController {
         return reply.status(400).send({
           success: false,
           error: AuthErrorCode.PASSWORD_INVALID,
-          message: error.errors[0].message,
+          message: error.issues[0].message,
         });
       }
 
@@ -162,7 +162,7 @@ export class AuthController {
         return reply.status(400).send({
           success: false,
           error: AuthErrorCode.PASSWORD_INVALID,
-          message: error.errors[0].message,
+          message: error.issues[0].message,
         });
       }
 
@@ -240,7 +240,7 @@ export class AuthController {
         return reply.status(400).send({
           success: false,
           error: AuthErrorCode.VERIFICATION_TOKEN_INVALID,
-          message: error.errors[0].message,
+          message: error.issues[0].message,
         });
       }
 
@@ -295,7 +295,7 @@ export class AuthController {
         return reply.status(400).send({
           success: false,
           error: AuthErrorCode.PASSWORD_INVALID,
-          message: error.errors[0].message,
+          message: error.issues[0].message,
         });
       }
 
@@ -343,7 +343,7 @@ export class AuthController {
         return reply.status(400).send({
           success: false,
           error: AuthErrorCode.PASSWORD_INVALID,
-          message: error.errors[0].message,
+          message: error.issues[0].message,
         });
       }
 
@@ -391,7 +391,7 @@ export class AuthController {
         return reply.status(400).send({
           success: false,
           error: AuthErrorCode.PASSWORD_INVALID,
-          message: error.errors[0].message,
+          message: error.issues[0].message,
         });
       }
 
@@ -456,7 +456,7 @@ export class AuthController {
         return reply.status(400).send({
           success: false,
           error: AuthErrorCode.TOKEN_INVALID,
-          message: error.errors[0].message,
+          message: error.issues[0].message,
         });
       }
 
@@ -552,7 +552,7 @@ export class AuthController {
         return reply.status(400).send({
           success: false,
           error: AuthErrorCode.TOKEN_INVALID,
-          message: error.errors[0].message,
+          message: error.issues[0].message,
         });
       }
 
