@@ -313,6 +313,15 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
     )
   }, [model.material])
 
+  // Test/debug handle, same pattern as __editorSpinBox: lets Playwright
+  // deselect layers and switch materials without fighting sidebar UI.
+  useEffect(() => {
+    ;(window as any).__editorStore = useDesignStore
+    return () => {
+      delete (window as any).__editorStore
+    }
+  }, [])
+
   const dims = model.dimensions
   const maxDim = Math.max(dims.length, dims.width, dims.height || 1) / 100
   const camDist = Math.max(1.6, maxDim * 2.4 + 0.9)
