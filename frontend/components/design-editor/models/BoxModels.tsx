@@ -157,53 +157,57 @@ function createCorrugatedEdgeTexture(size = 128): THREE.CanvasTexture {
   canvas.height = size
   const ctx = canvas.getContext("2d")!
 
-  ctx.fillStyle = "#D4C4A8"
+  // Flute medium (the wavy inner layer visible on a cut edge)
+  ctx.fillStyle = "#B99B6E"
   ctx.fillRect(0, 0, size, size)
 
-  // Zigzag pattern
-  ctx.strokeStyle = "#8B7355"
-  ctx.lineWidth = 1
-
-  const waveHeight = 6
-  const waveWidth = 8
-
-  for (let y = 0; y < size; y += waveHeight * 2) {
-    ctx.beginPath()
-    for (let x = 0; x < size; x += waveWidth) {
-      const yOffset = (Math.floor(x / waveWidth) % 2) * waveHeight
-      if (x === 0) {
-        ctx.moveTo(x, y + yOffset)
-      } else {
-        ctx.lineTo(x, y + yOffset)
-      }
-    }
-    ctx.stroke()
+  // Sinusoidal flute shading across the edge
+  const flutes = 12
+  for (let x = 0; x < size; x++) {
+    const phase = (x / size) * flutes * Math.PI * 2
+    const shade = Math.sin(phase) * 0.5 + 0.5 // 0..1
+    const r = Math.round(150 + shade * 70)
+    const g = Math.round(120 + shade * 55)
+    const b = Math.round(80 + shade * 35)
+    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`
+    ctx.fillRect(x, 0, 1, size)
   }
+
+  // Liner bands top and bottom (the flat outer papers sandwiching the flute)
+  ctx.fillStyle = "#C9AB7E"
+  ctx.fillRect(0, 0, size, size * 0.18)
+  ctx.fillRect(0, size * 0.82, size, size * 0.18)
+  ctx.fillStyle = "rgba(120, 95, 60, 0.5)"
+  ctx.fillRect(0, size * 0.18 - 1, size, 1)
+  ctx.fillRect(0, size * 0.82, size, 1)
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
-  texture.repeat.set(3, 3)
+  texture.repeat.set(6, 1)
   return texture
 }
 
 // ============================================
 // CARDBOARD TEXTURE - لون كرتون طبيعي (ليس خشب)
 // ============================================
-function createPhotoRealisticCardboard(size = 1024, isInside = false): THREE.CanvasTexture {
+function createPhotoRealisticCardboard(size = 1024, isInside = false, tone: 'kraft' | 'white' = 'kraft'): THREE.CanvasTexture {
   const canvas = document.createElement("canvas")
   canvas.width = size
   canvas.height = size
   const ctx = canvas.getContext("2d")!
 
+  const kraftOut = tone === 'kraft'
   if (isInside) {
     // داخل الصندوق - بيج فاتح جداً
-    ctx.fillStyle = "#F0E6D3"
+    ctx.fillStyle = kraftOut ? "#F0E6D3" : "#F6F6F3"
     ctx.fillRect(0, 0, size, size)
 
     // خطوط تموج خفيفة جداً
     for (let y = 0; y < size; y += 3.5) {
-      ctx.strokeStyle = `rgba(200, 180, 150, ${0.15 + Math.random() * 0.1})`
+      ctx.strokeStyle = kraftOut
+        ? `rgba(200, 180, 150, ${0.15 + Math.random() * 0.1})`
+        : `rgba(190, 190, 185, ${0.12 + Math.random() * 0.08})`
       ctx.lineWidth = 0.5
       ctx.beginPath()
       ctx.moveTo(0, y)
@@ -211,14 +215,16 @@ function createPhotoRealisticCardboard(size = 1024, isInside = false): THREE.Can
       ctx.stroke()
     }
   } else {
-    // خارج الصندوق - كرتون بني فاتح (مش خشب)
-    ctx.fillStyle = "#D4B896"
+    // خارج الصندوق - كرتون بني فاتح (مش خشب) / لاينر أبيض
+    ctx.fillStyle = kraftOut ? "#D4B896" : "#FCFCFC"
     ctx.fillRect(0, 0, size, size)
 
     // خطوط التموج الأفقية - خفيفة وواضحة
     for (let y = 0; y < size; y += 3) {
-      const alpha = 0.2 + Math.random() * 0.15
-      ctx.strokeStyle = `rgba(160, 130, 100, ${alpha})`
+      const alpha = kraftOut ? 0.2 + Math.random() * 0.15 : 0.05 + Math.random() * 0.05
+      ctx.strokeStyle = kraftOut
+        ? `rgba(160, 130, 100, ${alpha})`
+        : `rgba(180, 180, 178, ${alpha})`
       ctx.lineWidth = 0.8
 
       ctx.beginPath()
@@ -228,7 +234,7 @@ function createPhotoRealisticCardboard(size = 1024, isInside = false): THREE.Can
     }
 
     // خطوط أغمق كل فترة
-    ctx.strokeStyle = "rgba(140, 110, 80, 0.18)"
+    ctx.strokeStyle = kraftOut ? "rgba(140, 110, 80, 0.18)" : "rgba(170, 170, 168, 0.07)"
     ctx.lineWidth = 1.2
     for (let y = 0; y < size; y += 9) {
       ctx.beginPath()
@@ -479,6 +485,82 @@ function Flap({ width, depth, thickness, angle, position, material, rotationAxis
   )
 }
 
+
+// ============================================
+// BOARD LOOK PER MATERIAL (Egyptian market)
+// ============================================
+interface BoardLook {
+  outsideColor: string
+  insideColor: string
+  outsideTone: 'kraft' | 'white'
+  roughness: number
+  corrugated: boolean
+  fluteTint: string
+}
+
+function boardLook(materialType?: string): BoardLook {
+  const m = (materialType || 'kraft').toLowerCase()
+  const corrugated = m.includes('corrugated')
+  // أبيض مصري — duller, slightly grey, recycled fibre
+  if (m.includes('local')) {
+    return {
+      outsideColor: '#E7E7E1',
+      insideColor: '#EFEFEA',
+      outsideTone: 'white',
+      roughness: 0.88,
+      corrugated,
+      fluteTint: '#D8D0BC',
+    }
+  }
+  // أبيض مستورد — bright, smooth coated liner
+  if (m.includes('white') || m.includes('coated') || m.includes('premium')) {
+    return {
+      outsideColor: '#FDFDFD',
+      insideColor: m.includes('white-kraft') ? '#E6D9C3' : '#F5F5F5',
+      outsideTone: 'white',
+      roughness: 0.55,
+      corrugated,
+      fluteTint: '#F2EDE2',
+    }
+  }
+  // بني كرافت — brown testliner
+  return {
+    outsideColor: '#B08D63',
+    insideColor: '#E6D9C3',
+    outsideTone: 'kraft',
+    roughness: 0.9,
+    corrugated: true,
+    fluteTint: '#C9AB7E',
+  }
+}
+
+// Cut-edge corrugation strip: flute texture visible on raw board edges.
+interface CorrugatedRimProps {
+  position: [number, number, number]
+  length: number
+  thickness: number
+  axis?: 'x' | 'z'
+  tint?: string
+}
+
+function CorrugatedRim({ position, length, thickness, axis = 'x', tint = '#C9AB7E' }: CorrugatedRimProps) {
+  const tex = useMemo(() => createCorrugatedEdgeTexture(128), [])
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({
+    map: tex,
+    color: tint,
+    roughness: 0.95,
+    metalness: 0,
+  }), [tex, tint])
+  const args: [number, number, number] = axis === 'x'
+    ? [length, thickness, thickness]
+    : [thickness, thickness, length]
+  return (
+    <mesh position={position} material={mat}>
+      <boxGeometry args={args} />
+    </mesh>
+  )
+}
+
 // ============================================
 // MAILER BOX - فارغ من الداخل + إغلاق سلس
 // ============================================
@@ -494,27 +576,27 @@ export function MailerBox({
   const w = dimensions.width / 100
   const h = dimensions.height / 100
 
-  const isKraft = !materialType || materialType.includes("kraft")
+  const look = boardLook(materialType)
 
-  const outsideMap = useMemo(() => createPhotoRealisticCardboard(512, false), [])
-  const insideMap = useMemo(() => createPhotoRealisticCardboard(512, true), [])
+  const outsideMap = useMemo(() => createPhotoRealisticCardboard(512, false, look.outsideTone), [look.outsideTone])
+  const insideMap = useMemo(() => createPhotoRealisticCardboard(512, true, look.outsideTone), [look.outsideTone])
 
   const outsideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
-    map: isKraft ? outsideMap : undefined,
-    color: isKraft ? "#C19A6B" : "#FAFAFA",
-    roughness: 0.88,
+    map: outsideMap,
+    color: look.outsideColor,
+    roughness: look.roughness,
     metalness: 0,
-  }), [isKraft, outsideMap])
+  }), [outsideMap, look])
 
   const insideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
-    map: isKraft ? insideMap : undefined,
-    color: isKraft ? "#E6D9C3" : "#F8F8F8",
-    roughness: 0.92,
+    map: insideMap,
+    color: look.insideColor,
+    roughness: Math.min(0.95, look.roughness + 0.04),
     metalness: 0,
-  }), [isKraft, insideMap])
+  }), [insideMap, look])
 
   const t = easeInOutCubic(openState)
-  const wall = 0.006
+  const wall = 0.004 // E-flute corrugated ~4mm
 
   // Per-face art binding — deterministic 2D→3D mapping.
   const frontMat = resolveFaceMaterial(outsideMaterial, textures, "front")
@@ -566,6 +648,16 @@ export function MailerBox({
         <boxGeometry args={[l - wall * 2, wall, w - wall * 2]} />
         <primitive object={bottomMat} attach="material" />
       </mesh>
+
+      {/* Cut edges: visible corrugation on the wall tops (seen when open) */}
+      {look.corrugated && (
+        <>
+          <CorrugatedRim position={[0, h + wall / 2, w / 2]} length={l} thickness={wall} axis="x" tint={look.fluteTint} />
+          <CorrugatedRim position={[0, h + wall / 2, -w / 2]} length={l} thickness={wall} axis="x" tint={look.fluteTint} />
+          <CorrugatedRim position={[-l / 2, h + wall / 2, 0]} length={w} thickness={wall} axis="z" tint={look.fluteTint} />
+          <CorrugatedRim position={[l / 2, h + wall / 2, 0]} length={w} thickness={wall} axis="z" tint={look.fluteTint} />
+        </>
+      )}
 
       {/* ===== DUST FLAPS (fold in first, sit under the lid) ===== */}
       <group position={[-l / 2, h - wall * 2, 0]}>
@@ -631,25 +723,27 @@ export function ShippingBox({
   const w = dimensions.width / 100
   const h = dimensions.height / 100
 
-  const outsideMap = useMemo(() => createPhotoRealisticCardboard(512, false), [])
-  const insideMap = useMemo(() => createPhotoRealisticCardboard(512, true), [])
+  const look = boardLook(materialType)
+
+  const outsideMap = useMemo(() => createPhotoRealisticCardboard(512, false, look.outsideTone), [look.outsideTone])
+  const insideMap = useMemo(() => createPhotoRealisticCardboard(512, true, look.outsideTone), [look.outsideTone])
 
   const outsideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     map: outsideMap,
-    color: "#C19A6B",
-    roughness: 0.88,
+    color: look.outsideColor,
+    roughness: look.roughness,
     metalness: 0,
-  }), [outsideMap])
+  }), [outsideMap, look])
 
   const insideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     map: insideMap,
-    color: "#E6D9C3",
-    roughness: 0.92,
+    color: look.insideColor,
+    roughness: Math.min(0.95, look.roughness + 0.04),
     metalness: 0,
-  }), [insideMap])
+  }), [insideMap, look])
 
   const t = easeInOutCubic(openState)
-  const wall = 0.006
+  const wall = 0.006 // B/C-flute shipping board ~6mm
 
   const frontMat = resolveFaceMaterial(outsideMaterial, textures, "front")
   const backMat = resolveFaceMaterial(outsideMaterial, textures, "back")
@@ -693,6 +787,15 @@ export function ShippingBox({
         <boxGeometry args={[l - wall * 2, wall, w - wall * 2]} />
         <primitive object={bottomMat} attach="material" />
       </mesh>
+
+      {look.corrugated && (
+        <>
+          <CorrugatedRim position={[0, h + wall / 2, w / 2]} length={l} thickness={wall} axis="x" tint={look.fluteTint} />
+          <CorrugatedRim position={[0, h + wall / 2, -w / 2]} length={l} thickness={wall} axis="x" tint={look.fluteTint} />
+          <CorrugatedRim position={[-l / 2, h + wall / 2, 0]} length={w} thickness={wall} axis="z" tint={look.fluteTint} />
+          <CorrugatedRim position={[l / 2, h + wall / 2, 0]} length={w} thickness={wall} axis="z" tint={look.fluteTint} />
+        </>
+      )}
 
       {/* ===== MINOR FLAPS (side, lower layer) ===== */}
       <group position={[-l / 2, h, 0]}>

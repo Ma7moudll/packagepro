@@ -7,38 +7,39 @@ async function main() {
   console.log('Seeding database...');
 
   // Create sample materials.
-  // unitPrice is EGP per square centimeter (the pricing engine computes
+  // unitPrice is EGP per square centimeter, calibrated to Egyptian
+  // board prices (testliner ~25-30 EGP/kg; imported white liner higher).
   // surface area in cm2). These codes match every material id/code the
   // frontend sends (editor MATERIAL_TYPES, product pages, pricing config).
   const MATERIALS = [
     // Product page codes (products/[id]/page.tsx materialColor mapping)
-    { code: 'kraft', name: 'Kraft Board', price: 0.013473 },
-    { code: 'white-kraft', name: 'White Kraft Board', price: 0.016167 },
-    { code: 'premium-white', name: 'Premium White Board', price: 0.021556 },
+    { code: 'kraft', name: 'Kraft Board', price: 0.0009 },
+    { code: 'white-kraft', name: 'White Kraft Board', price: 0.001196 },
+    { code: 'premium-white', name: 'Premium White Board', price: 0.001595 },
     // Editor material types (products-data.ts MATERIAL_TYPES)
-    { code: 'cardboard-kraft', name: 'Kraft Cardboard', price: 0.013473 },
-    { code: 'corrugated-kraft', name: 'Corrugated Kraft', price: 0.013473 },
-    { code: 'cardboard-white', name: 'White Glossy (Imported)', price: 0.016167 },
-    { code: 'cardboard-coated', name: 'White Coated (Premium)', price: 0.018861 },
-    { code: 'cardboard-white-matte', name: 'White Matte (Imported)', price: 0.017245 },
-    { code: 'cardboard-local', name: 'White Local (Economic)', price: 0.011856 },
-    { code: 'corrugated-white', name: 'Corrugated White', price: 0.016167 },
-    { code: 'paper-silk', name: 'Silk Finish Paper', price: 0.032334 },
-    { code: 'paper-soft-touch', name: 'Soft Touch Paper', price: 0.037723 },
+    { code: 'cardboard-kraft', name: 'Kraft Cardboard', price: 0.000997 },
+    { code: 'corrugated-kraft', name: 'Corrugated Kraft', price: 0.000997 },
+    { code: 'cardboard-white', name: 'White Glossy (Imported)', price: 0.001196 },
+    { code: 'cardboard-coated', name: 'White Coated (Premium)', price: 0.001396 },
+    { code: 'cardboard-white-matte', name: 'White Matte (Imported)', price: 0.001276 },
+    { code: 'cardboard-local', name: 'White Local (Economic)', price: 0.0011 },
+    { code: 'corrugated-white', name: 'Corrugated White', price: 0.001196 },
+    { code: 'paper-silk', name: 'Silk Finish Paper', price: 0.002393 },
+    { code: 'paper-soft-touch', name: 'Soft Touch Paper', price: 0.002792 },
     // Frontend pricing config codes (pricing-rules.ts MATERIAL_COSTS)
-    { code: 'corrugated_kraft', name: 'Corrugated Kraft (Config)', price: 0.013473 },
-    { code: 'white_corrugated', name: 'White Corrugated (Config)', price: 0.016167 },
-    { code: 'chipboard', name: 'Chipboard', price: 0.026945 },
-    { code: 'kraft_liner', name: 'Kraft Liner', price: 0.024251 },
-    { code: 'vinyl', name: 'Vinyl', price: 0.043112 },
-    { code: 'paper', name: 'Paper', price: 0.008083 },
-    { code: 'polyester', name: 'Polyester', price: 0.05389 },
+    { code: 'corrugated_kraft', name: 'Corrugated Kraft (Config)', price: 0.000997 },
+    { code: 'white_corrugated', name: 'White Corrugated (Config)', price: 0.001196 },
+    { code: 'chipboard', name: 'Chipboard', price: 0.001994 },
+    { code: 'kraft_liner', name: 'Kraft Liner', price: 0.001795 },
+    { code: 'vinyl', name: 'Vinyl', price: 0.00319 },
+    { code: 'paper', name: 'Paper', price: 0.000598 },
+    { code: 'polyester', name: 'Polyester', price: 0.003988 },
     // Poly mailer body (lightweight LDPE)
-    { code: 'poly', name: 'LDPE Poly Mailer', price: 0.021556 },
+    { code: 'poly', name: 'LDPE Poly Mailer', price: 0.001595 },
     // Legacy codes
-    { code: 'COATED_250', name: 'Coated Paper 250gsm', price: 0.015089 },
-    { code: 'UNCOATED_200', name: 'Uncoated Paper 200gsm', price: 0.0097 },
-    { code: 'CORRUGATED_E', name: 'Corrugated Board E-Flute', price: 0.014011 },
+    { code: 'COATED_250', name: 'Coated Paper 250gsm', price: 0.001117 },
+    { code: 'UNCOATED_200', name: 'Uncoated Paper 200gsm', price: 0.000718 },
+    { code: 'CORRUGATED_E', name: 'Corrugated Board E-Flute', price: 0.001037 },
   ];
 
   const materials = await Promise.all(
@@ -307,37 +308,38 @@ async function main() {
   const OPTION_MATERIAL_BOX = {
     key: 'material', label: 'Material', control: 'select', required: true,
     values: [
-      { label: 'Kraft Board', value: 'kraft' },
-      { label: 'White Kraft Board', value: 'white-kraft' },
-      { label: 'Kraft Cardboard', value: 'cardboard-kraft' },
+      { label: 'Kraft (Brown)', value: 'kraft' },
+      { label: 'White (Egyptian)', value: 'cardboard-local' },
+      { label: 'White (Imported)', value: 'cardboard-white' },
       { label: 'Corrugated Kraft', value: 'corrugated-kraft' },
-      { label: 'White Glossy (Imported)', value: 'cardboard-white' },
+      { label: 'Corrugated White (Imported)', value: 'corrugated-white' },
+      { label: 'White Kraft Board', value: 'white-kraft' },
     ],
   };
   const OPTION_PRINT_COLORS = {
     key: 'printColors', label: 'Print colours', control: 'select', required: true,
     values: [
       { label: 'No print', value: 'none', priceDelta: 0 },
-      { label: '1 colour', value: 'mono', priceDelta: 0.27 },
-      { label: 'Full colour', value: 'full_color', priceDelta: 1.62, isDefault: true },
+      { label: '1 colour', value: 'mono', priceDelta: 1.2 },
+      { label: 'Full colour', value: 'full_color', priceDelta: 2.5, isDefault: true },
     ],
   };
   const OPTION_PRINT_SIDES = {
     key: 'printSides', label: 'Print sides', control: 'select', required: true,
     values: [
       { label: 'Outside only', value: 'outside_only', priceDelta: 0 },
-      { label: 'Inside & outside', value: 'inside_outside', priceDelta: 0.81 },
+      { label: 'Inside & outside', value: 'inside_outside', priceDelta: 1.5 },
     ],
   };
   const OPTION_FINISH = {
     key: 'finish', label: 'Finish', control: 'select', required: false,
     values: [
       { label: 'None', value: 'none', priceDelta: 0, isDefault: true },
-      { label: 'Gloss lamination', value: 'gloss_lamin', priceDelta: 2.16 },
-      { label: 'Matte lamination', value: 'matte_lamin', priceDelta: 2.69 },
-      { label: 'Spot UV', value: 'spot_uv', priceDelta: 3.23 },
-      { label: 'Gold foil', value: 'foil_gold', priceDelta: 13.47 },
-      { label: 'Silver foil', value: 'foil_silver', priceDelta: 10.78 },
+      { label: 'Gloss lamination', value: 'gloss_lamin', priceDelta: 2 },
+      { label: 'Matte lamination', value: 'matte_lamin', priceDelta: 2.4 },
+      { label: 'Spot UV', value: 'spot_uv', priceDelta: 3 },
+      { label: 'Gold foil', value: 'foil_gold', priceDelta: 8 },
+      { label: 'Silver foil', value: 'foil_silver', priceDelta: 6.5 },
     ],
   };
 
@@ -1235,7 +1237,7 @@ async function main() {
       ],
       minDims: { length: 2, width: 2, height: 1 },
       maxDims: { length: 60, width: 50, height: 40 },
-      priceFrom: 29.64,
+      priceFrom: 14,
       thumbnail: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
       gallery: [
         'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
@@ -1246,7 +1248,7 @@ async function main() {
       editorDefaults: { boxType: 'mailer-box', defaultMaterial: 'cardboard-kraft', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'E', structure: MAILER_BOX_STRUCTURE, prepress: { caliperMm: 0.5, fluteType: 'E', glueFlapToleranceMm: 1.5 }, schemaVersion: 1, unit: 'mm', dieline: MAILER_DIELINE_TEMPLATE, support: 'supported' },
       defaultVariant: { materialCode: 'kraft', color: 'kraft', printMode: 'none', printSides: 'outside_only', finish: 'none' },
       options: [OPTION_MATERIAL_BOX, OPTION_PRINT_COLORS, OPTION_PRINT_SIDES, OPTION_FINISH],
-      conversion: 1.08,
+      conversion: 8,
       margin: 0.35,
     },
     {
@@ -1267,7 +1269,7 @@ async function main() {
       ],
       minDims: { length: 3, width: 2, height: 1 },
       maxDims: { length: 40, width: 30, height: 20 },
-      priceFrom: 22.63,
+      priceFrom: 12,
       thumbnail: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&h=600&fit=crop',
       gallery: [
         'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&h=600&fit=crop',
@@ -1283,7 +1285,7 @@ async function main() {
         OPTION_PRINT_SIDES,
         OPTION_FINISH,
       ],
-      conversion: 0.97,
+      conversion: 7,
       margin: 0.4,
     },
     {
@@ -1305,7 +1307,7 @@ async function main() {
       ],
       minDims: { length: 10, width: 10, height: 5 },
       maxDims: { length: 120, width: 80, height: 80 },
-      priceFrom: 45.81,
+      priceFrom: 9,
       thumbnail: 'https://images.unsplash.com/photo-1605902711622-cfb43c4437b5?w=800&h=600&fit=crop',
       gallery: [
         'https://images.unsplash.com/photo-1605902711622-cfb43c4437b5?w=800&h=600&fit=crop',
@@ -1330,11 +1332,11 @@ async function main() {
           key: 'finish', label: 'Finish', control: 'select', required: false,
           values: [
             { label: 'None', value: 'none', priceDelta: 0, isDefault: true },
-            { label: 'Gloss lamination', value: 'gloss_lamin', priceDelta: 2.16 },
+            { label: 'Gloss lamination', value: 'gloss_lamin', priceDelta: 2 },
           ],
         },
       ],
-      conversion: 1.51,
+      conversion: 5,
       margin: 0.32,
     },
     {
@@ -1355,7 +1357,7 @@ async function main() {
       ],
       minDims: { length: 10, width: 8, height: 3 },
       maxDims: { length: 60, width: 50, height: 20 },
-      priceFrom: 99.7,
+      priceFrom: 35,
       thumbnail: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&h=600&fit=crop',
       gallery: [
         'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&h=600&fit=crop',
@@ -1379,7 +1381,7 @@ async function main() {
         OPTION_PRINT_SIDES,
         OPTION_FINISH,
       ],
-      conversion: 2.69,
+      conversion: 15,
       margin: 0.45,
     },
     {
@@ -1400,7 +1402,7 @@ async function main() {
       ],
       minDims: { length: 20, width: 20, height: 2 },
       maxDims: { length: 60, width: 60, height: 10 },
-      priceFrom: 51.2,
+      priceFrom: 10,
       thumbnail: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=600&fit=crop',
       gallery: [
         'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=600&fit=crop',
@@ -1424,7 +1426,7 @@ async function main() {
         OPTION_PRINT_SIDES,
         OPTION_FINISH,
       ],
-      conversion: 1.89,
+      conversion: 4,
       margin: 0.35,
     },
     {
@@ -1445,7 +1447,7 @@ async function main() {
       ],
       minDims: { length: 10, width: 8, height: 3 },
       maxDims: { length: 50, width: 40, height: 20 },
-      priceFrom: 40.42,
+      priceFrom: 8,
       thumbnail: 'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?w=800&h=600&fit=crop',
       gallery: [
         'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?w=800&h=600&fit=crop',
@@ -1470,21 +1472,21 @@ async function main() {
           key: 'finish', label: 'Finish', control: 'select', required: false,
           values: [
             { label: 'None', value: 'none', priceDelta: 0, isDefault: true },
-            { label: 'Gloss lamination', value: 'gloss_lamin', priceDelta: 2.16 },
-            { label: 'Matte lamination', value: 'matte_lamin', priceDelta: 2.69 },
+            { label: 'Gloss lamination', value: 'gloss_lamin', priceDelta: 2 },
+            { label: 'Matte lamination', value: 'matte_lamin', priceDelta: 2.4 },
           ],
         },
         {
           key: 'handle', label: 'Handle', control: 'select', required: true,
           values: [
             { label: 'No handle', value: 'none', priceDelta: 0, isDefault: true },
-            { label: 'Twisted paper', value: 'twisted_paper', priceDelta: 6.47, appliesTo: { materials: ['kraft', 'white-kraft'] } },
-            { label: 'Cotton ropes', value: 'cotton_ropes', priceDelta: 16.17 },
-            { label: 'Ribbon', value: 'ribbon', priceDelta: 18.86 },
+            { label: 'Twisted paper', value: 'twisted_paper', priceDelta: 4, appliesTo: { materials: ['kraft', 'white-kraft'] } },
+            { label: 'Cotton ropes', value: 'cotton_ropes', priceDelta: 8 },
+            { label: 'Ribbon', value: 'ribbon', priceDelta: 9 },
           ],
         },
       ],
-      conversion: 2.43,
+      conversion: 3,
       margin: 0.33,
     },
     {
@@ -1505,7 +1507,7 @@ async function main() {
       ],
       minDims: { length: 10, width: 10, height: 1 },
       maxDims: { length: 60, width: 60, height: 5 },
-      priceFrom: 9.7,
+      priceFrom: 5,
       thumbnail: 'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=800&h=600&fit=crop',
       gallery: [
         'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=800&h=600&fit=crop',
@@ -1525,11 +1527,11 @@ async function main() {
           key: 'closure', label: 'Closure', control: 'select', required: true,
           values: [
             { label: 'Peel & seal', value: 'peel_seal', priceDelta: 0, isDefault: true },
-            { label: 'Tamper evident', value: 'tamper_evident', priceDelta: 1.08 },
+            { label: 'Tamper evident', value: 'tamper_evident', priceDelta: 0.6 },
           ],
         },
       ],
-      conversion: 3.23,
+      conversion: 0.6,
       margin: 0.35,
     },
     {
@@ -1551,7 +1553,7 @@ async function main() {
       ],
       minDims: { length: 2, width: 2, height: 0.1 },
       maxDims: { length: 30, width: 20, height: 0.1 },
-      priceFrom: 4.31,
+      priceFrom: 1.5,
       thumbnail: 'https://images.unsplash.com/photo-1590846406792-0adc7f938f1d?w=800&h=600&fit=crop',
       gallery: [
         'https://images.unsplash.com/photo-1590846406792-0adc7f938f1d?w=800&h=600&fit=crop',
@@ -1573,7 +1575,7 @@ async function main() {
         OPTION_PRINT_COLORS,
         OPTION_FINISH,
       ],
-      conversion: 0.43,
+      conversion: 0.4,
       margin: 0.5,
     },
   ];

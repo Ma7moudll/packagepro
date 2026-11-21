@@ -96,22 +96,23 @@ export function calculateConversionCost(
   surfaceArea: number,
   complexity: 'simple' | 'medium' | 'complex' = 'medium'
 ): number {
-  // Base conversion costs per unit (in EGP)
+  // Base conversion costs per unit (in EGP), calibrated to Egyptian
+  // die-cutting/printing labor at low quantities.
   const baseCosts: Record<string, Record<string, number>> = {
     box: {
-      simple: 8.08,
-      medium: 13.47,
-      complex: 21.56,
+      simple: 5,
+      medium: 8,
+      complex: 12,
     },
     bag: {
-      simple: 5.39,
-      medium: 9.7,
-      complex: 16.17,
+      simple: 3,
+      medium: 4.5,
+      complex: 7,
     },
     label: {
-      simple: 2.69,
-      medium: 4.31,
-      complex: 6.47,
+      simple: 0.4,
+      medium: 0.6,
+      complex: 0.9,
     },
   };
 
