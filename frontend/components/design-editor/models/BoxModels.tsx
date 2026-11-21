@@ -515,7 +515,7 @@ function boardLook(materialType?: string): BoardLook {
   // أبيض مستورد — bright, smooth coated liner
   if (m.includes('white') || m.includes('coated') || m.includes('premium')) {
     return {
-      outsideColor: '#FDFDFD',
+      outsideColor: '#F2F2EF',
       insideColor: m.includes('white-kraft') ? '#E6D9C3' : '#F5F5F5',
       outsideTone: 'white',
       roughness: 0.55,
@@ -525,7 +525,7 @@ function boardLook(materialType?: string): BoardLook {
   }
   // بني كرافت — brown testliner
   return {
-    outsideColor: '#B08D63',
+    outsideColor: '#9A7B50',
     insideColor: '#E6D9C3',
     outsideTone: 'kraft',
     roughness: 0.9,

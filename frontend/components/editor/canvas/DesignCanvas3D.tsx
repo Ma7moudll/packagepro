@@ -290,7 +290,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         gl={{
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.05,
+          toneMappingExposure: 0.95,
         }}
       >
         {/* خلفية رمادية فاتحة */}
