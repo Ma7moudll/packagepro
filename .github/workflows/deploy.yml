@@ -49,7 +49,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
@@ -94,7 +94,7 @@ jobs:
             --build-env NEXT_PUBLIC_API_URL="${{ vars.NEXT_PUBLIC_API_URL }}" \
             --token "$VERCEL_TOKEN"
 
-      - name: Smoke-check deployed frontend
-        run: |
-          curl -fsS -o /dev/null --max-time 30 "${{ vars.NEXT_PUBLIC_API_URL }}/api/health" || \
-          echo "::warning::Backend /api/health did not answer within 30s — check Railway logs"
+      - name: Require deployed backend health
+        env:
+          BACKEND_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+        run: bash scripts/check-deployment-health.sh

@@ -298,6 +298,7 @@ model Order {
   reviews         Review[]
 
   @@map("orders")
+  approvalTokens OrderApprovalToken[]
 }
 
 model OrderItem {
@@ -893,4 +894,16 @@ model ProductOptionValue {
   @@index([optionId, sortOrder])
   @@index([productId])
   @@map("product_option_values")
+}
+
+// Approval capabilities are durable, hashed, expiring and single-use.
+model OrderApprovalToken {
+  tokenHash String @id
+  orderId String
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  consumedAt DateTime?
+  @@index([orderId])
+  @@map("order_approval_tokens")
 }

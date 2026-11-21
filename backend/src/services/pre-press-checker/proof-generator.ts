@@ -13,6 +13,7 @@
 // The endpoint contract (ProofResult / upload / DesignFile record / approval
 // token) is unchanged.
 
+import {issueApprovalToken, verifyApprovalToken} from './approval-tokens';
 import { prisma } from '../../lib/prisma';
 import { NotFoundError } from '../../utils/errors';
 import { fileUploadService } from '../file-upload/upload.service';
@@ -533,33 +534,12 @@ export class ProofGeneratorService {
       },
     });
 
-    const approvalToken = this.generateApprovalToken(orderId);
-
-    const redis = require('../../lib/redis').getRedisClient();
-    if (redis) {
-      try {
-        await redis.setex(
-          `approval:token:${approvalToken}`,
-          7 * 24 * 60 * 60,
-          JSON.stringify({
-            orderId,
-            createdAt: new Date().toISOString(),
-          })
-        );
-      } catch (error) {
-        // Redis not available - continue without it
-      }
-    }
+    const approvalToken = await issueApprovalToken(orderId);
 
     return {
       proofUrl: proofUpload.fileUrl,
       approvalToken,
     };
-  }
-
-  private generateApprovalToken(_orderId: string): string {
-    const crypto = require('crypto');
-    return crypto.randomBytes(32).toString('hex');
   }
 
   async getProof(orderId: string): Promise<ProofResult | null> {
@@ -581,7 +561,7 @@ export class ProofGeneratorService {
     }
 
     const proofFile = order.design.files[0];
-    const approvalToken = this.generateApprovalToken(orderId);
+    const approvalToken = await issueApprovalToken(orderId);
 
     return {
       proofUrl: proofFile.fileUrl,
@@ -590,20 +570,7 @@ export class ProofGeneratorService {
   }
 
   async verifyApprovalToken(token: string): Promise<{ orderId: string } | null> {
-    const redis = require('../../lib/redis').getRedisClient();
-    if (!redis) {
-      return null;
-    }
-
-    try {
-      const data = await redis.get(`approval:token:${token}`);
-      if (!data) {
-        return null;
-      }
-      return JSON.parse(data);
-    } catch (error) {
-      return null;
-    }
+    return verifyApprovalToken(token);
   }
 }
 

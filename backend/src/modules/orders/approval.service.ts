@@ -1,3 +1,4 @@
+import {hashApprovalToken} from '../../services/pre-press-checker/approval-tokens';
 import { prisma } from '../../lib/prisma';
 import { AuthorizationError, ConflictError, NotFoundError, ValidationError } from '../../utils/errors';
 import { emailService } from '../../services/email/email.service';
@@ -84,33 +85,18 @@ export class ApprovalService {
       throw new ValidationError('Invalid or expired approval token');
     }
 
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-    });
-
-    if (!order) {
-      throw new NotFoundError('Order');
-    }
-
-    if (order.status !== 'awaiting_approval') {
-      throw new ValidationError('Order is not awaiting approval');
-    }
-
-    // Update order status
-    await prisma.order.update({
-      where: { id: orderId },
-      data: {
-        status: 'ready_for_routing',
-        approvedAt: new Date(),
-        metadata: {
-          ...(order.metadata as any),
-          approval: {
-            ipAddress,
-            userAgent,
-            approvedAt: new Date().toISOString(),
-          },
-        },
-      },
+    const order = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`;
+      const current = await tx.order.findUnique({where:{id:orderId}});
+      if (!current) throw new NotFoundError('Order');
+      if (current.status !== 'awaiting_approval') throw new ValidationError('Order is not awaiting approval');
+      const consumed = await tx.orderApprovalToken.updateMany({
+        where:{tokenHash:hashApprovalToken(token),orderId,consumedAt:null,expiresAt:{gt:new Date()}},
+        data:{consumedAt:new Date()},
+      });
+      if (consumed.count !== 1) throw new ValidationError('Invalid or expired approval token');
+      await tx.order.update({where:{id:orderId},data:{status:'ready_for_routing',approvedAt:new Date(),metadata:{...(current.metadata as any),approval:{ipAddress,userAgent,approvedAt:new Date().toISOString()}}}});
+      return current;
     });
 
     // Cancel reminder jobs
