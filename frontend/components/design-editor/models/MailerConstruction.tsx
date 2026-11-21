@@ -53,7 +53,9 @@ export function MailerConstruction({ l,w,h,open, outside,inside,front,back,left,
   useEffect(() => () => {edge.dispose(); edgeMap.dispose(); crease.dispose()}, [edge,edgeMap,crease])
   const lidWidth = l - b * 4.4
   const lidDepth = w - b * 1.3
-  const angles = mailerFoldAngles(open)
+  // Initial JSX rotations must stay stable. Updating those props to the new
+  // target would snap one frame to the endpoint before useFrame eases back.
+  const angles = useRef(mailerFoldAngles(open)).current
   const lidRef = useRef<THREE.Group>(null)
   const tuckRef = useRef<THREE.Group>(null)
   const wingRefs = useRef<Array<THREE.Group | null>>([])
