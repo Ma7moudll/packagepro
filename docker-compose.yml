@@ -6,10 +6,12 @@ services:
     container_name: packagepro-postgres
     environment:
       POSTGRES_USER: packagepro
-      POSTGRES_PASSWORD: packagepro123
+      # Required: no committed default. Set it in a local .env (git-ignored).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}
       POSTGRES_DB: packagepro
     ports:
-      - "5432:5432"
+      # Localhost-only: the database must not be reachable from the network.
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +24,8 @@ services:
     image: redis:7-alpine
     container_name: packagepro-redis
     ports:
-      - "6379:6379"
+      # Localhost-only: same reasoning as Postgres.
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -38,11 +41,12 @@ services:
     container_name: packagepro-backend
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://packagepro:packagepro123@postgres:5432/packagepro?schema=public
+      DATABASE_URL: postgresql://packagepro:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}@postgres:5432/packagepro?schema=public
       REDIS_URL: redis://redis:6379
       PORT: 3000
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-in-production}
+      # Required: no committed defaults. The backend refuses to boot without them.
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in your .env file}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in your .env file}
     ports:
       - "3000:3000"
     depends_on:

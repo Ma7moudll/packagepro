@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
@@ -1743,42 +1744,51 @@ async function main() {
 
   console.log(`Created/updated ${catalogProducts} catalog products, ${catalogVariants} variants, ${catalogOptions} option values, ${TIER_LADDER.length} discount tiers`);
 
-  // Create sample vendor (for testing)
-  const vendorUser = await prisma.user.upsert({
-    where: { email: 'vendor@example.com' },
-    update: {},
-    create: {
-      email: 'vendor@example.com',
-      passwordHash: '$2b$10$rFqKq6xqQxQxQxQxQxQxQeQxQxQxQxQxQxQxQxQxQxQxQxQxQxQ', // password: vendor123
-      role: 'VENDOR',
-      firstName: 'Test',
-      lastName: 'Vendor',
-      emailVerified: true,
-    },
-  });
+  // Create sample vendor (local testing only). No credentials are committed:
+  // the account is only created when SEED_SAMPLE_VENDOR_PASSWORD is set, and
+  // its password is hashed at seed time. Skipped silently otherwise.
+  const sampleVendorPassword = process.env.SEED_SAMPLE_VENDOR_PASSWORD;
+  if (sampleVendorPassword) {
+    if (sampleVendorPassword.length < 8) {
+      throw new Error('SEED_SAMPLE_VENDOR_PASSWORD must be at least 8 characters.');
+    }
+    const sampleVendorHash = await bcrypt.hash(sampleVendorPassword, 12);
+    const vendorUser = await prisma.user.upsert({
+      where: { email: 'vendor@example.com' },
+      update: {},
+      create: {
+        email: 'vendor@example.com',
+        passwordHash: sampleVendorHash,
+        role: 'VENDOR',
+        firstName: 'Test',
+        lastName: 'Vendor',
+        emailVerified: true,
+      },
+    });
 
-  const vendor = await prisma.vendor.upsert({
-    where: { userId: vendorUser.id },
-    update: {},
-    create: {
-      userId: vendorUser.id,
-      companyName: 'Test Printing Co.',
-      address: '123 Industrial St',
-      city: 'Cairo',
-      country: 'Egypt',
-      postalCode: '11511',
-      latitude: 30.0444,
-      longitude: 31.2357,
-      phone: '+20 123 456 7890',
-      email: 'vendor@example.com',
-      isActive: true,
-      qualityRating: 4.5,
-      averageLeadTime: 5,
-      minOrderQuantity: 100,
-    },
-  });
+    const vendor = await prisma.vendor.upsert({
+      where: { userId: vendorUser.id },
+      update: {},
+      create: {
+        userId: vendorUser.id,
+        companyName: 'Test Printing Co.',
+        address: '123 Industrial St',
+        city: 'Cairo',
+        country: 'Egypt',
+        postalCode: '11511',
+        latitude: 30.0444,
+        longitude: 31.2357,
+        phone: '+20 123 456 7890',
+        email: 'vendor@example.com',
+        isActive: true,
+        qualityRating: 4.5,
+        averageLeadTime: 5,
+        minOrderQuantity: 100,
+      },
+    });
 
-  console.log('Created sample vendor:', vendor.companyName);
+    console.log('Created sample vendor:', vendor.companyName);
+  }
 
   console.log('Seeding completed!');
 }
