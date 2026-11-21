@@ -93,7 +93,9 @@ function createInitialCoreState(): DesignCoreState {
   }
 
   const ui: UIState = {
-    leftSidebarOpen: true,
+    // Progressive disclosure: panels open on demand from the icon rails,
+    // so the editor's first screen is just the preview + product settings.
+    leftSidebarOpen: false,
     rightSidebarOpen: true,
     gridVisible: true,
     guidesVisible: true,

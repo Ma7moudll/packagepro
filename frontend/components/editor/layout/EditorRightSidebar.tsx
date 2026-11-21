@@ -350,7 +350,7 @@ export function EditorRightSidebar() {
                   </h3>
       </div>
 
-      <Accordion type="multiple" defaultValue={["product", "dimensions"]} className="space-y-1">
+      <Accordion type="single" collapsible defaultValue="product" className="space-y-1">
         {/* Product Type */}
         <AccordionItem value="product" className="border rounded-lg px-3">
           <AccordionTrigger className="text-[11px] font-semibold py-2 hover:no-underline">
