@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react"
 import { getBoxModel } from "@/components/design-editor/models/BoxModels"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { generateTextureFromLayers } from "@/lib/editor/services/texture-generator"
-import { Stage, Environment, ContactShadows, OrbitControls } from "@react-three/drei"
+import { Stage, ContactShadows, OrbitControls } from "@react-three/drei"
 import * as THREE from "three"
 import type { FaceId } from "@/lib/editor/state/types"
 
@@ -305,7 +305,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         {/* إضاءة رئيسية (key light) */}
         <directionalLight
           position={[5, 8, 6]}
-          intensity={1.3}
+          intensity={1.1}
           castShadow
           shadow-mapSize={[4096, 4096]}
           shadow-camera-far={30}
@@ -323,10 +323,8 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         <directionalLight position={[0, 3, -6]} intensity={0.35} />
 
         {/* إضاءة نصف كروية للمحيط */}
-        <hemisphereLight intensity={0.3} groundColor="#9A8060" color="#ffffff" />
+        <hemisphereLight intensity={0.45} groundColor="#9A8060" color="#ffffff" />
 
-        {/* بيئة للانعكاسات */}
-        <Environment preset="studio" background={false} />
 
         {/* ظل ناعم على الأرض */}
         <ContactShadows
