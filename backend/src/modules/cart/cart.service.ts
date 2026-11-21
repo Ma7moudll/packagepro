@@ -48,7 +48,7 @@ export class CartService {
 
     if (!cart) {
       cart = await prisma.cart.create({
-        data: { customerId, currency: 'USD' },
+        data: { customerId, currency: 'EGP' },
         include: { items: true },
       });
     }
@@ -102,7 +102,7 @@ export class CartService {
       finish: item.finish,
       templateId: item.templateId,
       sessionId: item.sessionId,
-      name: product?.name || template?.name || item.productType,
+      name: (item.config as Record<string, string> | null)?.designName || product?.name || template?.name || item.productType,
       thumbnail: product?.thumbnail || template?.thumbnail || undefined,
       unitPrice: round2(itemSubtotal / item.quantity),
       totalPrice: itemSubtotal,

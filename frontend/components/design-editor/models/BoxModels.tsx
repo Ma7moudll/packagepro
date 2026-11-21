@@ -48,29 +48,42 @@ const faceTextureCache = new Map<string, THREE.MeshStandardMaterial>()
 function resolveFaceMaterial(
   fallback: THREE.MeshStandardMaterial,
   textures: Record<string, string> | undefined,
-  faceId: string
+  faceId: string,
+  emissive?: string | null
 ): THREE.MeshStandardMaterial {
   if (!textures) return fallback
   const dataUrl = textures[faceId] ?? textures[faceId.replace("inside_", "")]
   if (!dataUrl) return fallback
 
-  let mat = faceTextureCache.get(dataUrl)
+  const cacheKey = `${fallback.uuid}|${dataUrl}`
+  let mat = faceTextureCache.get(cacheKey)
   if (!mat) {
+    // Print sits ON the board: draw the face's cardboard texture first,
+    // then the artwork over it, so kraft striations and board tone show
+    // around and through the print like a real printed box.
+    const composite = document.createElement("canvas")
+    const base = fallback.map?.image as HTMLCanvasElement | undefined
+    composite.width = base?.width || 1024
+    composite.height = base?.height || composite.width
+    const ctx = composite.getContext("2d")!
+    if (base) ctx.drawImage(base, 0, 0, composite.width, composite.height)
+    const texture = new THREE.CanvasTexture(composite)
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.anisotropy = 16
     const img = new Image()
-    img.src = dataUrl
-    const texture = new THREE.Texture(img)
     img.onload = () => {
+      ctx.drawImage(img, 0, 0, composite.width, composite.height)
       texture.needsUpdate = true
     }
-    texture.colorSpace = THREE.SRGBColorSpace
+    img.src = dataUrl
     mat = new THREE.MeshStandardMaterial({
       map: texture,
-      transparent: true,
-      roughness: 0.8,
+      roughness: 0.85,
       metalness: 0,
       side: THREE.FrontSide,
+      emissive: emissive ? new THREE.Color(emissive) : new THREE.Color(0x000000),
     })
-    faceTextureCache.set(dataUrl, mat)
+    faceTextureCache.set(cacheKey, mat)
   }
   return mat
 }
@@ -151,97 +164,138 @@ function createFiberNormalMap(size = 256): THREE.CanvasTexture {
 }
 
 // Create corrugated edge texture (zigzag pattern)
-function createCorrugatedEdgeTexture(size = 128): THREE.CanvasTexture {
+function createCorrugatedEdgeTexture(size = 256): THREE.CanvasTexture {
   const canvas = document.createElement("canvas")
   canvas.width = size
   canvas.height = size
   const ctx = canvas.getContext("2d")!
 
-  ctx.fillStyle = "#D4C4A8"
+  // Corrugated cross-section: kraft liners top and bottom, the wavy medium
+  // between them rendered as alternating lit crests and dark shadow valleys,
+  // the way a real cut board edge photographs.
+  const flutes = 8
+  const period = size / flutes
+  const linerH = size * 0.22
+
+  // Flute medium base
+  ctx.fillStyle = "#A8885C"
   ctx.fillRect(0, 0, size, size)
 
-  // Zigzag pattern
-  ctx.strokeStyle = "#8B7355"
-  ctx.lineWidth = 1
-
-  const waveHeight = 6
-  const waveWidth = 8
-
-  for (let y = 0; y < size; y += waveHeight * 2) {
-    ctx.beginPath()
-    for (let x = 0; x < size; x += waveWidth) {
-      const yOffset = (Math.floor(x / waveWidth) % 2) * waveHeight
-      if (x === 0) {
-        ctx.moveTo(x, y + yOffset)
-      } else {
-        ctx.lineTo(x, y + yOffset)
-      }
-    }
-    ctx.stroke()
+  for (let i = 0; i < flutes; i++) {
+    const x0 = i * period
+    const grad = ctx.createLinearGradient(x0, 0, x0 + period, 0)
+    grad.addColorStop(0, "rgba(58, 40, 20, 0.9)")
+    grad.addColorStop(0.35, "rgba(198, 166, 118, 0.95)")
+    grad.addColorStop(0.7, "rgba(142, 112, 74, 0.9)")
+    grad.addColorStop(1, "rgba(58, 40, 20, 0.9)")
+    ctx.fillStyle = grad
+    ctx.fillRect(x0, linerH, period, size - linerH * 2)
+  }
+  // Fine vertical flute ridges
+  for (let i = 0; i < flutes * 2; i++) {
+    const x = (i / (flutes * 2)) * size
+    ctx.fillStyle = "rgba(48, 34, 16, 0.4)"
+    ctx.fillRect(x, linerH, 1, size - linerH * 2)
   }
 
+  // Liners sandwiching the flute
+  const liner = ctx.createLinearGradient(0, 0, 0, linerH)
+  liner.addColorStop(0, "#D9BE94")
+  liner.addColorStop(1, "#C2A174")
+  ctx.fillStyle = liner
+  ctx.fillRect(0, 0, size, linerH)
+  const liner2 = ctx.createLinearGradient(0, size - linerH, 0, size)
+  liner2.addColorStop(0, "#C2A174")
+  liner2.addColorStop(1, "#D9BE94")
+  ctx.fillStyle = liner2
+  ctx.fillRect(0, size - linerH, size, linerH)
+
+  // Dark separation lines where liner meets flute
+  ctx.fillStyle = "rgba(50, 36, 18, 0.85)"
+  ctx.fillRect(0, linerH - 1, size, 1.5)
+  ctx.fillRect(0, size - linerH - 0.5, size, 1.5)
+
   const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
-  texture.repeat.set(3, 3)
+  texture.repeat.set(6, 1)
+  texture.anisotropy = 16
   return texture
 }
 
 // ============================================
 // CARDBOARD TEXTURE - لون كرتون طبيعي (ليس خشب)
 // ============================================
-function createPhotoRealisticCardboard(size = 1024, isInside = false): THREE.CanvasTexture {
+function createPhotoRealisticCardboard(size = 1024, isInside = false, tone: 'kraft' | 'white' | 'white-imported' = 'kraft', outOverride?: string): THREE.CanvasTexture {
   const canvas = document.createElement("canvas")
   canvas.width = size
   canvas.height = size
   const ctx = canvas.getContext("2d")!
 
-  if (isInside) {
-    // داخل الصندوق - بيج فاتح جداً
-    ctx.fillStyle = "#F0E6D3"
-    ctx.fillRect(0, 0, size, size)
+  // Baked board tones matched to real reference renders (Packhelp):
+  // kraft = warm tan testliner, white = duller greyish Egyptian white,
+  // white-imported = bright smooth coated liner.
+  const tones = {
+    kraft:            { out: "#A8855A", inn: "#D9C7A8", line: [96, 70, 42],    lineOut: 0.22, lineIn: 0.13, bandA: 0.12, fiber: [130, 100, 66] },
+    white:            { out: "#BABFC4", inn: "#CBCDD2", line: [100, 105, 112], lineOut: 0.22, lineIn: 0.12, bandA: 0.14, fiber: [134, 140, 148] },
+    "white-imported": { out: "#DDE1E6", inn: "#E9ECEF", line: [170, 175, 182], lineOut: 0.09, lineIn: 0.06, bandA: 0.05, fiber: [190, 194, 200] },
+  } as const
+  const t = tones[tone] ?? tones.kraft
+  const [lr, lg, lb] = t.line
 
-    // خطوط تموج خفيفة جداً
-    for (let y = 0; y < size; y += 3.5) {
-      ctx.strokeStyle = `rgba(200, 180, 150, ${0.15 + Math.random() * 0.1})`
-      ctx.lineWidth = 0.5
-      ctx.beginPath()
-      ctx.moveTo(0, y)
-      ctx.lineTo(size, y)
-      ctx.stroke()
+  ctx.fillStyle = isInside ? t.inn : (outOverride ?? t.out)
+  ctx.fillRect(0, 0, size, size)
+
+  // Fine horizontal flute striations with a slight organic wobble
+  const lineA = isInside ? t.lineIn : t.lineOut
+  for (let y = 0; y < size; y += 3) {
+    const alpha = lineA * (0.5 + Math.random() * 0.8)
+    ctx.strokeStyle = `rgba(${lr}, ${lg}, ${lb}, ${alpha.toFixed(3)})`
+    ctx.lineWidth = 0.8
+    const phase = Math.random() * Math.PI * 2
+    ctx.beginPath()
+    for (let x = 0; x <= size; x += 32) {
+      const yy = y + Math.sin((x / size) * Math.PI * 4 + phase) * 0.6
+      if (x === 0) ctx.moveTo(x, yy)
+      else ctx.lineTo(x, yy)
     }
-  } else {
-    // خارج الصندوق - كرتون بني فاتح (مش خشب)
-    ctx.fillStyle = "#D4B896"
-    ctx.fillRect(0, 0, size, size)
+    ctx.stroke()
+  }
 
-    // خطوط التموج الأفقية - خفيفة وواضحة
-    for (let y = 0; y < size; y += 3) {
-      const alpha = 0.2 + Math.random() * 0.15
-      ctx.strokeStyle = `rgba(160, 130, 100, ${alpha})`
-      ctx.lineWidth = 0.8
-
-      ctx.beginPath()
-      ctx.moveTo(0, y)
-      ctx.lineTo(size, y)
-      ctx.stroke()
+  // Flute print-through: soft darker bands where the wavy medium telegraphs
+  // through the liner. Very visible on kraft and Egyptian white board.
+  if (tone !== "white-imported") {
+    for (let y = 23; y < size; y += 46) {
+      const g = ctx.createLinearGradient(0, y - 3, 0, y + 3)
+      g.addColorStop(0, `rgba(${lr}, ${lg}, ${lb}, 0)`)
+      g.addColorStop(0.5, `rgba(${lr}, ${lg}, ${lb}, ${t.bandA})`)
+      g.addColorStop(1, `rgba(${lr}, ${lg}, ${lb}, 0)`)
+      ctx.fillStyle = g
+      ctx.fillRect(0, y - 3, size, 6)
     }
+  }
 
-    // خطوط أغمق كل فترة
-    ctx.strokeStyle = "rgba(140, 110, 80, 0.18)"
-    ctx.lineWidth = 1.2
-    for (let y = 0; y < size; y += 9) {
+  // Sparse vertical fibre ticks on kraft
+  if (tone === "kraft") {
+    const [fr, fg, fb] = t.fiber
+    for (let i = 0; i < size * 1.5; i++) {
+      const x = Math.random() * size
+      const y = Math.random() * size
+      const len = 2 + Math.random() * 6
+      ctx.strokeStyle = `rgba(${fr}, ${fg}, ${fb}, ${(0.10 + Math.random() * 0.18).toFixed(3)})`
+      ctx.lineWidth = 0.6
       ctx.beginPath()
-      ctx.moveTo(0, y)
-      ctx.lineTo(size, y)
+      ctx.moveTo(x, y)
+      ctx.lineTo(x + (Math.random() - 0.5), y + len)
       ctx.stroke()
     }
   }
 
-  // نسيج خفيف
+  // Fine grain
   const imgData = ctx.getImageData(0, 0, size, size)
   for (let i = 0; i < imgData.data.length; i += 4) {
-    const noise = (Math.random() - 0.5) * 10
+    const noise = (Math.random() - 0.5) * 8
     imgData.data[i] = Math.min(255, Math.max(0, imgData.data[i] + noise))
     imgData.data[i + 1] = Math.min(255, Math.max(0, imgData.data[i + 1] + noise * 0.9))
     imgData.data[i + 2] = Math.min(255, Math.max(0, imgData.data[i + 2] + noise * 0.8))
@@ -249,6 +303,7 @@ function createPhotoRealisticCardboard(size = 1024, isInside = false): THREE.Can
   ctx.putImageData(imgData, 0, 0)
 
   const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
   texture.repeat.set(1.2, 1.2)
@@ -429,16 +484,6 @@ function easeOutQuad(t: number): number {
   return 1 - (1 - t) * (1 - t)
 }
 
-// ============================================
-// SLOW ROTATION HOOK
-// ============================================
-function useRotation(ref: React.RefObject<THREE.Group | null>, speed = 0.002) {
-  useFrame(() => {
-    if (ref.current) {
-      ref.current.rotation.y += speed
-    }
-  })
-}
 
 // ============================================
 // FLAP COMPONENT (Correct Pivot)
@@ -489,6 +534,104 @@ function Flap({ width, depth, thickness, angle, position, material, rotationAxis
   )
 }
 
+
+// ============================================
+// BOARD LOOK PER MATERIAL (Egyptian market)
+// ============================================
+interface BoardLook {
+  outsideColor: string
+  insideColor: string
+  textureTone: 'kraft' | 'white' | 'white-imported'
+  roughness: number
+  corrugated: boolean
+  fluteTint: string
+  wallBright: string | null
+  // Flat light added to white boards: the rig leaves wall faces at ~60% of
+  // texture brightness, which reads grey, not white. Kraft stays untouched.
+  // THREE.Color(hex) converts sRGB to linear, so hex values near white are
+  // needed for a visible lift; walls need much more than the lid.
+  emissive: string | null
+  wallEmissive: string | null
+}
+
+function boardLook(materialType?: string): BoardLook {
+  const m = (materialType || 'kraft').toLowerCase()
+  const corrugated = m.includes('corrugated')
+  // Board tone is baked into the texture itself; the material colour stays
+  // white so the texture shows exactly the tone it was painted with.
+  // أبيض مصري — duller, slightly grey, recycled fibre
+  if (m.includes('local') || m.startsWith('corrugated-white')) {
+    return {
+      outsideColor: '#FFFFFF',
+      insideColor: '#FFFFFF',
+      // Walls sit in the renderer's saturated mid-tone zone and render warm
+      // while the brighter lid desaturates to neutral. A brighter wall-only
+      // texture pushes the walls into the same neutral zone (measured:
+      // cool color multiplies only darkened and skewed blue).
+      wallBright: '#E4E4E6',
+      emissive: '#7A7A7C',
+      wallEmissive: '#A6A6A8',
+      textureTone: 'white',
+      roughness: 0.9,
+      corrugated,
+      fluteTint: '#FFFFFF',
+    }
+  }
+  // أبيض مستورد — bright, smooth coated liner
+  if (m.includes('white') || m.includes('coated') || m.includes('premium') || m.startsWith('paper-')) {
+    return {
+      outsideColor: '#FFFFFF',
+      insideColor: '#FFFFFF',
+      wallBright: '#EFEFF1',
+      emissive: '#8A8A8C',
+      wallEmissive: '#B0B0B2',
+      textureTone: 'white-imported',
+      roughness: 0.5,
+      corrugated,
+      fluteTint: '#FFFFFF',
+    }
+  }
+  // بني كرافت — brown testliner
+  return {
+    outsideColor: '#FFFFFF',
+    insideColor: '#FFFFFF',
+    wallBright: null as string | null,
+    emissive: null as string | null,
+    wallEmissive: null as string | null,
+    textureTone: 'kraft',
+    roughness: 0.92,
+    corrugated: true,
+    fluteTint: '#FFFFFF',
+  }
+}
+
+// Cut-edge corrugation strip: flute texture visible on raw board edges.
+interface CorrugatedRimProps {
+  position: [number, number, number]
+  length: number
+  thickness: number
+  axis?: 'x' | 'z'
+  tint?: string
+}
+
+function CorrugatedRim({ position, length, thickness, axis = 'x', tint = '#FFFFFF' }: CorrugatedRimProps) {
+  const tex = useMemo(() => createCorrugatedEdgeTexture(128), [])
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({
+    map: tex,
+    color: tint,
+    roughness: 0.95,
+    metalness: 0,
+  }), [tex, tint])
+  const args: [number, number, number] = axis === 'x'
+    ? [length, thickness, thickness]
+    : [thickness, thickness, length]
+  return (
+    <mesh position={position} material={mat}>
+      <boxGeometry args={args} />
+    </mesh>
+  )
+}
+
 // ============================================
 // MAILER BOX - فارغ من الداخل + إغلاق سلس
 // ============================================
@@ -500,117 +643,170 @@ export function MailerBox({
   printCoverage = "outside",
   openState = 0
 }: BoxModelProps) {
-  const groupRef = useRef<THREE.Group>(null)
-  useRotation(groupRef, 0.0012)
-
   const l = dimensions.length / 100
   const w = dimensions.width / 100
   const h = dimensions.height / 100
 
-  const isKraft = !materialType || materialType.includes("kraft")
+  const look = boardLook(materialType)
 
-  // Materials
-  const outsideMap = useMemo(() => createPhotoRealisticCardboard(512, false), [])
-  const insideMap = useMemo(() => createPhotoRealisticCardboard(512, true), [])
+  const outsideMap = useMemo(() => createPhotoRealisticCardboard(512, false, look.textureTone), [look.textureTone])
+  const insideMap = useMemo(() => createPhotoRealisticCardboard(512, true, look.textureTone), [look.textureTone])
 
   const outsideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
-    map: isKraft ? outsideMap : undefined,
-    color: isKraft ? "#D4B896" : "#FAFAFA",
-    roughness: 0.85,
+    map: outsideMap,
+    color: look.outsideColor,
+    roughness: look.roughness,
     metalness: 0,
-    side: THREE.FrontSide,
-  }), [isKraft, outsideMap])
+    emissive: look.emissive ? new THREE.Color(look.emissive) : new THREE.Color(0x000000),
+  }), [outsideMap, look])
+
+  // Wall-only material with a brighter board texture, so wall faces reach
+  // the same desaturated neutral response as the lid (kraft unchanged).
+  const wallMap = useMemo(
+    () => look.wallBright ? createPhotoRealisticCardboard(512, false, look.textureTone, look.wallBright) : outsideMap,
+    [look.wallBright, look.textureTone, outsideMap]
+  )
+  const wallMaterial = useMemo(() => {
+    const wm = outsideMaterial.clone()
+    wm.map = wallMap
+    if (look.wallEmissive) wm.emissive = new THREE.Color(look.wallEmissive)
+    return wm
+  }, [outsideMaterial, wallMap, look.wallEmissive])
 
   const insideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
-    map: isKraft ? insideMap : undefined,
-    color: isKraft ? "#F0E6D3" : "#F8F8F8",
-    roughness: 0.9,
+    map: insideMap,
+    color: look.insideColor,
+    roughness: Math.min(0.95, look.roughness + 0.04),
     metalness: 0,
-  }), [isKraft, insideMap])
+  }), [insideMap, look])
 
-  const t = openState
-  const smoothT = easeInOutCubic(t)
-  const wall = 0.006
+  const t = easeInOutCubic(openState)
+  const wall = 0.004 // E-flute corrugated ~4mm
 
-  // Per-face art binding — the meat of deterministic 2D→3D mapping.
-  const frontMat = resolveFaceMaterial(outsideMaterial, textures, "front")
-  const backMat = resolveFaceMaterial(outsideMaterial, textures, "back")
-  const leftMat = resolveFaceMaterial(outsideMaterial, textures, "left")
-  const rightMat = resolveFaceMaterial(outsideMaterial, textures, "right")
-  const topMat = resolveFaceMaterial(outsideMaterial, textures, "top")
+  // Per-face art binding — deterministic 2D→3D mapping.
+  const frontMat = resolveFaceMaterial(wallMaterial, textures, "front", look.wallEmissive)
+  const backMat = resolveFaceMaterial(wallMaterial, textures, "back", look.wallEmissive)
+  const leftMat = resolveFaceMaterial(wallMaterial, textures, "left", look.wallEmissive)
+  const rightMat = resolveFaceMaterial(wallMaterial, textures, "right", look.wallEmissive)
+  const topMat = resolveFaceMaterial(outsideMaterial, textures, "top", look.emissive)
   const bottomMat = resolveFaceMaterial(insideMaterial, textures, "bottom")
 
+  // ===== 0427 roll-end tuck-front mailer =====
+  // One full lid hinged on the back wall, a tuck flap that folds down behind
+  // the front wall, and two dust flaps that fold in from the side walls.
+  // Lid covers the wall thickness too: it overhangs the body on all sides,
+  // which is what makes the lid/body seam read in closed state.
+  const lidDepth = w
+  const lidWidth = l + wall * 2
+  const tuckDepth = Math.min(h * 0.7, w * 0.55)
+  const dustDepth = Math.min(w * 0.48, h * 0.55)
+  const dustSpan = w * 0.94
+
+  // Lid: 0 = flat over the opening, -106deg = leaning back, fully open.
+  const lidAngle = -t * Math.PI * 0.59
+  // Tuck flap: +90deg (hanging down inside the front wall) when closed,
+  // nearly aligned with the lid when open.
+  const tuckAngle = (Math.PI / 2) * (1 - t * 0.83)
+  // Dust flaps: folded flat inside under the lid when closed; sticking out
+  // ~50deg above horizontal when open. Slightly PAST flat (PI + 0.05) so the
+  // flap tips drop below the lid — at PI - 0.08 they poked through it and
+  // rendered as pale strips on the closed lid.
+  const dustClosed = Math.PI + 0.05
+  const dustOpen = Math.PI / 4 + 0.12
+  const dustAngle = dustClosed + t * (dustOpen - dustClosed)
+
   return (
-    <group ref={groupRef}>
-      {/* ===== BOX BODY (بسيط - 4 جدران + قاع) ===== */}
-      {/* Front wall */}
+    <group>
+      {/* ===== BODY: 4 walls + bottom ===== */}
       <mesh position={[0, h / 2, w / 2]} castShadow userData={{ faceId: "front" }}>
         <boxGeometry args={[l, h, wall]} />
         <primitive object={frontMat} attach="material" />
       </mesh>
-
-      {/* Back wall */}
       <mesh position={[0, h / 2, -w / 2]} castShadow userData={{ faceId: "back" }}>
         <boxGeometry args={[l, h, wall]} />
         <primitive object={backMat} attach="material" />
       </mesh>
-
-      {/* Left wall */}
       <mesh position={[-l / 2, h / 2, 0]} castShadow userData={{ faceId: "left" }}>
         <boxGeometry args={[wall, h, w]} />
         <primitive object={leftMat} attach="material" />
       </mesh>
-
-      {/* Right wall */}
       <mesh position={[l / 2, h / 2, 0]} castShadow userData={{ faceId: "right" }}>
         <boxGeometry args={[wall, h, w]} />
         <primitive object={rightMat} attach="material" />
       </mesh>
-
-      {/* Bottom */}
       <mesh position={[0, wall / 2, 0]} receiveShadow userData={{ faceId: "bottom" }}>
-        <boxGeometry args={[l, wall, w]} />
+        <boxGeometry args={[l - wall * 2, wall, w - wall * 2]} />
         <primitive object={bottomMat} attach="material" />
       </mesh>
 
-      {/* ===== TOP FLAPS ===== */}
-      {/* Front major flap */}
-      <group position={[0, h, w / 2]}>
-        <group rotation={[-smoothT * Math.PI * 0.4, 0, 0]}>
-          <mesh position={[0, wall / 2, -w / 4]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[l, wall, w / 2]} />
-            <primitive object={topMat} attach="material" />
+      {/* Cut edges: visible corrugation on the wall tops (only when open —
+          under a closed lid they poked through and read as packing tape) */}
+      {look.corrugated && t > 0.05 && (
+        <>
+          <CorrugatedRim position={[0, h + wall / 2, w / 2]} length={l} thickness={wall} axis="x" tint={look.fluteTint} />
+          <CorrugatedRim position={[0, h + wall / 2, -w / 2]} length={l} thickness={wall} axis="x" tint={look.fluteTint} />
+          <CorrugatedRim position={[-l / 2, h + wall / 2, 0]} length={w} thickness={wall} axis="z" tint={look.fluteTint} />
+          <CorrugatedRim position={[l / 2, h + wall / 2, 0]} length={w} thickness={wall} axis="z" tint={look.fluteTint} />
+        </>
+      )}
+
+      {/* ===== DUST FLAPS (fold in first, sit under the lid) ===== */}
+      <group position={[-l / 2, h - wall * 2, 0]}>
+        <group rotation={[0, 0, -dustAngle]}>
+          <mesh position={[-dustDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
+            <boxGeometry args={[dustDepth, wall, dustSpan]} />
+            <primitive object={insideMaterial} attach="material" />
+          </mesh>
+        </group>
+      </group>
+      <group position={[l / 2, h - wall * 2, 0]}>
+        <group rotation={[0, 0, dustAngle]}>
+          <mesh position={[dustDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
+            <boxGeometry args={[dustDepth, wall, dustSpan]} />
+            <primitive object={insideMaterial} attach="material" />
           </mesh>
         </group>
       </group>
 
-      {/* Back major flap */}
+      {/* ===== LID (hinged on the back wall top edge) ===== */}
       <group position={[0, h, -w / 2]}>
-        <group rotation={[smoothT * Math.PI * 0.4, 0, 0]}>
-          <mesh position={[0, wall / 2, w / 4]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[l, wall, w / 2]} />
+        <group rotation={[lidAngle, 0, 0]}>
+          <mesh position={[0, wall / 2, lidDepth / 2]} castShadow userData={{ faceId: "top" }}>
+            <boxGeometry args={[lidWidth, wall, lidDepth]} />
             <primitive object={topMat} attach="material" />
           </mesh>
-        </group>
-      </group>
-
-      {/* Left side flap - ممتد للخارج (مفتوح جزئياً) */}
-      <group position={[-l / 2, h, 0]}>
-        <group rotation={[0, 0, -Math.PI * 0.3 - smoothT * Math.PI * 0.2]}>
-          <mesh position={[-w / 3, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[w / 2, wall, w * 0.85]} />
-            <primitive object={outsideMaterial} attach="material" />
+          {/* Flute cross-section on the lid's cut side edges (always visible,
+              like the Packhelp reference); rides with the lid when opening */}
+          {look.corrugated && (
+            <>
+              <CorrugatedRim position={[l / 2 + wall / 2, wall / 2, lidDepth / 2]} length={lidDepth} thickness={wall} axis="z" tint={look.fluteTint} />
+              <CorrugatedRim position={[-(l / 2 + wall / 2), wall / 2, lidDepth / 2]} length={lidDepth} thickness={wall} axis="z" tint={look.fluteTint} />
+              {/* Front cut edge: the tuck-front seam line, visible across the
+                  top front when closed (Packhelp reference) */}
+              <CorrugatedRim position={[0, wall / 2, lidDepth]} length={lidWidth} thickness={wall} axis="x" tint={look.fluteTint} />
+            </>
+          )}
+          {/* Lid underside (visible when open) */}
+          <mesh position={[0, -wall / 2 + 0.0001, lidDepth / 2]} userData={{ faceId: "inside_top" }}>
+            <boxGeometry args={[lidWidth, 0.0001, lidDepth]} />
+            <primitive object={insideMaterial} attach="material" />
           </mesh>
-        </group>
-      </group>
 
-      {/* Right side flap - ممتد للخارج (مفتوح جزئياً) */}
-      <group position={[l / 2, h, 0]}>
-        <group rotation={[0, 0, Math.PI * 0.3 + smoothT * Math.PI * 0.2]}>
-          <mesh position={[w / 3, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[w / 2, wall, w * 0.85]} />
-            <primitive object={outsideMaterial} attach="material" />
-          </mesh>
+          {/* ===== TUCK FLAP (hinged on the lid's front edge) ===== */}
+          {/* Pivot sits inside the front wall's inner face so the closed flap
+              hangs in the cavity, not over the wall's outer surface */}
+          <group position={[0, 0, lidDepth - wall * 1.5]}>
+            <group rotation={[tuckAngle, 0, 0]}>
+              <mesh position={[0, wall / 2, tuckDepth / 2]} castShadow userData={{ faceId: "top" }}>
+                <boxGeometry args={[l * 0.96, wall, tuckDepth]} />
+                <primitive object={outsideMaterial} attach="material" />
+              </mesh>
+              <mesh position={[0, -wall / 2 + 0.0001, tuckDepth / 2]} userData={{ faceId: "inside_top" }}>
+                <boxGeometry args={[l * 0.96, 0.0001, tuckDepth]} />
+                <primitive object={insideMaterial} attach="material" />
+              </mesh>
+            </group>
+          </group>
         </group>
       </group>
     </group>
@@ -627,115 +823,117 @@ export function ShippingBox({
   material: materialType,
   openState = 0
 }: BoxModelProps) {
-  const groupRef = useRef<THREE.Group>(null)
-  useRotation(groupRef, 0.001)
-
   const l = dimensions.length / 100
   const w = dimensions.width / 100
   const h = dimensions.height / 100
 
-  const outsideMap = useMemo(() => createPhotoRealisticCardboard(512, false), [])
-  const insideMap = useMemo(() => createPhotoRealisticCardboard(512, true), [])
+  const look = boardLook(materialType)
+
+  const outsideMap = useMemo(() => createPhotoRealisticCardboard(512, false, look.textureTone), [look.textureTone])
+  const insideMap = useMemo(() => createPhotoRealisticCardboard(512, true, look.textureTone), [look.textureTone])
 
   const outsideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     map: outsideMap,
-    color: "#D4B896",
-    roughness: 0.85,
+    color: look.outsideColor,
+    roughness: look.roughness,
     metalness: 0,
-    side: THREE.FrontSide,
-  }), [outsideMap])
+    emissive: look.emissive ? new THREE.Color(look.emissive) : new THREE.Color(0x000000),
+  }), [outsideMap, look])
 
   const insideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     map: insideMap,
-    color: "#F0E6D3",
-    roughness: 0.9,
+    color: look.insideColor,
+    roughness: Math.min(0.95, look.roughness + 0.04),
     metalness: 0,
-  }), [insideMap])
+  }), [insideMap, look])
 
-  const t = openState
-  const smoothT = easeInOutCubic(t)
-  const wall = 0.006
+  const t = easeInOutCubic(openState)
+  const wall = 0.006 // B/C-flute shipping board ~6mm
 
-  // RSC: الفلابات الجانبية أقصر من الأمامية/الخلفية
-  // major flaps = نصف العرض
-  const majorFlapDepth = w / 2 - wall * 2
-  // minor flaps = نصف الطول (أقصر)
-  const minorFlapDepth = l / 2 - wall * 2
+  const frontMat = resolveFaceMaterial(outsideMaterial, textures, "front")
+  const backMat = resolveFaceMaterial(outsideMaterial, textures, "back")
+  const leftMat = resolveFaceMaterial(outsideMaterial, textures, "left")
+  const rightMat = resolveFaceMaterial(outsideMaterial, textures, "right")
+  const topMat = resolveFaceMaterial(outsideMaterial, textures, "top")
+  const bottomMat = resolveFaceMaterial(insideMaterial, textures, "bottom")
 
-  // Animation: جانبية أولاً ثم أمامية/خلفية
-  const sideAngle = smoothT * Math.PI / 2
-  const majorAngle = easeInOutCubic(Math.max(0, (t - 0.1) * 1.1)) * Math.PI / 2
+  // ===== RSC 0201 =====
+  // Minor (side) flaps fold in FIRST and sit lower; major (front/back) flaps
+  // fold over them and meet in the middle. Fully open = folded back ~115deg.
+  const majorFlapDepth = w / 2 - wall
+  const minorFlapDepth = Math.min(w / 2, l / 2) - wall
+
+  const minorT = easeInOutCubic(Math.min(1, t * 1.6))
+  const majorT = easeInOutCubic(Math.max(0, t - 0.15) / 0.85)
+  const OPEN = Math.PI * 0.64 // ~115deg folded back
+  const minorAngle = minorT * OPEN
+  const majorAngle = majorT * OPEN
 
   return (
-    <group ref={groupRef}>
-      {/* ===== BOX BODY (بسيط) ===== */}
-      {/* Front wall */}
+    <group>
+      {/* ===== BODY: 4 walls + bottom ===== */}
       <mesh position={[0, h / 2, w / 2]} castShadow userData={{ faceId: "front" }}>
         <boxGeometry args={[l, h, wall]} />
-        <primitive object={outsideMaterial} attach="material" />
+        <primitive object={frontMat} attach="material" />
       </mesh>
-
-      {/* Back wall */}
       <mesh position={[0, h / 2, -w / 2]} castShadow userData={{ faceId: "back" }}>
         <boxGeometry args={[l, h, wall]} />
-        <primitive object={outsideMaterial} attach="material" />
+        <primitive object={backMat} attach="material" />
       </mesh>
-
-      {/* Left wall */}
       <mesh position={[-l / 2, h / 2, 0]} castShadow userData={{ faceId: "left" }}>
         <boxGeometry args={[wall, h, w]} />
-        <primitive object={outsideMaterial} attach="material" />
+        <primitive object={leftMat} attach="material" />
       </mesh>
-
-      {/* Right wall */}
       <mesh position={[l / 2, h / 2, 0]} castShadow userData={{ faceId: "right" }}>
         <boxGeometry args={[wall, h, w]} />
-        <primitive object={outsideMaterial} attach="material" />
+        <primitive object={rightMat} attach="material" />
       </mesh>
-
-      {/* Bottom */}
       <mesh position={[0, wall / 2, 0]} receiveShadow userData={{ faceId: "bottom" }}>
-        <boxGeometry args={[l, wall, w]} />
-        <primitive object={insideMaterial} attach="material" />
+        <boxGeometry args={[l - wall * 2, wall, w - wall * 2]} />
+        <primitive object={bottomMat} attach="material" />
       </mesh>
 
-      {/* ===== TOP FLAPS ===== */}
-      {/* Front major flap */}
-      <group position={[0, h, w / 2]}>
-        <group rotation={[-majorAngle, 0, 0]}>
+      {look.corrugated && (
+        <>
+          <CorrugatedRim position={[0, h + wall / 2, w / 2]} length={l} thickness={wall} axis="x" tint={look.fluteTint} />
+          <CorrugatedRim position={[0, h + wall / 2, -w / 2]} length={l} thickness={wall} axis="x" tint={look.fluteTint} />
+          <CorrugatedRim position={[-l / 2, h + wall / 2, 0]} length={w} thickness={wall} axis="z" tint={look.fluteTint} />
+          <CorrugatedRim position={[l / 2, h + wall / 2, 0]} length={w} thickness={wall} axis="z" tint={look.fluteTint} />
+        </>
+      )}
+
+      {/* ===== MINOR FLAPS (side, lower layer) ===== */}
+      <group position={[-l / 2, h, 0]}>
+        <group rotation={[0, 0, minorAngle]}>
+          <mesh position={[minorFlapDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "inside_left" }}>
+            <boxGeometry args={[minorFlapDepth, wall, w - wall * 2]} />
+            <primitive object={insideMaterial} attach="material" />
+          </mesh>
+        </group>
+      </group>
+      <group position={[l / 2, h, 0]}>
+        <group rotation={[0, 0, -minorAngle]}>
+          <mesh position={[-minorFlapDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "inside_right" }}>
+            <boxGeometry args={[minorFlapDepth, wall, w - wall * 2]} />
+            <primitive object={insideMaterial} attach="material" />
+          </mesh>
+        </group>
+      </group>
+
+      {/* ===== MAJOR FLAPS (front/back, top layer, meet in the middle) ===== */}
+      <group position={[0, h + wall * 1.5, w / 2]}>
+        <group rotation={[majorAngle, 0, 0]}>
           <mesh position={[0, wall / 2, -majorFlapDepth / 2]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[l, wall, majorFlapDepth]} />
-            <primitive object={outsideMaterial} attach="material" />
+            <primitive object={topMat} attach="material" />
           </mesh>
         </group>
       </group>
-
-      {/* Back major flap */}
-      <group position={[0, h, -w / 2]}>
-        <group rotation={[majorAngle, 0, 0]}>
+      <group position={[0, h + wall * 1.5, -w / 2]}>
+        <group rotation={[-majorAngle, 0, 0]}>
           <mesh position={[0, wall / 2, majorFlapDepth / 2]} castShadow userData={{ faceId: "top" }}>
             <boxGeometry args={[l, wall, majorFlapDepth]} />
-            <primitive object={outsideMaterial} attach="material" />
-          </mesh>
-        </group>
-      </group>
-
-      {/* Right side flap */}
-      <group position={[l / 2, h, 0]}>
-        <group rotation={[0, 0, sideAngle]}>
-          <mesh position={[minorFlapDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[minorFlapDepth, wall, w]} />
-            <primitive object={outsideMaterial} attach="material" />
-          </mesh>
-        </group>
-      </group>
-
-      {/* Left side flap */}
-      <group position={[-l / 2, h, 0]}>
-        <group rotation={[0, 0, -sideAngle]}>
-          <mesh position={[-minorFlapDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[minorFlapDepth, wall, w]} />
-            <primitive object={outsideMaterial} attach="material" />
+            <primitive object={topMat} attach="material" />
           </mesh>
         </group>
       </group>
@@ -753,8 +951,7 @@ export function RigidBox({
   material: materialType,
   openState = 0
 }: BoxModelProps) {
-  const groupRef = useRef<THREE.Group>(null)
-  useRotation(groupRef, 0.0012)
+  
 
   const l = dimensions.length / 100
   const w = dimensions.width / 100
@@ -783,13 +980,14 @@ export function RigidBox({
 
   const lidHeight = h * 0.3
   const baseHeight = h * 0.7
+  const lidOver = wall * 3 // lid closes OVER the base, scaled to board thickness
 
   // Smooth lift and tilt
   const lidLift = t * h * 0.6
   const lidTilt = t * (-Math.PI / 5)
 
   return (
-    <group ref={groupRef}>
+    <group>
       {/* ===== BASE (hollow) ===== */}
       {/* 4 walls */}
       <mesh position={[0, baseHeight / 2, w / 2 - wall / 2]} castShadow userData={{ faceId: "front" }}>
@@ -817,25 +1015,25 @@ export function RigidBox({
       {/* ===== LID (hollow, slightly larger) ===== */}
       <group position={[0, baseHeight + lidLift, -t * w * 0.1]} rotation={[lidTilt, 0, 0]}>
         {/* 4 walls */}
-        <mesh position={[0, lidHeight / 2, (w + 0.02) / 2 - wall / 2]} castShadow userData={{ faceId: "top" }}>
-          <boxGeometry args={[l + 0.02, lidHeight, wall]} />
+        <mesh position={[0, lidHeight / 2, (w + lidOver) / 2 - wall / 2]} castShadow userData={{ faceId: "top" }}>
+          <boxGeometry args={[l + lidOver, lidHeight, wall]} />
           <primitive object={outsideMaterial} attach="material" />
         </mesh>
-        <mesh position={[0, lidHeight / 2, -(w + 0.02) / 2 + wall / 2]} castShadow userData={{ faceId: "top" }}>
-          <boxGeometry args={[l + 0.02, lidHeight, wall]} />
+        <mesh position={[0, lidHeight / 2, -(w + lidOver) / 2 + wall / 2]} castShadow userData={{ faceId: "top" }}>
+          <boxGeometry args={[l + lidOver, lidHeight, wall]} />
           <primitive object={outsideMaterial} attach="material" />
         </mesh>
-        <mesh position={[-(l + 0.02) / 2 + wall / 2, lidHeight / 2, 0]} castShadow userData={{ faceId: "top" }}>
-          <boxGeometry args={[wall, lidHeight, w + 0.02]} />
+        <mesh position={[-(l + lidOver) / 2 + wall / 2, lidHeight / 2, 0]} castShadow userData={{ faceId: "top" }}>
+          <boxGeometry args={[wall, lidHeight, w + lidOver]} />
           <primitive object={outsideMaterial} attach="material" />
         </mesh>
-        <mesh position={[(l + 0.02) / 2 - wall / 2, lidHeight / 2, 0]} castShadow userData={{ faceId: "top" }}>
-          <boxGeometry args={[wall, lidHeight, w + 0.02]} />
+        <mesh position={[(l + lidOver) / 2 - wall / 2, lidHeight / 2, 0]} castShadow userData={{ faceId: "top" }}>
+          <boxGeometry args={[wall, lidHeight, w + lidOver]} />
           <primitive object={outsideMaterial} attach="material" />
         </mesh>
         {/* Top */}
         <mesh position={[0, lidHeight - wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
-          <boxGeometry args={[l + 0.02 - wall * 2, wall, w + 0.02 - wall * 2]} />
+          <boxGeometry args={[l + lidOver - wall * 2, wall, w + lidOver - wall * 2]} />
           <primitive object={outsideMaterial} attach="material" />
         </mesh>
         {/* Inside bottom */}
@@ -865,9 +1063,6 @@ export function FoldingCarton({
   material: materialType,
   openState = 0
 }: BoxModelProps) {
-  const groupRef = useRef<THREE.Group>(null)
-  useRotation(groupRef, 0.0012)
-
   const l = dimensions.length / 100
   const w = dimensions.width / 100
   const h = dimensions.height / 100
@@ -878,83 +1073,106 @@ export function FoldingCarton({
 
   const outsideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     map: isKraft ? outsideMap : undefined,
-    color: isKraft ? "#D4B896" : "#FEFEFE",
-    roughness: 0.85,
+    color: isKraft ? "#C19A6B" : "#FEFEFE",
+    roughness: isKraft ? 0.88 : 0.55,
     metalness: 0,
   }), [isKraft, outsideMap])
 
   const insideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     map: isKraft ? insideMap : undefined,
-    color: isKraft ? "#F0E6D3" : "#F5F5F5",
-    roughness: 0.9,
+    color: isKraft ? "#E6D9C3" : "#F5F5F5",
+    roughness: 0.92,
     metalness: 0,
   }), [isKraft, insideMap])
 
-  const t = openState
-  const smoothT = easeInOutCubic(t)
-  const wall = 0.006
+  const t = easeInOutCubic(openState)
+  const wall = 0.004
 
-  const tuckDepth = Math.min(w * 0.5, h * 0.4)
-  const sideFlapDepth = Math.min(w * 0.2, h * 0.3)
+  const frontMat = resolveFaceMaterial(outsideMaterial, textures, "front")
+  const backMat = resolveFaceMaterial(outsideMaterial, textures, "back")
+  const leftMat = resolveFaceMaterial(outsideMaterial, textures, "left")
+  const rightMat = resolveFaceMaterial(outsideMaterial, textures, "right")
+  const topMat = resolveFaceMaterial(outsideMaterial, textures, "top")
+  const bottomMat = resolveFaceMaterial(insideMaterial, textures, "bottom")
+
+  // ===== Straight tuck end =====
+  // Lid hinged on the back wall covers the opening; a short tuck tongue folds
+  // down behind the front wall; small dust flaps fold in from the sides.
+  const lidDepth = w - wall * 2
+  const tuckDepth = Math.min(h * 0.3, w * 0.45)
+  const dustDepth = Math.min(w * 0.4, h * 0.28)
+
+  const lidAngle = -t * Math.PI * 0.59
+  const tuckAngle = (Math.PI / 2) * (1 - t * 0.83)
+  const dustClosed = Math.PI - 0.08
+  const dustOpen = Math.PI / 4 + 0.12
+  const dustAngle = dustClosed + t * (dustOpen - dustClosed)
 
   return (
-    <group ref={groupRef}>
-      {/* ===== HOLLOW BOX ===== */}
+    <group>
+      {/* ===== BODY: 4 walls + glued bottom ===== */}
       <mesh position={[0, h / 2, w / 2 - wall / 2]} castShadow userData={{ faceId: "front" }}>
         <boxGeometry args={[l, h, wall]} />
-        <primitive object={outsideMaterial} attach="material" />
+        <primitive object={frontMat} attach="material" />
       </mesh>
       <mesh position={[0, h / 2, -w / 2 + wall / 2]} castShadow userData={{ faceId: "back" }}>
         <boxGeometry args={[l, h, wall]} />
-        <primitive object={outsideMaterial} attach="material" />
+        <primitive object={backMat} attach="material" />
       </mesh>
       <mesh position={[-l / 2 + wall / 2, h / 2, 0]} castShadow userData={{ faceId: "left" }}>
-        <boxGeometry args={[wall, h, w]} />
-        <primitive object={outsideMaterial} attach="material" />
+        <boxGeometry args={[wall, h, w - wall * 2]} />
+        <primitive object={leftMat} attach="material" />
       </mesh>
       <mesh position={[l / 2 - wall / 2, h / 2, 0]} castShadow userData={{ faceId: "right" }}>
-        <boxGeometry args={[wall, h, w]} />
-        <primitive object={outsideMaterial} attach="material" />
+        <boxGeometry args={[wall, h, w - wall * 2]} />
+        <primitive object={rightMat} attach="material" />
       </mesh>
       <mesh position={[0, wall / 2, 0]} receiveShadow userData={{ faceId: "bottom" }}>
         <boxGeometry args={[l - wall * 2, wall, w - wall * 2]} />
-        <primitive object={insideMaterial} attach="material" />
+        <primitive object={bottomMat} attach="material" />
       </mesh>
 
-      {/* ===== TOP FLAPS ===== */}
-      {/* Side dust flaps */}
-      <group position={[-l / 2, h, 0]}>
-        <group rotation={[0, 0, -smoothT * Math.PI / 2]}>
-          <mesh position={[-sideFlapDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[sideFlapDepth, wall, w * 0.85]} />
-            <primitive object={outsideMaterial} attach="material" />
+      {/* ===== DUST FLAPS ===== */}
+      <group position={[-l / 2 + wall, h - wall * 2, 0]}>
+        <group rotation={[0, 0, -dustAngle]}>
+          <mesh position={[-dustDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "inside_left" }}>
+            <boxGeometry args={[dustDepth, wall, (w - wall * 2) * 0.92]} />
+            <primitive object={insideMaterial} attach="material" />
           </mesh>
         </group>
       </group>
-      <group position={[l / 2, h, 0]}>
-        <group rotation={[0, 0, smoothT * Math.PI / 2]}>
-          <mesh position={[sideFlapDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[sideFlapDepth, wall, w * 0.85]} />
-            <primitive object={outsideMaterial} attach="material" />
-          </mesh>
-        </group>
-      </group>
-
-      {/* Front tuck flap */}
-      <group position={[0, h, w / 2]}>
-        <group rotation={[-smoothT * Math.PI / 2, 0, 0]}>
-          <mesh position={[0, wall / 2, -tuckDepth / 2]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[l * 0.9, wall, tuckDepth]} />
-            <primitive object={outsideMaterial} attach="material" />
+      <group position={[l / 2 - wall, h - wall * 2, 0]}>
+        <group rotation={[0, 0, dustAngle]}>
+          <mesh position={[dustDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "inside_right" }}>
+            <boxGeometry args={[dustDepth, wall, (w - wall * 2) * 0.92]} />
+            <primitive object={insideMaterial} attach="material" />
           </mesh>
         </group>
       </group>
 
-      {/* Back panel */}
-      <mesh position={[0, h + wall / 2, -w / 2 + tuckDepth / 2]} castShadow userData={{ faceId: "top" }}>
-        <boxGeometry args={[l * 0.9, wall, tuckDepth]} />
-        <primitive object={outsideMaterial} attach="material" />
-      </mesh>
+      {/* ===== TUCK LID (hinged on the back wall top edge) ===== */}
+      <group position={[0, h, -w / 2 + wall]}>
+        <group rotation={[lidAngle, 0, 0]}>
+          <mesh position={[0, wall / 2, lidDepth / 2]} castShadow userData={{ faceId: "top" }}>
+            <boxGeometry args={[l, wall, lidDepth]} />
+            <primitive object={topMat} attach="material" />
+          </mesh>
+          <mesh position={[0, -wall / 2 + 0.0001, lidDepth / 2]} userData={{ faceId: "inside_top" }}>
+            <boxGeometry args={[l, 0.0001, lidDepth]} />
+            <primitive object={insideMaterial} attach="material" />
+          </mesh>
+
+          {/* Tuck tongue on the lid's front edge */}
+          <group position={[0, 0, lidDepth]}>
+            <group rotation={[tuckAngle, 0, 0]}>
+              <mesh position={[0, wall / 2, tuckDepth / 2]} castShadow userData={{ faceId: "top" }}>
+                <boxGeometry args={[l * 0.82, wall, tuckDepth]} />
+                <primitive object={outsideMaterial} attach="material" />
+              </mesh>
+            </group>
+          </group>
+        </group>
+      </group>
     </group>
   )
 }
@@ -969,9 +1187,6 @@ export function PizzaBox({
   material: materialType,
   openState = 0
 }: BoxModelProps) {
-  const groupRef = useRef<THREE.Group>(null)
-  useRotation(groupRef, 0.0012)
-
   const size = dimensions.length / 100
   const h = dimensions.height / 100
 
@@ -980,29 +1195,35 @@ export function PizzaBox({
 
   const outsideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     map: outsideMap,
-    color: "#D4B896",
-    roughness: 0.85,
+    color: "#C19A6B",
+    roughness: 0.88,
     metalness: 0,
   }), [outsideMap])
 
   const insideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     map: insideMap,
-    color: "#F0E6D3",
-    roughness: 0.9,
+    color: "#E6D9C3",
+    roughness: 0.92,
     metalness: 0,
   }), [insideMap])
 
   const t = easeInOutCubic(openState)
+  // Lid opens to ~100deg (just past vertical).
   const lidAngle = t * (-Math.PI * 0.55)
 
-  const wall = 0.01
-  const lidHeight = h * 0.25
-  const baseHeight = h * 0.75
+  const wall = 0.008
+  const lidHeight = h * 0.28
+  const baseHeight = h * 0.72
+  // Lid is one board thickness larger per side so it closes OVER the base
+  // instead of z-fighting with the base walls.
+  const lidSize = size + wall * 2.5
+
+  const topMat = resolveFaceMaterial(outsideMaterial, textures, "top")
+  const bottomMat = resolveFaceMaterial(insideMaterial, textures, "bottom")
 
   return (
-    <group ref={groupRef}>
+    <group>
       {/* ===== BASE (hollow) ===== */}
-      {/* 4 walls */}
       <mesh position={[0, baseHeight / 2, size / 2 - wall / 2]} castShadow userData={{ faceId: "front" }}>
         <boxGeometry args={[size, baseHeight, wall]} />
         <primitive object={outsideMaterial} attach="material" />
@@ -1019,40 +1240,36 @@ export function PizzaBox({
         <boxGeometry args={[wall, baseHeight, size]} />
         <primitive object={outsideMaterial} attach="material" />
       </mesh>
-      {/* Bottom */}
       <mesh position={[0, wall / 2, 0]} receiveShadow userData={{ faceId: "bottom" }}>
         <boxGeometry args={[size - wall * 2, wall, size - wall * 2]} />
-        <primitive object={insideMaterial} attach="material" />
+        <primitive object={bottomMat} attach="material" />
       </mesh>
 
-      {/* ===== LID (hinged at back, hollow) ===== */}
-      <group position={[0, baseHeight, -size / 2]}>
+      {/* ===== LID (hinged at the back top edge, hollow, slightly larger) ===== */}
+      <group position={[0, baseHeight, -size / 2 + wall / 2]}>
         <group rotation={[lidAngle, 0, 0]}>
-          {/* 4 walls */}
-          <mesh position={[0, lidHeight / 2, size - wall / 2]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[size, lidHeight, wall]} />
+          {/* Front lip of the lid */}
+          <mesh position={[0, lidHeight / 2, lidSize - wall / 2]} castShadow userData={{ faceId: "top" }}>
+            <boxGeometry args={[lidSize, lidHeight, wall]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
-          <mesh position={[0, lidHeight / 2, wall / 2]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[size, lidHeight, wall]} />
+          {/* Lid side walls */}
+          <mesh position={[-lidSize / 2 + wall / 2, lidHeight / 2, lidSize / 2]} castShadow userData={{ faceId: "top" }}>
+            <boxGeometry args={[wall, lidHeight, lidSize]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
-          <mesh position={[-size / 2 + wall / 2, lidHeight / 2, size / 2]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[wall, lidHeight, size]} />
+          <mesh position={[lidSize / 2 - wall / 2, lidHeight / 2, lidSize / 2]} castShadow userData={{ faceId: "top" }}>
+            <boxGeometry args={[wall, lidHeight, lidSize]} />
             <primitive object={outsideMaterial} attach="material" />
           </mesh>
-          <mesh position={[size / 2 - wall / 2, lidHeight / 2, size / 2]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[wall, lidHeight, size]} />
-            <primitive object={outsideMaterial} attach="material" />
+          {/* Lid top panel */}
+          <mesh position={[0, lidHeight - wall / 2, lidSize / 2]} castShadow userData={{ faceId: "top" }}>
+            <boxGeometry args={[lidSize - wall * 2, wall, lidSize - wall * 2]} />
+            <primitive object={topMat} attach="material" />
           </mesh>
-          {/* Top */}
-          <mesh position={[0, lidHeight - wall / 2, size / 2]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[size - wall * 2, wall, size - wall * 2]} />
-            <primitive object={outsideMaterial} attach="material" />
-          </mesh>
-          {/* Inside */}
-          <mesh position={[0, wall / 2, size / 2]} userData={{ faceId: "top" }}>
-            <boxGeometry args={[size - wall * 2, wall, size - wall * 2]} />
+          {/* Lid inside */}
+          <mesh position={[0, wall / 2, lidSize / 2]} userData={{ faceId: "inside_top" }}>
+            <boxGeometry args={[lidSize - wall * 2, wall, lidSize - wall * 2]} />
             <primitive object={insideMaterial} attach="material" />
           </mesh>
         </group>
@@ -1069,8 +1286,7 @@ export function PaperCup({
   backgroundColor,
   material: materialType
 }: BoxModelProps) {
-  const groupRef = useRef<THREE.Group>(null)
-  useRotation(groupRef)
+  
 
   const topR = dimensions.width / 200
   const bottomR = dimensions.length / 250
@@ -1080,7 +1296,7 @@ export function PaperCup({
   const cupColor = isKraft ? "#8B7355" : "#FFFFFF"
 
   return (
-    <group ref={groupRef}>
+    <group>
       <mesh position={[0, h / 2, 0]} castShadow>
         <cylinderGeometry args={[topR, bottomR, h, 48, 1, true]} />
         <meshStandardMaterial color={cupColor} roughness={0.7} side={THREE.DoubleSide} />
@@ -1109,8 +1325,7 @@ export function CarrierBag({
   backgroundColor,
   material: materialType
 }: BoxModelProps) {
-  const groupRef = useRef<THREE.Group>(null)
-  useRotation(groupRef)
+  
 
   const l = dimensions.length / 100
   const w = dimensions.width / 100
@@ -1120,7 +1335,7 @@ export function CarrierBag({
   const bagColor = isKraft ? "#8B7355" : "#FFFFFF"
 
   return (
-    <group ref={groupRef}>
+    <group>
       <mesh position={[0, h / 2, 0]} castShadow>
         <boxGeometry args={[l, h, w * 0.15]} />
         <meshStandardMaterial color={bagColor} roughness={0.85} />
@@ -1145,8 +1360,7 @@ export function StandUpPouch({
   backgroundColor,
   material: materialType
 }: BoxModelProps) {
-  const groupRef = useRef<THREE.Group>(null)
-  useRotation(groupRef)
+  
 
   const l = dimensions.length / 100
   const h = dimensions.height / 100
@@ -1154,7 +1368,7 @@ export function StandUpPouch({
   const pouchColor = materialType?.includes("kraft") ? "#8B7355" : "#FFFFFF"
 
   return (
-    <group ref={groupRef}>
+    <group>
       <mesh position={[0, h / 2, 0]} castShadow>
         <boxGeometry args={[l * 0.9, h, 0.025]} />
         <meshStandardMaterial color={pouchColor} roughness={0.4} metalness={0.1} />
@@ -1183,8 +1397,7 @@ export function Tube({
   backgroundColor,
   material: materialType
 }: BoxModelProps) {
-  const groupRef = useRef<THREE.Group>(null)
-  useRotation(groupRef)
+  
 
   const r = dimensions.width / 200
   const h = dimensions.height / 100
@@ -1192,7 +1405,7 @@ export function Tube({
   const tubeColor = materialType?.includes("kraft") ? "#8B7355" : "#F5F5F5"
 
   return (
-    <group ref={groupRef}>
+    <group>
       <mesh position={[0, h / 2, 0]} castShadow>
         <cylinderGeometry args={[r, r, h, 48]} />
         <meshStandardMaterial color={tubeColor} roughness={0.8} />
@@ -1221,8 +1434,7 @@ export function Envelope({
   backgroundColor,
   material: materialType
 }: BoxModelProps) {
-  const groupRef = useRef<THREE.Group>(null)
-  useRotation(groupRef)
+  
 
   const l = dimensions.length / 100
   const h = dimensions.height / 100
@@ -1230,7 +1442,7 @@ export function Envelope({
   const envColor = materialType?.includes("kraft") ? "#8B7355" : "#F8F8F8"
 
   return (
-    <group ref={groupRef}>
+    <group>
       <mesh castShadow>
         <boxGeometry args={[l, h * 0.7, 0.006]} />
         <meshStandardMaterial color={envColor} roughness={0.85} />
@@ -1254,8 +1466,7 @@ export function Label({
   backgroundColor,
   material: materialType
 }: BoxModelProps) {
-  const groupRef = useRef<THREE.Group>(null)
-  useRotation(groupRef)
+  
 
   const l = dimensions.length / 100
   const h = dimensions.height / 100
@@ -1267,7 +1478,7 @@ export function Label({
   const faceMat = resolveFaceMaterial(baseMat, textures, "front")
 
   return (
-    <group ref={groupRef}>
+    <group>
       <mesh castShadow userData={{ faceId: "front" }}>
         <boxGeometry args={[l, h, 0.003]} />
         <primitive object={faceMat} attach="material" />

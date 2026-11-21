@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import { scheduleAutoSave, cancelAutoSave, ensureCloudSession } from "@/lib/editor/services/storage"
 import { useLanguage } from "@/providers/language-provider"
+import { useAuth } from "@/providers/auth-provider"
 import { MockupGallery } from "@/components/editor/preview/MockupGallery"
 import { ShareDialog } from "@/components/editor/collaboration/ShareDialog"
 import { TutorialOverlay } from "@/components/editor/TutorialOverlay"
@@ -58,32 +59,38 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
   const setLeftSidebarOpen = useDesignStore((s) => s.setLeftSidebarOpen)
   const setRightSidebarOpen = useDesignStore((s) => s.setRightSidebarOpen)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const { user } = useAuth()
+  // Manual Save must stay clickable while the autosave debounce is pending
+  // (the pill reads "Saving..." for the whole 30s window); disable only while
+  // an actual manual save request is in flight.
+  const [manualSaving, setManualSaving] = useState(false)
   const [showTutorial, setShowTutorial] = useState(false)
 
   const title = `${model.type.replace(/_/g, " ")} ${model.dimensions.length}×${model.dimensions.width}×${model.dimensions.height}mm`
 
-  // Auto-save on state changes
+  // Auto-save on state changes. The status pill reflects the real write: the
+  // debounced IndexedDB save fires 30s after the last change, and only then do
+  // we show "Saved" — previously the pill flipped to saved after 500ms while
+  // nothing had been written yet.
   useEffect(() => {
     const designId = "current-design"
     const name = title
     const state = useDesignStore.getState()
     const coreState = state.history.present
 
-    scheduleAutoSave(designId, name, coreState, false)
     setSaveStatus("saving")
-
-    const timer = setTimeout(() => {
+    scheduleAutoSave(designId, name, coreState, false, () => {
       setSaveStatus("saved")
       setTimeout(() => setSaveStatus("idle"), 2000)
-    }, 500)
+    })
 
     return () => {
       cancelAutoSave()
-      clearTimeout(timer)
     }
   }, [model.dimensions, layersCount, title])
 
   const handleSave = async () => {
+    setManualSaving(true)
     setSaveStatus("saving")
     try {
       const designId = "current-design"
@@ -113,6 +120,8 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
       console.error("Save failed:", error)
       setSaveStatus("error")
       setTimeout(() => setSaveStatus("idle"), 3000)
+    } finally {
+      setManualSaving(false)
     }
   }
 
@@ -199,7 +208,11 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
                 </>
               )}
               {saveStatus === "idle" && (
-                <span>{language === "ar" ? "محفوظ تلقائياً" : "Auto-saved"}</span>
+                <span>
+                  {user
+                    ? language === "ar" ? "محفوظ تلقائياً" : "Auto-saved"
+                    : language === "ar" ? "محفوظ على هذا الجهاز" : "Saved on this device"}
+                </span>
               )}
             </div>
           </div>
@@ -294,7 +307,7 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
             size="sm"
             className="bg-slate-900 hover:bg-slate-800 text-white font-medium h-8 px-4 rounded-lg"
             onClick={handleSave}
-            disabled={saveStatus === "saving"}
+            disabled={manualSaving}
           >
             {saveStatus === "saving" ? (
               <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />

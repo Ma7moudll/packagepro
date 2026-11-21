@@ -7,6 +7,7 @@ import { useLanguage } from "@/providers/language-provider"
 import dynamic from "next/dynamic"
 import { EditorShell } from "@/components/editor/layout/EditorShell"
 import { getTemplate, loadTemplateIntoEditor } from "@/lib/editor/services/template-service"
+import { templateProductSlug } from "@/lib/editor/services/template-mapping"
 import { useDesignStore } from "@/lib/editor/state/store"
 
 const PackhelpEditor = dynamic(
@@ -85,19 +86,58 @@ export default function EditorPage() {
     return dims
   }, [productConfig.size])
 
-  // Load template if templateId is provided
+  // Load template if templateId is provided. A template is artwork for one
+  // specific product: first init the editor from that product's catalog
+  // config so the die-cut blueprint, the 2D faces and the 3D model are the
+  // template's own, then apply the template's defaults on top.
   useEffect(() => {
-    if (templateId) {
-      getTemplate(templateId)
-        .then((template) => {
-          const designState = loadTemplateIntoEditor(template)
-          applyCoreState(() => designState)
-        })
-        .catch((error) => {
-          console.error("Error loading template:", error)
-        })
+    if (!templateId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const template = await getTemplate(templateId)
+        if (cancelled) return
+        const slug = templateProductSlug(template)
+        if (slug) {
+          const { catalogApi } = await import("@/lib/api/catalog")
+          // MOQ differs per product (bags start at 50); try the requested
+          // quantity, then step up until the product accepts it.
+          let config: any = null
+          for (const qty of [Number(qtyParam) || 30, 100, 500]) {
+            try {
+              const res = await catalogApi.getEditorConfig(slug, qty)
+              if (res.success && res.data) {
+                config = res.data
+                break
+              }
+            } catch {
+              // try the next quantity
+            }
+          }
+          if (cancelled || !config) return
+          initFromEditorConfig(config as any)
+          const type = config.product.boxType ?? config.product.type?.replace(/_/g, "-") ?? "mailer-box"
+          setEdConfig({ type, material: config.material.code })
+          setProductType(
+            (config.product.type === "bag"
+              ? "bag"
+              : config.product.type === "cup"
+                ? "cup"
+                : config.product.type === "tube"
+                  ? "tube"
+                  : "box") as any
+          )
+          setProductConfig((prev) => ({ ...prev, type, material: config.material.code }))
+        }
+        applyCoreState(loadTemplateIntoEditor(template))
+      } catch (error) {
+        console.error("Error loading template:", error)
+      }
+    })()
+    return () => {
+      cancelled = true
     }
-  }, [templateId, applyCoreState])
+  }, [templateId, applyCoreState, initFromEditorConfig, qtyParam])
 
   // Load a previously saved design session from the backend
   const sessionRestoreRef = useRef<Promise<unknown> | null>(null)

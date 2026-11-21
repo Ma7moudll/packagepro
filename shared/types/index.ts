@@ -145,6 +145,9 @@ export interface PricingResponse {
     code: string
     name: string
     unitPrice: number
+    /** ISO currency of the material rate card (e.g. "USD"); the backend has
+     *  always returned it, the type just didn't say so. */
+    currency?: string
   }
   productType: string
   quantity: number
