@@ -2,7 +2,7 @@
 
 import { Canvas, useThree, useFrame } from "@react-three/fiber"
 import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react"
-import { getBoxModel } from "@/components/design-editor/models/BoxModels"
+import { getBoxModel, setArtworkLightScale } from "@/components/design-editor/models/BoxModels"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { generateTextureFromLayers } from "@/lib/editor/services/texture-generator"
 import { setTexturesPending } from "@/lib/editor/services/texture-status"
@@ -313,9 +313,18 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
     )
   }, [model.material])
 
+  // Gated test hooks (editorDebug URL param only): __editorStore handle and a
+  // noBoost override for same-build boost on/off comparisons.
+  const debugOn = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("editorDebug")
+  const boostActive = boostWhite && !(debugOn && new URLSearchParams(window.location.search).has("noBoost"))
+  // Set during render (not an effect) so child BoxModels resolve printed-face
+  // materials with the current scale in the same pass.
+  setArtworkLightScale(boostActive ? 0.32 : 1)
+
   // Test/debug handle, same pattern as __editorSpinBox: lets Playwright
   // deselect layers and switch materials without fighting sidebar UI.
   useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("editorDebug")) return
     ;(window as any).__editorStore = useDesignStore
     return () => {
       delete (window as any).__editorStore
@@ -383,7 +392,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         {/* White-board boost rig: imported white reads paper-white only
             under stronger studio light; kraft/Egyptian white stay on the
             shared rig. */}
-        {boostWhite && (
+        {boostActive && (
           <>
             {/* The box is the only lit object in this scene (background is a
                 flat color, shadows are ContactShadows), so mounting this rig
