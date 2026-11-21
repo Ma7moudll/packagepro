@@ -14,15 +14,16 @@ function Board({ width, height, thickness, outside, inside, edge, position = [0,
 }) {
   const geometry = useMemo(() => createMailerPanel(width, height, thickness, profile, radius), [width,height,thickness,profile,radius])
   useEffect(() => () => geometry.dispose(), [geometry])
-  return <mesh geometry={geometry} material={[outside, inside, edge]} position={position} rotation={rotation} castShadow receiveShadow userData={faceId ? { faceId } : {}} />
+  return <mesh geometry={geometry} material={[outside, inside, edge]} position={position} rotation={rotation} castShadow receiveShadow userData={faceId ? { faceId, insideFaceId: `inside_${faceId}` } : {}} />
 }
 
 /** Physical roll-end mailer. Artwork remains on the six existing canonical faces;
  * new manufacturing parts are decorative, so they cannot hijack face picking.
  */
-export function MailerConstruction({ l,w,h,open, outside,inside,front,back,left,right,top,bottom, tone }: {
+export function MailerConstruction({ l,w,h,open, outside,inside,front,back,left,right,top,bottom, insideFaces, tone }: {
   l:number; w:number; h:number; open:number; outside:Material; inside:Material;
   front:Material; back:Material; left:Material; right:Material; top:Material; bottom:Material;
+  insideFaces?: Record<string,Material>;
   tone: "kraft" | "white" | "white-imported"
 }) {
   const c = mailerConstruction(l,w,h), b = c.thickness
@@ -80,11 +81,11 @@ export function MailerConstruction({ l,w,h,open, outside,inside,front,back,left,
   const wingAngle = angles.wing
   const p = { thickness:b, inside, edge, radius:c.cornerRadius }
   return <group name="mailer-construction">
-    <Board {...p} width={l-b*2} height={h} outside={front} position={[0,h/2,w/2-b/2]} profile="notch" faceId="front" />
-    <Board {...p} width={l-b*2} height={h} outside={back} position={[0,h/2,-w/2+b/2]} rotation={[0,Math.PI,0]} faceId="back" />
-    <Board {...p} width={w} height={h} outside={left} position={[-l/2+b/2,h/2,0]} rotation={[0,-Math.PI/2,0]} faceId="left" />
-    <Board {...p} width={w} height={h} outside={right} position={[l/2-b/2,h/2,0]} rotation={[0,Math.PI/2,0]} faceId="right" />
-    <Board {...p} width={l-b*2} height={w-b*2} outside={bottom} position={[0,b/2,0]} rotation={[-Math.PI/2,0,0]} faceId="bottom" />
+    <Board {...p} width={l-b*2} height={h} inside={insideFaces?.front || inside} outside={front} position={[0,h/2,w/2-b/2]} profile="notch" faceId="front" />
+    <Board {...p} width={l-b*2} height={h} inside={insideFaces?.back || inside} outside={back} position={[0,h/2,-w/2+b/2]} rotation={[0,Math.PI,0]} faceId="back" />
+    <Board {...p} width={w} height={h} inside={insideFaces?.left || inside} outside={left} position={[-l/2+b/2,h/2,0]} rotation={[0,-Math.PI/2,0]} faceId="left" />
+    <Board {...p} width={w} height={h} inside={insideFaces?.right || inside} outside={right} position={[l/2-b/2,h/2,0]} rotation={[0,Math.PI/2,0]} faceId="right" />
+    <Board {...p} width={l-b*2} height={w-b*2} inside={insideFaces?.bottom || inside} outside={bottom} position={[0,b/2,0]} rotation={[Math.PI/2,0,0]} faceId="bottom" />
 
     {/* Rolled-over side walls: separate inner liner, rounded bridge and a
         narrow receiver channel between them for the lid's locking wings. */}
@@ -109,7 +110,7 @@ export function MailerConstruction({ l,w,h,open, outside,inside,front,back,left,
       <primitive object={inside} attach="material" />
     </mesh>
     <group ref={lidRef} position={[0,h+b*.55,-w/2+b*.8]} rotation={[lidAngle,0,0]} name="hinged-lid">
-      <Board {...p} width={lidWidth} height={lidDepth} outside={top} position={[0,0,lidDepth/2]} rotation={[-Math.PI/2,0,0]} faceId="top" />
+      <Board {...p} width={lidWidth} height={lidDepth} inside={insideFaces?.top || inside} outside={top} position={[0,0,lidDepth/2]} rotation={[-Math.PI/2,0,0]} faceId="top" />
       {/* Double score hinge, locally compressed board. */}
       {[b*.8,b*1.5].map(z => <mesh key={z} position={[0,-b*.55,z]}>
         <boxGeometry args={[lidWidth-b,b*.12,b*.13]} /><primitive object={crease} attach="material" />

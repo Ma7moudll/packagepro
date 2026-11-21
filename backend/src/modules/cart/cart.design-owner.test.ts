@@ -10,3 +10,6 @@ describe('cart design association ownership',()=>{
  it('refuses anonymous/unowned artwork',async()=>{mocks.findDesign.mockResolvedValue({id:'design',ownerId:null});await expect(cartService.addItem('customer',input)).rejects.toThrow(/not owned/);expect(mocks.createItem).not.toHaveBeenCalled()});
  it('refuses unknown session instead of silently detaching artwork',async()=>{mocks.findDesign.mockResolvedValue(null);await expect(cartService.addItem('customer',input)).rejects.toThrow(/not owned/);expect(mocks.createItem).not.toHaveBeenCalled()});
 });
+describe('custom specification quote gate',()=>{
+ it.each([{model:{boardSpecification:{version:1}}},{layers:[{raisedPrint:{text:'word',method:'unspecified'}}]}])('blocks owned custom design before pricing or persisting',async designData=>{mocks.findDesign.mockResolvedValue({id:'design',ownerId:'buyer',designData});await expect(cartService.addItem('customer',input)).rejects.toThrow(/QUOTE_REQUIRED/);expect(mocks.price).not.toHaveBeenCalled();expect(mocks.createItem).not.toHaveBeenCalled()});
+});

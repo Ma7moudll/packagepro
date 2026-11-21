@@ -12,7 +12,7 @@ interface TextureOptions {
   includeEmptyFaces?: boolean
 }
 
-function getFaceDimensions(faceId: string, dimensions: ModelDimensions) {
+export function getFaceDimensions(faceId: string, dimensions: ModelDimensions) {
   const { length, width, height } = dimensions
   // Normalize faceId if it's internal
   const id = faceId.replace("inside_", "")

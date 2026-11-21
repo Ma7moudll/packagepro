@@ -4,6 +4,8 @@ import { Canvas, useThree, useFrame } from "@react-three/fiber"
 import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react"
 import { getBoxModel, setArtworkLightScale } from "@/components/design-editor/models/BoxModels"
 import { useDesignStore } from "@/lib/editor/state/store"
+import { intersectionFaceId } from "@/lib/editor/geometry/intersection-face"
+import { generateReliefMasks } from "@/lib/editor/services/relief-masks"
 import { generateTextureFromLayers } from "@/lib/editor/services/texture-generator"
 import { setTexturesPending } from "@/lib/editor/services/texture-status"
 import { Stage, ContactShadows, OrbitControls } from "@react-three/drei"
@@ -58,7 +60,8 @@ function FaceHighlight({ selectedFace }: { selectedFace: FaceId }) {
       const mesh = o as THREE.Mesh
       if (!mesh.isMesh) return
       const fid = (mesh.userData as any)?.faceId
-      if (!fid || fid !== selectedFace) return
+      const inner = (mesh.userData as any)?.insideFaceId
+      if ((!fid || fid !== selectedFace) && inner !== selectedFace) return
       const line = new THREE.LineSegments(
         new THREE.EdgesGeometry(mesh.geometry, 30),
         new THREE.LineBasicMaterial({ color: "#1d4ed8" })
@@ -133,7 +136,7 @@ function PickBridge() {
       raycaster.setFromCamera(mouse, camera)
       const hits = raycaster.intersectObject(scene, true)
       for (const hit of hits) {
-        const fid = (hit.object?.userData as any)?.faceId as string | undefined
+        const fid = intersectionFaceId(hit)
         if (fid && isValidFace(fid)) {
           if (opts?.apply !== false) {
             useDesignStore.getState().setSelectedFace(fid as FaceId)
@@ -282,7 +285,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
     // be last-write-wins and favor the farthest face).
     const nearestTagged = (e.intersections as any[])
       .map((h: any) => ({
-        faceId: (h?.object?.userData as any)?.faceId as string | undefined,
+        faceId: intersectionFaceId(h),
         distance: h?.distance,
       }))
       .find((h: any) => h.faceId && isValidFace(h.faceId))
@@ -290,6 +293,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
     setSelectedFace(nearestTagged.faceId as FaceId)
   }
 
+  const reliefMasks = useMemo(() => generateReliefMasks(layers, model), [layers, model])
   const [faceTextures, setFaceTextures] = useState<Record<string, string>>({})
 
   // Generate textures for each face — keyed by the SAME stable Face IDs used on
@@ -325,6 +329,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   // boxes must both fit the frame (previously fixed, which cropped big boxes
   // and swallowed small ones, and an open lid filled the whole view).
   const boostWhite = useMemo(() => {
+    if (model.boardSpecification) return false
     const m = (model.material || "").toLowerCase()
     // أبيض مستورد family only; Egyptian white (local / corrugated-white)
     // intentionally stays duller, and kraft is untouched.
@@ -333,7 +338,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
       !m.includes("local") &&
       !m.startsWith("corrugated-white")
     )
-  }, [model.material])
+  }, [model.material, model.boardSpecification])
 
   // Gated test hooks (editorDebug URL param only): __editorStore handle and a
   // noBoost override for same-build boost on/off comparisons.
@@ -451,8 +456,10 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
                 dimensions={model.dimensions}
                 type={type}
                 material={model.material}
+                boardSpecification={model.boardSpecification}
                 printCoverage={model.printCoverage}
                 textures={faceTextures}
+                reliefMasks={reliefMasks}
                 backgroundColor={canvas.backgroundColor}
                 openState={boxOpenState}
               />

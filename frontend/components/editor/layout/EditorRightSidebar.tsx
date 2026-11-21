@@ -1,5 +1,7 @@
 "use client"
 
+import { BoardSpecificationPanel } from "@/components/editor/panels/BoardSpecificationPanel"
+import { RaisedPrintControl } from "@/components/editor/panels/RaisedPrintControl"
 import { useState, useEffect } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { pricingApi } from "@/lib/api/pricing"
@@ -58,6 +60,7 @@ export function EditorRightSidebar() {
   const updateLayer = useDesignStore((s) => s.updateLayer)
   const removeLayer = useDesignStore((s) => s.removeLayer)
   const applyCoreState = useDesignStore((s) => s.applyCoreState)
+  const customQuote = !!model.boardSpecification || layers.some(l => !!l.raisedPrint)
   const selected = layers.find((l) => l.id === selectedIds[0])
 
   const [activeTab, setActiveTab] = useState<TabId>("design")
@@ -73,6 +76,7 @@ export function EditorRightSidebar() {
 
   useEffect(() => {
     let cancelled = false
+    if (customQuote) { setQuote(null); setQuoteLoading(false); return }
     setQuoteLoading(true)
     const timer = setTimeout(() => {
       const t = (model.type || "").toLowerCase()
@@ -108,7 +112,7 @@ export function EditorRightSidebar() {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [model.type, model.material, model.dimensions.length, model.dimensions.width, model.dimensions.height, model.quantity])
+  }, [customQuote, model.type, model.material, model.dimensions.length, model.dimensions.width, model.dimensions.height, model.quantity])
 
   const currentProduct = getProductById(model.type)
   const filteredProducts = productCategory === "all" 
@@ -281,6 +285,7 @@ export function EditorRightSidebar() {
               />
                       </div>
             <TextStylesPanel />
+            <RaisedPrintControl layer={selected} arabic={language === "ar"} update={updateLayer} />
                     </div>
         )}
 
@@ -440,6 +445,9 @@ export function EditorRightSidebar() {
                         </div>
           </AccordionTrigger>
           <AccordionContent className="pb-3 space-y-3">
+            <BoardSpecificationPanel arabic={language === "ar"} />
+            {/* Legacy material remains for old designs only. */}
+            {!model.boardSpecification && <>
             {/* Material Type Selection */}
             <Select
               value={model.material}
@@ -535,6 +543,7 @@ export function EditorRightSidebar() {
               </p>
             )}
 
+            </>}
             {/* Print Coverage */}
             {currentProduct?.supportsPrintCoverage && currentProduct.supportsPrintCoverage.length > 1 && (
               <div className="space-y-1 pt-2 border-t">
@@ -778,7 +787,7 @@ export function EditorRightSidebar() {
           </div>
           <div className="text-right">
             <div className="text-xl font-bold text-slate-900">
-              {quoteLoading && !quote ? (
+              {customQuote ? (<span className="text-sm font-normal text-amber-700">{language === "ar" ? "يتطلب عرض سعر" : "Quote required"}</span>) : quoteLoading && !quote ? (
                 <span className="text-sm font-normal text-slate-400">…</span>
               ) : quote ? (
                 <>
@@ -787,11 +796,11 @@ export function EditorRightSidebar() {
                 </>
               ) : (
                 <span className="text-sm font-normal text-slate-400">
-                  {language === "ar" ? "السعر غير متاح" : "Price unavailable"}
+                  {customQuote ? (language === "ar" ? "يتطلب عرض سعر" : "Quote required") : (language === "ar" ? "السعر غير متاح" : "Price unavailable")}
                 </span>
               )}
             </div>
-            {quote && (
+            {quote && !customQuote && (
               <div className="text-[10px] text-slate-400">
                 {quote.unit.toFixed(2)} {quote.currency}/{language === "ar" ? "قطعة" : "pc"}
                 {language === "ar" ? " (شامل الشحن)" : " (incl. shipping)"}

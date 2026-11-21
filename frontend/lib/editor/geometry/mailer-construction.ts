@@ -68,7 +68,8 @@ export function createMailerPanel(width: number, height: number, thickness: numb
   g.clearGroups()
   for (let i = 0; i < pos.count; i++) {
     if (Math.abs(normals.getZ(i)) > 0.99) {
-      uv.setXY(i, (pos.getX(i) + x) / width, (pos.getY(i) + y) / height)
+      const u = (pos.getX(i) + x) / width
+      uv.setXY(i, normals.getZ(i) < 0 ? 1 - u : u, (pos.getY(i) + y) / height)
     } else {
       uv.setXY(i, uv.getX(i) * 8, (pos.getZ(i) + thickness / 2) / thickness)
     }

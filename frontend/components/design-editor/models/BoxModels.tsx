@@ -3,6 +3,7 @@
 import { useRef, useMemo, type ReactNode } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
+import { LINERS, type BoardSpecification } from "@/lib/editor/material-specification"
 import { MailerConstruction } from "./MailerConstruction"
 
 // ============================================
@@ -15,6 +16,8 @@ export interface BoxDimensions {
 }
 
 export interface BoxModelProps {
+  boardSpecification?: BoardSpecification
+  reliefMasks?: Record<string, string>
   dimensions: BoxDimensions
   type: string
   elements?: any[]
@@ -59,10 +62,12 @@ function resolveFaceMaterial(
   fallback: THREE.MeshStandardMaterial,
   textures: Record<string, string> | undefined,
   faceId: string,
-  emissive?: string | null
+  emissive?: string | null,
+  relief?: string,
+  exactFace = false
 ): THREE.MeshStandardMaterial {
   if (!textures) return fallback
-  const dataUrl = textures[faceId] ?? textures[faceId.replace("inside_", "")]
+  const dataUrl = textures[faceId] ?? (exactFace ? undefined : textures[faceId.replace("inside_", "")])
   if (!dataUrl) return fallback
   // Printed faces get NO flat emissive: white-board looks add ~65-69% white
   // emissive so plain walls read paper-white, but the same additive lift on a
@@ -71,7 +76,7 @@ function resolveFaceMaterial(
   // rig (shared or boost) supplies the face's brightness.
   emissive = null
 
-  const cacheKey = `${fallback.uuid}|${artworkLightScale}|${dataUrl}`
+  const cacheKey = `${fallback.uuid}|${artworkLightScale}|${relief || ""}|${dataUrl}`
   let mat = faceTextureCache.get(cacheKey)
   if (!mat) {
     // Print sits ON the board: draw the face's cardboard texture first,
@@ -95,11 +100,19 @@ function resolveFaceMaterial(
     mat = new THREE.MeshStandardMaterial({
       map: texture,
       color: new THREE.Color(artworkLightScale, artworkLightScale, artworkLightScale),
-      roughness: 0.85,
+      roughness: fallback.roughness,
+      normalMap: fallback.normalMap,
+      normalScale: fallback.normalScale.clone(),
       metalness: 0,
       side: THREE.FrontSide,
       emissive: emissive ? new THREE.Color(emissive) : new THREE.Color(0x000000),
     })
+    if (relief) {
+      const reliefTexture = new THREE.TextureLoader().load(relief)
+      reliefTexture.anisotropy = 8
+      mat.bumpMap = reliefTexture
+      mat.bumpScale = 0.003 // illustrative preview, not a manufacturing height
+    }
     faceTextureCache.set(cacheKey, mat)
   }
   return mat
@@ -671,6 +684,8 @@ function CorrugatedRim({ position, length, thickness, axis = 'x', tint = '#FFFFF
 // ============================================
 export function MailerBox({
   dimensions,
+  boardSpecification,
+  reliefMasks,
   textures,
   backgroundColor,
   material: materialType,
@@ -681,10 +696,17 @@ export function MailerBox({
   const w = dimensions.width / 100
   const h = dimensions.height / 100
 
-  const look = useMemo(() => boardLook(materialType), [materialType])
+  const exterior = LINERS.find(l => l.id === boardSpecification?.outside)
+  const interior = LINERS.find(l => l.id === boardSpecification?.inside)
+  const look = useMemo(() => {
+    const legacy = boardLook(materialType)
+    if (!exterior) return legacy
+    return { ...boardLook(exterior.id.includes("white") ? "cardboard-white-imported" : "kraft"), outsideColor: "#FFFFFF", insideColor: "#FFFFFF", emissive: exterior.id.includes("white") ? "#777779" : null, wallEmissive: exterior.id.includes("white") ? "#99999B" : null, roughness: exterior.roughness, wallBright: null }
+  }, [materialType, exterior])
+  const insideLook = useMemo(() => interior ? boardLook(interior.id.includes("white") ? "cardboard-white-imported" : "kraft") : look, [interior, look])
 
-  const outsideMap = useMemo(() => createPhotoRealisticCardboard(512, false, look.textureTone), [look.textureTone])
-  const insideMap = useMemo(() => createPhotoRealisticCardboard(512, true, look.textureTone), [look.textureTone])
+  const outsideMap = useMemo(() => createPhotoRealisticCardboard(512, false, look.textureTone, exterior?.colour), [look.textureTone, exterior])
+  const insideMap = useMemo(() => createPhotoRealisticCardboard(512, !interior, insideLook.textureTone, interior?.colour), [insideLook.textureTone, interior])
 
   const paperNormal = useMemo(() => createFiberNormalMap(256), [])
   const paperRoughness = useMemo(() => createNoiseTexture(256, 0.08), [])
@@ -699,7 +721,7 @@ export function MailerBox({
     normalScale: new THREE.Vector2(paperDepth, paperDepth),
     roughnessMap: paperRoughness,
     emissive: look.emissive ? new THREE.Color(look.emissive) : new THREE.Color(0x000000),
-  }), [outsideMap, look, paperNormal, paperDepth, paperRoughness])
+  }), [outsideMap, look, paperNormal, paperDepth, paperRoughness, boardSpecification])
 
   // Wall-only material with a brighter board texture, so wall faces reach
   // the same desaturated neutral response as the lid (kraft unchanged).
@@ -717,26 +739,28 @@ export function MailerBox({
   const insideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     map: insideMap,
     color: look.insideColor,
-    roughness: Math.min(0.95, look.roughness + 0.04),
+    roughness: interior?.roughness ?? Math.min(0.95, look.roughness + 0.04),
+    emissive: interior?.id.includes("white") ? new THREE.Color("#777779") : new THREE.Color(0),
     metalness: 0,
     normalMap: paperNormal,
     normalScale: new THREE.Vector2(paperDepth, paperDepth),
     roughnessMap: paperRoughness,
-  }), [insideMap, look, paperNormal, paperDepth, paperRoughness])
+  }), [insideMap, look, paperNormal, paperDepth, paperRoughness, interior])
 
   const t = easeInOutCubic(openState)
 
   // Per-face art binding — deterministic 2D→3D mapping.
-  const frontMat = resolveFaceMaterial(wallMaterial, textures, "front", look.wallEmissive)
-  const backMat = resolveFaceMaterial(wallMaterial, textures, "back", look.wallEmissive)
-  const leftMat = resolveFaceMaterial(wallMaterial, textures, "left", look.wallEmissive)
-  const rightMat = resolveFaceMaterial(wallMaterial, textures, "right", look.wallEmissive)
-  const topMat = resolveFaceMaterial(outsideMaterial, textures, "top", look.emissive)
-  const bottomMat = resolveFaceMaterial(insideMaterial, textures, "bottom")
+  const frontMat = resolveFaceMaterial(wallMaterial, textures, "front", look.wallEmissive, reliefMasks?.front)
+  const backMat = resolveFaceMaterial(wallMaterial, textures, "back", look.wallEmissive, reliefMasks?.back)
+  const leftMat = resolveFaceMaterial(wallMaterial, textures, "left", look.wallEmissive, reliefMasks?.left)
+  const rightMat = resolveFaceMaterial(wallMaterial, textures, "right", look.wallEmissive, reliefMasks?.right)
+  const topMat = resolveFaceMaterial(outsideMaterial, textures, "top", look.emissive, reliefMasks?.top)
+  const bottomMat = resolveFaceMaterial(boardSpecification ? outsideMaterial : insideMaterial, textures, "bottom", null, reliefMasks?.bottom)
 
   return <LayerOneGroup>
     <MailerConstruction l={l} w={w} h={h} open={t}
       outside={outsideMaterial} inside={insideMaterial}
+      insideFaces={Object.fromEntries(["front","back","left","right","top","bottom"].map(face => [face, resolveFaceMaterial(insideMaterial, textures, `inside_${face}`, null, reliefMasks?.[`inside_${face}`], true)]))}
       front={frontMat} back={backMat} left={leftMat} right={rightMat}
       top={topMat} bottom={bottomMat} tone={look.textureTone} />
   </LayerOneGroup>

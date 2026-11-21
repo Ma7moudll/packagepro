@@ -28,6 +28,7 @@ export function PriceCalculator({ className }: PriceCalculatorProps) {
   // summary reads the same value, so panel and footer can never disagree.
   const model = useDesignStore((s) => s.model);
   const applyCoreState = useDesignStore((s) => s.applyCoreState);
+  const customQuote = useDesignStore(s => !!s.model.boardSpecification || s.layers.some(l => !!l.raisedPrint));
   const quantity = model.quantity;
   const setQuantity = (q: number) =>
     applyCoreState((s) => ({ ...s, model: { ...s.model, quantity: q } }));
@@ -38,6 +39,7 @@ export function PriceCalculator({ className }: PriceCalculatorProps) {
 
   useEffect(() => {
     let cancelled = false;
+    if (customQuote) { setQuote(null); setTiers({}); setLoading(false); return; }
     setLoading(true);
     const timer = setTimeout(() => {
       const t = (model.type || '').toLowerCase();
@@ -81,7 +83,7 @@ export function PriceCalculator({ className }: PriceCalculatorProps) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [quantity, model.type, model.material, model.dimensions.length, model.dimensions.width, model.dimensions.height]);
+  }, [customQuote, quantity, model.type, model.material, model.dimensions.length, model.dimensions.width, model.dimensions.height]);
 
   const currency = quote?.material?.currency ?? 'EGP';
   const formatPrice = (amount: number) =>
@@ -100,6 +102,8 @@ export function PriceCalculator({ className }: PriceCalculatorProps) {
     { label: language === 'ar' ? 'الهامش' : 'Margin', value: breakdown?.marginAmount },
     { label: language === 'ar' ? 'الضريبة' : 'Tax', value: breakdown?.tax },
   ].filter((r) => r.value !== undefined && r.value !== 0);
+
+  if (customQuote) return <div role="status" className="p-4 text-sm bg-amber-50 rounded border border-amber-200">{language === "ar" ? "هذه المواصفات تحتاج عرض سعر معتمد. لا توجد أسعار معتمدة لتركيبات الخامات والإضافات الجديدة." : "These specifications require an approved quote. No approved rates exist for the new stock combinations and additions."}</div>;
 
   return (
     <div className={className}>

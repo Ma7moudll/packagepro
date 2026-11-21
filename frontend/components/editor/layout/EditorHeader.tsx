@@ -49,6 +49,7 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
   const router = useRouter()
   const sessionId = searchParams.get("sessionId")
   const model = useDesignStore((s) => s.model)
+  const customQuote = useDesignStore(s => !!s.model.boardSpecification || s.layers.some(l => !!l.raisedPrint))
   const layersCount = useDesignStore((s) => s.layers.length)
   const pastLength = useDesignStore((s) => s.history.past.length)
   const futureLength = useDesignStore((s) => s.history.future.length)
@@ -292,6 +293,7 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
 
           {/* Add to Cart */}
           <AddToCart
+            quoteRequired={customQuote}
             productType={mapProductType(model.type)}
             materialCode={model.material || "cardboard-kraft"}
             dimensions={model.dimensions}
