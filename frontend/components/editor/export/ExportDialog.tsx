@@ -1,5 +1,7 @@
 "use client"
 
+import { sanitizeEditorSvg } from "@/lib/editor/sanitize-svg"
+
 import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -54,7 +56,7 @@ function ExportDialogInner() {
         if (canvasEl) {
           const fabricCanvas = (window as any).__fabricCanvas || null
           if (fabricCanvas) {
-            const svg = fabricCanvas.toSVG()
+            const svg = sanitizeEditorSvg(fabricCanvas.toSVG())
             const w = fabricCanvas.getWidth()
             const h = fabricCanvas.getHeight()
             if (fmt === "ai") {

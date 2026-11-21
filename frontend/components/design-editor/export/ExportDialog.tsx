@@ -1,5 +1,7 @@
 "use client"
 
+import { sanitizeEditorSvg } from "@/lib/editor/sanitize-svg"
+
 import React, { useState, isValidElement } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -85,7 +87,7 @@ export function ExportDialog({ canvas, trigger }: ExportDialogProps) {
   const exportSVG = async () => {
     if (!canvas) return
 
-    const svg = canvas.toSVG()
+    const svg = sanitizeEditorSvg(canvas.toSVG())
     const blob = new Blob([svg], { type: "image/svg+xml" })
     const url = URL.createObjectURL(blob)
 
@@ -106,7 +108,7 @@ export function ExportDialog({ canvas, trigger }: ExportDialogProps) {
 
   const exportVector = async (format: "ai" | "eps") => {
     if (!canvas) return
-    const svg = canvas.toSVG()
+    const svg = sanitizeEditorSvg(canvas.toSVG())
     const rect = canvas.getObjects().reduce(
       (acc, obj) => {
         const bounds = obj.getBoundingRect()

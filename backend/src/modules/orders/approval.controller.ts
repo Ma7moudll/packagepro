@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { approvalService } from './approval.service';
+import { requireAdmin } from '../../middleware/rbac';
 import { z } from 'zod';
 
 const approveOrderSchema = z.object({
@@ -10,8 +11,9 @@ const approveOrderSchema = z.object({
 
 export class ApprovalController {
   async requestApproval(request: FastifyRequest, reply: FastifyReply) {
+    const actor = await requireAdmin(request, reply);
     const orderId = (request.params as { id: string }).id;
-    await approvalService.requestApproval(orderId);
+    await approvalService.requestApproval(orderId, actor);
 
     return reply.send({
       success: true,
