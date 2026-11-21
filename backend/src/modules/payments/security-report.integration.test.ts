@@ -146,6 +146,18 @@ describe('security report regressions, real database', () => {
     expect((await shipmentService.getShipmentByOrder(o.id, owner)).id).toBe(s.id);
     expect((await shipmentService.getShipmentByOrder(o.id, admin)).id).toBe(s.id);
   });
+  it('HTTP shipment authorization rejects anonymous/non-admin creation and foreign reads', async () => {
+    const o=await order('ready_to_ship');
+    const s=await prisma.shipment.create({data:{orderId:o.id,dhlTrackingNumber:`${marker}-${++seq}`}});
+    expect((await app.inject({method:'POST',url:`/api/shipments/create/${o.id}`})).statusCode).toBe(401);
+    expect((await app.inject({method:'POST',url:`/api/shipments/create/${o.id}`,headers:headers(owner)})).statusCode).toBe(403);
+    for (const url of [`/api/shipments/${s.id}/tracking`,`/api/orders/${o.id}/shipment`]) {
+      expect((await app.inject({method:'GET',url,headers:headers(stranger)})).statusCode).toBe(403);
+    }
+    expect(dhlService.createShipment).not.toHaveBeenCalled();
+    expect(dhlService.trackShipment).not.toHaveBeenCalled();
+    expect((await app.inject({method:'GET',url:`/api/orders/${o.id}/shipment`,headers:headers(owner)})).statusCode).toBe(200);
+  });
   it('anonymous approval request is rejected', async () => {
     const o = await order();
     const res = await app.inject({ method: 'POST', url: `/api/orders/${o.id}/request-approval` });
@@ -160,6 +172,14 @@ describe('security report regressions, real database', () => {
     const o = await order('cancelled');
     await expect(approvalService.requestApproval(o.id, admin)).rejects.toMatchObject({ statusCode: 400 });
     expect(emailService.sendApprovalRequest).not.toHaveBeenCalled();
+  });
+  it('failed proof/token persistence cannot send approval email and retains duplicate claim', async () => {
+    const o=await order();
+    vi.mocked(proofGeneratorService.generateProof).mockRejectedValueOnce(new Error('durable token storage unavailable'));
+    await expect(approvalService.requestApproval(o.id,admin)).rejects.toThrow('durable token storage unavailable');
+    expect(emailService.sendApprovalRequest).not.toHaveBeenCalled();
+    await expect(approvalService.requestApproval(o.id,admin)).rejects.toMatchObject({statusCode:409});
+    expect(proofGeneratorService.generateProof).toHaveBeenCalledTimes(1);
   });
   it('concurrent admin approval requests send at most one proof/email', async () => {
     const { o } = await paid('awaiting_approval');
@@ -177,5 +197,9 @@ describe('security report regressions, real database', () => {
     await expect(poService.getPO(po.id, { userId: stranger.userId, role: 'VENDOR' })).rejects.toMatchObject({ statusCode: 403 });
     expect((await poService.getPO(po.id, { userId: vu.id, role: 'VENDOR' })).id).toBe(po.id);
     expect((await poService.getPO(po.id, admin as any)).id).toBe(po.id);
+    const url=`/api/purchase-orders/${po.id}`;
+    expect((await app.inject({method:'GET',url})).statusCode).toBe(401);
+    for(const actor of [owner,{userId:stranger.userId,role:'VENDOR'}]) expect((await app.inject({method:'GET',url,headers:headers(actor)})).statusCode).toBe(403);
+    for(const actor of [{...vu,userId:vu.id},admin]) expect((await app.inject({method:'GET',url,headers:headers(actor)})).statusCode).toBe(200);
   });
 });

@@ -30,6 +30,7 @@ on:
       - "backend/**"
       - "frontend/**"
       - ".github/workflows/deploy.yml"
+      - "scripts/check-deployment-health.sh"
     tags:
       - "v*"
   workflow_dispatch:
