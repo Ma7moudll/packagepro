@@ -366,15 +366,8 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
           color="#3a3a3a"
         />
 
-        {/* أرضية شفافة للظلال */}
-        <mesh
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[0, -0.01, 0]}
-          receiveShadow
-        >
-          <planeGeometry args={[15, 15]} />
-          <shadowMaterial transparent opacity={0.12} />
-        </mesh>
+        {/* الظل الأرضي: ContactShadows فقط — مستوى shadowMaterial كان يرسم
+            ظلًا صلب الحواف يبدو كورقة بيضاء بجانب الصندوق */}
 
         {/* نموذج الصندوق */}
         <Suspense fallback={<LoadingBox />}>
