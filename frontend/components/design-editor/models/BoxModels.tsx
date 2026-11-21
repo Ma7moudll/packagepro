@@ -3,6 +3,7 @@
 import { useRef, useMemo, type ReactNode } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
+import { MailerConstruction } from "./MailerConstruction"
 
 // ============================================
 // TYPES
@@ -680,18 +681,25 @@ export function MailerBox({
   const w = dimensions.width / 100
   const h = dimensions.height / 100
 
-  const look = boardLook(materialType)
+  const look = useMemo(() => boardLook(materialType), [materialType])
 
   const outsideMap = useMemo(() => createPhotoRealisticCardboard(512, false, look.textureTone), [look.textureTone])
   const insideMap = useMemo(() => createPhotoRealisticCardboard(512, true, look.textureTone), [look.textureTone])
+
+  const paperNormal = useMemo(() => createFiberNormalMap(256), [])
+  const paperRoughness = useMemo(() => createNoiseTexture(256, 0.08), [])
+  const paperDepth = look.textureTone === "white-imported" ? 0.045 : 0.12
 
   const outsideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     map: outsideMap,
     color: look.outsideColor,
     roughness: look.roughness,
     metalness: 0,
+    normalMap: paperNormal,
+    normalScale: new THREE.Vector2(paperDepth, paperDepth),
+    roughnessMap: paperRoughness,
     emissive: look.emissive ? new THREE.Color(look.emissive) : new THREE.Color(0x000000),
-  }), [outsideMap, look])
+  }), [outsideMap, look, paperNormal, paperDepth, paperRoughness])
 
   // Wall-only material with a brighter board texture, so wall faces reach
   // the same desaturated neutral response as the lid (kraft unchanged).
@@ -711,10 +719,12 @@ export function MailerBox({
     color: look.insideColor,
     roughness: Math.min(0.95, look.roughness + 0.04),
     metalness: 0,
-  }), [insideMap, look])
+    normalMap: paperNormal,
+    normalScale: new THREE.Vector2(paperDepth, paperDepth),
+    roughnessMap: paperRoughness,
+  }), [insideMap, look, paperNormal, paperDepth, paperRoughness])
 
   const t = easeInOutCubic(openState)
-  const wall = 0.004 // E-flute corrugated ~4mm
 
   // Per-face art binding — deterministic 2D→3D mapping.
   const frontMat = resolveFaceMaterial(wallMaterial, textures, "front", look.wallEmissive)
@@ -724,128 +734,12 @@ export function MailerBox({
   const topMat = resolveFaceMaterial(outsideMaterial, textures, "top", look.emissive)
   const bottomMat = resolveFaceMaterial(insideMaterial, textures, "bottom")
 
-  // ===== 0427 roll-end tuck-front mailer =====
-  // One full lid hinged on the back wall, a tuck flap that folds down behind
-  // the front wall, and two dust flaps that fold in from the side walls.
-  // Lid covers the wall thickness too: it overhangs the body on all sides,
-  // which is what makes the lid/body seam read in closed state.
-  const lidDepth = w
-  const lidWidth = l + wall * 2
-  const tuckDepth = Math.min(h * 0.7, w * 0.55)
-  const dustDepth = Math.min(w * 0.48, h * 0.55)
-  const dustSpan = w * 0.94
-
-  // Lid: 0 = flat over the opening, -106deg = leaning back, fully open.
-  const lidAngle = -t * Math.PI * 0.59
-  // Tuck flap: +90deg (hanging down inside the front wall) when closed,
-  // nearly aligned with the lid when open.
-  const tuckAngle = (Math.PI / 2) * (1 - t * 0.83)
-  // Dust flaps: folded flat inside under the lid when closed; sticking out
-  // ~50deg above horizontal when open. Slightly PAST flat (PI + 0.05) so the
-  // flap tips drop below the lid — at PI - 0.08 they poked through it and
-  // rendered as pale strips on the closed lid.
-  const dustClosed = Math.PI + 0.05
-  const dustOpen = Math.PI / 4 + 0.12
-  const dustAngle = dustClosed + t * (dustOpen - dustClosed)
-
-  return (
-    <LayerOneGroup>
-    <group>
-      {/* ===== BODY: 4 walls + bottom ===== */}
-      <mesh position={[0, h / 2, w / 2]} castShadow userData={{ faceId: "front" }}>
-        <boxGeometry args={[l, h, wall]} />
-        <primitive object={frontMat} attach="material" />
-      </mesh>
-      <mesh position={[0, h / 2, -w / 2]} castShadow userData={{ faceId: "back" }}>
-        <boxGeometry args={[l, h, wall]} />
-        <primitive object={backMat} attach="material" />
-      </mesh>
-      <mesh position={[-l / 2, h / 2, 0]} castShadow userData={{ faceId: "left" }}>
-        <boxGeometry args={[wall, h, w]} />
-        <primitive object={leftMat} attach="material" />
-      </mesh>
-      <mesh position={[l / 2, h / 2, 0]} castShadow userData={{ faceId: "right" }}>
-        <boxGeometry args={[wall, h, w]} />
-        <primitive object={rightMat} attach="material" />
-      </mesh>
-      <mesh position={[0, wall / 2, 0]} receiveShadow userData={{ faceId: "bottom" }}>
-        <boxGeometry args={[l - wall * 2, wall, w - wall * 2]} />
-        <primitive object={bottomMat} attach="material" />
-      </mesh>
-
-      {/* Cut edges: visible corrugation on the wall tops (only when open —
-          under a closed lid they poked through and read as packing tape) */}
-      {look.corrugated && t > 0.05 && (
-        <>
-          <CorrugatedRim position={[0, h + wall / 2, w / 2]} length={l} thickness={wall} axis="x" tint={look.fluteTint} />
-          <CorrugatedRim position={[0, h + wall / 2, -w / 2]} length={l} thickness={wall} axis="x" tint={look.fluteTint} />
-          <CorrugatedRim position={[-l / 2, h + wall / 2, 0]} length={w} thickness={wall} axis="z" tint={look.fluteTint} />
-          <CorrugatedRim position={[l / 2, h + wall / 2, 0]} length={w} thickness={wall} axis="z" tint={look.fluteTint} />
-        </>
-      )}
-
-      {/* ===== DUST FLAPS (fold in first, sit under the lid) ===== */}
-      <group position={[-l / 2, h - wall * 2, 0]}>
-        <group rotation={[0, 0, -dustAngle]}>
-          <mesh position={[-dustDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[dustDepth, wall, dustSpan]} />
-            <primitive object={insideMaterial} attach="material" />
-          </mesh>
-        </group>
-      </group>
-      <group position={[l / 2, h - wall * 2, 0]}>
-        <group rotation={[0, 0, dustAngle]}>
-          <mesh position={[dustDepth / 2, wall / 2, 0]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[dustDepth, wall, dustSpan]} />
-            <primitive object={insideMaterial} attach="material" />
-          </mesh>
-        </group>
-      </group>
-
-      {/* ===== LID (hinged on the back wall top edge) ===== */}
-      <group position={[0, h, -w / 2]}>
-        <group rotation={[lidAngle, 0, 0]}>
-          <mesh position={[0, wall / 2, lidDepth / 2]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[lidWidth, wall, lidDepth]} />
-            <primitive object={topMat} attach="material" />
-          </mesh>
-          {/* Flute cross-section on the lid's cut side edges (always visible,
-              like the Packhelp reference); rides with the lid when opening */}
-          {look.corrugated && (
-            <>
-              <CorrugatedRim position={[l / 2 + wall / 2, wall / 2, lidDepth / 2]} length={lidDepth} thickness={wall} axis="z" tint={look.fluteTint} />
-              <CorrugatedRim position={[-(l / 2 + wall / 2), wall / 2, lidDepth / 2]} length={lidDepth} thickness={wall} axis="z" tint={look.fluteTint} />
-              {/* Front cut edge: the tuck-front seam line, visible across the
-                  top front when closed (Packhelp reference) */}
-              <CorrugatedRim position={[0, wall / 2, lidDepth]} length={lidWidth} thickness={wall} axis="x" tint={look.fluteTint} />
-            </>
-          )}
-          {/* Lid underside (visible when open) */}
-          <mesh position={[0, -wall / 2 + 0.0001, lidDepth / 2]} userData={{ faceId: "inside_top" }}>
-            <boxGeometry args={[lidWidth, 0.0001, lidDepth]} />
-            <primitive object={insideMaterial} attach="material" />
-          </mesh>
-
-          {/* ===== TUCK FLAP (hinged on the lid's front edge) ===== */}
-          {/* Pivot sits inside the front wall's inner face so the closed flap
-              hangs in the cavity, not over the wall's outer surface */}
-          <group position={[0, 0, lidDepth - wall * 1.5]}>
-            <group rotation={[tuckAngle, 0, 0]}>
-              <mesh position={[0, wall / 2, tuckDepth / 2]} castShadow userData={{ faceId: "top" }}>
-                <boxGeometry args={[l * 0.96, wall, tuckDepth]} />
-                <primitive object={outsideMaterial} attach="material" />
-              </mesh>
-              <mesh position={[0, -wall / 2 + 0.0001, tuckDepth / 2]} userData={{ faceId: "inside_top" }}>
-                <boxGeometry args={[l * 0.96, 0.0001, tuckDepth]} />
-                <primitive object={insideMaterial} attach="material" />
-              </mesh>
-            </group>
-          </group>
-        </group>
-      </group>
-    </group>
-      </LayerOneGroup>
-  )
+  return <LayerOneGroup>
+    <MailerConstruction l={l} w={w} h={h} open={t}
+      outside={outsideMaterial} inside={insideMaterial}
+      front={frontMat} back={backMat} left={leftMat} right={rightMat}
+      top={topMat} bottom={bottomMat} tone={look.textureTone} />
+  </LayerOneGroup>
 }
 
 // ============================================
