@@ -203,6 +203,10 @@ export class PricingService {
       material = materials[0];
     }
 
+    if (material.currency !== 'EGP') {
+      throw new ValidationError('Material rate card is not EGP. Review and run the explicit EGP pricing bootstrap before quoting.');
+    }
+
     // Get margin from pricing rules
     const marginPercent = await this.getPricingRule(
       request.productType,
@@ -496,6 +500,9 @@ export class PricingService {
     // 8. Unit economics
     const productType = product.productType as 'box' | 'bag' | 'label';
     const surfaceArea = calculateSurfaceArea(dimensions, productType);
+    if (material.currency !== 'EGP') {
+      throw new ValidationError('Material rate card is not EGP. Review and run the explicit EGP pricing bootstrap before quoting.');
+    }
     const materialCostPerUnit = surfaceArea * material.unitPrice;
 
     // Option upcharges (per_unit adds flat; percent scales material cost; fixed amortizes)

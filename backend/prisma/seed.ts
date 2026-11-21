@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import EGP_RATES from '../src/services/pricing-bootstrap/egp-rates.json';
 
 const prisma = new PrismaClient();
 
@@ -11,36 +12,7 @@ async function main() {
   // board prices (testliner ~25-30 EGP/kg; imported white liner higher).
   // surface area in cm2). These codes match every material id/code the
   // frontend sends (editor MATERIAL_TYPES, product pages, pricing config).
-  const MATERIALS = [
-    // Product page codes (products/[id]/page.tsx materialColor mapping)
-    { code: 'kraft', name: 'Kraft Board', price: 0.0009 },
-    { code: 'white-kraft', name: 'White Kraft Board', price: 0.001196 },
-    { code: 'premium-white', name: 'Premium White Board', price: 0.001595 },
-    // Editor material types (products-data.ts MATERIAL_TYPES)
-    { code: 'cardboard-kraft', name: 'Kraft Cardboard', price: 0.000997 },
-    { code: 'corrugated-kraft', name: 'Corrugated Kraft', price: 0.000997 },
-    { code: 'cardboard-white', name: 'White Glossy (Imported)', price: 0.001196 },
-    { code: 'cardboard-coated', name: 'White Coated (Premium)', price: 0.001396 },
-    { code: 'cardboard-white-matte', name: 'White Matte (Imported)', price: 0.001276 },
-    { code: 'cardboard-local', name: 'White Local (Economic)', price: 0.0011 },
-    { code: 'corrugated-white', name: 'Corrugated White', price: 0.001196 },
-    { code: 'paper-silk', name: 'Silk Finish Paper', price: 0.002393 },
-    { code: 'paper-soft-touch', name: 'Soft Touch Paper', price: 0.002792 },
-    // Frontend pricing config codes (pricing-rules.ts MATERIAL_COSTS)
-    { code: 'corrugated_kraft', name: 'Corrugated Kraft (Config)', price: 0.000997 },
-    { code: 'white_corrugated', name: 'White Corrugated (Config)', price: 0.001196 },
-    { code: 'chipboard', name: 'Chipboard', price: 0.001994 },
-    { code: 'kraft_liner', name: 'Kraft Liner', price: 0.001795 },
-    { code: 'vinyl', name: 'Vinyl', price: 0.00319 },
-    { code: 'paper', name: 'Paper', price: 0.000598 },
-    { code: 'polyester', name: 'Polyester', price: 0.003988 },
-    // Poly mailer body (lightweight LDPE)
-    { code: 'poly', name: 'LDPE Poly Mailer', price: 0.001595 },
-    // Legacy codes
-    { code: 'COATED_250', name: 'Coated Paper 250gsm', price: 0.001117 },
-    { code: 'UNCOATED_200', name: 'Uncoated Paper 200gsm', price: 0.000718 },
-    { code: 'CORRUGATED_E', name: 'Corrugated Board E-Flute', price: 0.001037 },
-  ];
+  const MATERIALS = EGP_RATES.map((rate) => ({ ...rate, price: rate.unitPrice }));
 
   const materials = await Promise.all(
     MATERIALS.map((m) =>

@@ -15,7 +15,8 @@
     "test": "vitest",
     "test:coverage": "vitest --coverage",
     "lint": "eslint src --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "pricing:bootstrap:egp": "node dist/scripts/bootstrap-egp.js"
   },
   "keywords": [
     "packagepro",
