@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useMemo } from "react"
+import { useRef, useMemo, type ReactNode } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
@@ -554,6 +554,23 @@ interface BoardLook {
   wallEmissive: string | null
 }
 
+/**
+ * Enables THREE layer 1 on every mesh in the box so the white-board boost
+ * rig (DesignCanvas3D) can light the box harder for imported white without
+ * touching other materials. Meshes keep layer 0, so camera, picking,
+ * shadows and ContactShadows are unaffected. Re-runs periodically because
+ * open-state rims mount/unmount during the lid animation.
+ */
+function LayerOneGroup({ children }: { children: ReactNode }) {
+  const ref = useRef<THREE.Group>(null)
+  const frame = useRef(0)
+  useFrame(() => {
+    if (frame.current++ % 30 !== 0) return
+    ref.current?.traverse((o) => o.layers.enable(1))
+  })
+  return <group ref={ref}>{children}</group>
+}
+
 function boardLook(materialType?: string): BoardLook {
   const m = (materialType || 'kraft').toLowerCase()
   const corrugated = m.includes('corrugated')
@@ -716,6 +733,7 @@ export function MailerBox({
   const dustAngle = dustClosed + t * (dustOpen - dustClosed)
 
   return (
+    <LayerOneGroup>
     <group>
       {/* ===== BODY: 4 walls + bottom ===== */}
       <mesh position={[0, h / 2, w / 2]} castShadow userData={{ faceId: "front" }}>
@@ -810,6 +828,7 @@ export function MailerBox({
         </group>
       </group>
     </group>
+      </LayerOneGroup>
   )
 }
 

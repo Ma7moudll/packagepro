@@ -1,7 +1,7 @@
 "use client"
 
 import { Canvas, useThree, useFrame } from "@react-three/fiber"
-import { useState, useEffect, useCallback, useRef, Suspense } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react"
 import { getBoxModel } from "@/components/design-editor/models/BoxModels"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { generateTextureFromLayers } from "@/lib/editor/services/texture-generator"
@@ -216,14 +216,15 @@ function PickBridge() {
   return null
 }
 
-function CameraFillLight({ intensity }: { intensity: number }) {
+function CameraFillLight({ intensity, layer }: { intensity: number; layer?: number }) {
   const lightRef = useRef<THREE.DirectionalLight>(null)
   const targetRef = useRef<THREE.Object3D>(null)
   useEffect(() => {
     if (lightRef.current && targetRef.current) {
       lightRef.current.target = targetRef.current
+      if (layer !== undefined) lightRef.current.layers.set(layer)
     }
-  }, [])
+  }, [layer])
   useFrame(({ camera }) => {
     // Headlight: keep the light at the camera so faces toward the viewer
     // are lit; angle to the key light still varies, preserving shading.
@@ -301,6 +302,17 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   // Camera distance follows the box size: small cartons and large shipping
   // boxes must both fit the frame (previously fixed, which cropped big boxes
   // and swallowed small ones, and an open lid filled the whole view).
+  const boostWhite = useMemo(() => {
+    const m = (model.material || "").toLowerCase()
+    // أبيض مستورد family only; Egyptian white (local / corrugated-white)
+    // intentionally stays duller, and kraft is untouched.
+    return (
+      (m.includes("white") || m.includes("coated") || m.includes("premium") || m.startsWith("paper-")) &&
+      !m.includes("local") &&
+      !m.startsWith("corrugated-white")
+    )
+  }, [model.material])
+
   const dims = model.dimensions
   const maxDim = Math.max(dims.length, dims.width, dims.height || 1) / 100
   const camDist = Math.max(1.6, maxDim * 2.4 + 0.9)
@@ -315,6 +327,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         shadows
         dpr={[1, 2]}
         camera={{ position: camPos, fov: 38 }}
+        onCreated={({ camera }) => camera.layers.enable(1)}
         gl={{
           antialias: true,
           // AgX: no ACES warm hue-skew in mid-tones, so white board stays
@@ -357,6 +370,20 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
 
         {/* إضاءة تتبع الكاميرا: ترفع الأوجه المواجهة للمشاهد بدون تسطيح الظلال */}
         <CameraFillLight intensity={0.55} />
+
+        {/* White-board boost rig (layer 1): imported white reads paper-white
+            only under stronger studio light; kraft/Egyptian white stay on the
+            shared rig. Box meshes carry layer 1 (see LayerOneGroup). */}
+        {boostWhite && (
+          <>
+            {/* The box is the only lit object in this scene (background is a
+                flat color, shadows are ContactShadows), so mounting this rig
+                only while an imported-white material is active IS the scoping:
+                kraft and Egyptian white never see it. */}
+            <directionalLight position={[4, 7, 5]} intensity={1.0} />
+            <CameraFillLight intensity={0.45} />
+          </>
+        )}
 
 
         {/* ظل ناعم على الأرض */}
