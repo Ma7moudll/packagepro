@@ -1,3 +1,4 @@
+import { prisma } from '../../lib/prisma';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { stripeService } from '../../integrations/stripe/stripe.service';
 import { getPaymentProvider } from '../../integrations/payments/registry';
@@ -7,7 +8,6 @@ import { handleStripeWebhook } from '../../integrations/stripe/webhooks';
 
 const createPaymentIntentSchema = z.object({
   orderId: z.string(),
-  currency: z.string().optional(),
 });
 
 export class PaymentController {
@@ -17,7 +17,6 @@ export class PaymentController {
     const body = createPaymentIntentSchema.parse(request.body);
 
     // Get order and verify ownership
-    const { prisma } = require('../../lib/prisma');
     const order = await prisma.order.findUnique({
       where: { id: body.orderId },
       include: {
@@ -42,7 +41,7 @@ export class PaymentController {
     const payment = await getPaymentProvider().createPayment({
       orderId: body.orderId,
       amount: Number(order.total),
-      currency: (body.currency || process.env.DEFAULT_CURRENCY || 'usd').toLowerCase(),
+      currency: process.env.DEFAULT_CURRENCY || 'usd',
       customerEmail: user.email,
     });
 
@@ -63,7 +62,7 @@ export class PaymentController {
       })
       .parse(request.body);
 
-    await stripeService.confirmPayment(body.paymentIntentId);
+    await stripeService.confirmPayment(body.paymentIntentId, undefined, (request as AuthenticatedRequest).user);
 
     return reply.send({
       success: true,

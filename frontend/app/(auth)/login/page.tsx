@@ -47,6 +47,11 @@ export default function SignInPage() {
               ? "لم يتم التحقق من بريدك الإلكتروني. يرجى التحقق من بريدك قبل تسجيل الدخول."
               : "Your email is not verified. Please verify your email before signing in."
           )
+        } else if (["CAPTCHA_REQUIRED", "CAPTCHA_UNAVAILABLE", "AUTH_STORAGE_UNAVAILABLE"].includes(reason || "")) {
+          setNeedsVerification(false)
+          setError(language === "ar"
+            ? "تعذر التحقق الأمني من تسجيل الدخول. حاول لاحقًا أو تواصل مع الدعم."
+            : "Security verification is unavailable. Try again later or contact support.")
         } else {
           setNeedsVerification(false)
           setError(

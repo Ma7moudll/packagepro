@@ -1,5 +1,5 @@
 import { prisma } from '../../lib/prisma';
-import { NotFoundError, ValidationError } from '../../utils/errors';
+import { AuthorizationError, ConflictError, NotFoundError, ValidationError } from '../../utils/errors';
 import { getShippingProvider } from '../../integrations/shipping/registry';
 import { emailService } from '../../services/email/email.service';
 import { notificationService } from '../notifications/notifications.service';
@@ -8,7 +8,9 @@ export class ShipmentService {
   /**
    * Create shipment for an order
    */
-  async createShipment(orderId: string): Promise<any> {
+  async createShipment(orderId: string, actor: { userId: string; role: string }): Promise<any> {
+    // Shipment creation buys a carrier label: restrict this operational action to admins.
+    if (actor.role !== 'ADMIN') throw new AuthorizationError('Only admins may create shipments');
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -49,11 +51,24 @@ export class ShipmentService {
       height: 10,
     };
 
-    // Create the shipment through the configured carrier (SHIPPING_PROVIDER).
+    // Reserve the unique orderId BEFORE contacting the carrier. Never delete this
+    // claim on errors: a timeout may mean the carrier created a billable label.
+    // Failed/ambiguous reservations require admin reconciliation, not a blind retry.
+    let reservation;
+    try {
+      reservation = await prisma.shipment.create({ data: { orderId, status: 'created', weight, dimensions, shippingMethod: 'express' } });
+    } catch (error) {
+      if ((error as { code?: string }).code === 'P2002') throw new ConflictError('Shipment already reserved for this order');
+      throw error;
+    }
+
+    // Create DHL shipment
     // 4a bridge: shipments are PO-scoped once splitting lands; until 4b the
     // vendor of the first PO ships the whole order.
     const poVendor = order.purchaseOrders[0]?.vendor;
-    const dhlResult = await getShippingProvider().createShipment({
+    let dhlResult;
+    try {
+      dhlResult = await getShippingProvider().createShipment({
       orderId,
       pickupAddress: {
         name: poVendor?.companyName || '',
@@ -69,8 +84,14 @@ export class ShipmentService {
       shippingMethod: 'express',
     });
 
-    // Create shipment record
-    const shipment = await prisma.shipment.create({
+    } catch (error) {
+      await prisma.shipment.update({ where: { id: reservation.id }, data: { status: 'failed' } });
+      throw error;
+    }
+
+    // Finalize the reserved record. A DB failure retains the claim for reconciliation.
+    const shipment = await prisma.shipment.update({
+      where: { id: reservation.id },
       data: {
         orderId,
         dhlTrackingNumber: dhlResult.trackingNumber,
@@ -148,17 +169,19 @@ export class ShipmentService {
   /**
    * Get shipment tracking
    */
-  async getTracking(shipmentId: string): Promise<any> {
+  async getTracking(shipmentId: string, actor: { userId: string; role: string }): Promise<any> {
     const shipment = await prisma.shipment.findUnique({
       where: { id: shipmentId },
       include: {
-        order: true,
+        order: { include: { customer: true } },
       },
     });
 
     if (!shipment) {
       throw new NotFoundError('Shipment');
     }
+
+    this.assertReadAccess(shipment.order.customer.userId, actor);
 
     if (!shipment.dhlTrackingNumber) {
       throw new ValidationError('Tracking number not available');
@@ -176,11 +199,11 @@ export class ShipmentService {
   /**
    * Get shipment by order ID
    */
-  async getShipmentByOrder(orderId: string): Promise<any> {
+  async getShipmentByOrder(orderId: string, actor: { userId: string; role: string }): Promise<any> {
     const shipment = await prisma.shipment.findUnique({
       where: { orderId },
       include: {
-        order: true,
+        order: { include: { customer: true } },
       },
     });
 
@@ -188,8 +211,13 @@ export class ShipmentService {
       throw new NotFoundError('Shipment');
     }
 
+    this.assertReadAccess(shipment.order.customer.userId, actor);
     return shipment;
   }
+  private assertReadAccess(ownerId: string, actor: { userId: string; role: string }): void {
+    if (actor.role !== 'ADMIN' && actor.userId !== ownerId) throw new AuthorizationError('You do not own this shipment');
+  }
+
 }
 
 export const shipmentService = new ShipmentService();

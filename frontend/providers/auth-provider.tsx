@@ -1,4 +1,5 @@
 "use client"
+import { getLoginCaptchaToken } from "@/lib/login-captcha"
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { API_BASE } from "@/lib/api/client"
 
@@ -67,12 +68,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string
   ): Promise<{ ok: boolean; reason?: string }> => {
     try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
+      const submit = (captchaToken?: string) => fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, ...(captchaToken ? { captchaToken } : {}) }),
       })
-      const data = await res.json()
+      let res = await submit()
+      let data = await res.json()
+      if (!res.ok && data?.error === "CAPTCHA_REQUIRED") {
+        try {
+          const token = await getLoginCaptchaToken()
+          res = await submit(token)
+          data = await res.json()
+        } catch {
+          return { ok: false, reason: "CAPTCHA_UNAVAILABLE" }
+        }
+      }
 
       if (!res.ok || !data.success) {
         return {
