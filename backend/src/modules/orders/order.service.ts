@@ -41,7 +41,7 @@ export function serializeOrder<T extends Record<string, any>>(order: T): T {
       ? (PAYMENT_STATUS_MAP[rawPaymentStatus] ?? rawPaymentStatus)
       : 'pending',
     paymentMethod: 'stripe',
-    currency: order.payment?.currency || 'USD',
+    currency: order.payment?.currency || 'EGP',
     shipping: order.shippingCost ?? 0,
     trackingNumber:
       order.shipment?.dhlTrackingNumber ??

@@ -1,5 +1,5 @@
 import { prisma } from '../../lib/prisma';
-import { NotFoundError, ValidationError } from '../../utils/errors';
+import { NotFoundError, ValidationError, AuthorizationError } from '../../utils/errors';
 import { pricingService } from '../../services/pricing-engine/pricing.service';
 import { groupShippingByProductType } from '../../services/pricing-engine/calculations';
 
@@ -48,7 +48,7 @@ export class CartService {
 
     if (!cart) {
       cart = await prisma.cart.create({
-        data: { customerId, currency: 'USD' },
+        data: { customerId, currency: 'EGP' },
         include: { items: true },
       });
     }
@@ -102,7 +102,7 @@ export class CartService {
       finish: item.finish,
       templateId: item.templateId,
       sessionId: item.sessionId,
-      name: product?.name || template?.name || item.productType,
+      name: (item.config as Record<string, string> | null)?.designName || product?.name || template?.name || item.productType,
       thumbnail: product?.thumbnail || template?.thumbnail || undefined,
       unitPrice: round2(itemSubtotal / item.quantity),
       totalPrice: itemSubtotal,
@@ -160,6 +160,7 @@ export class CartService {
     // for pricing/authorization — this is persistence only.
     let design: {
       id: string;
+      ownerId: string | null;
       designConfig?: unknown;
       productId?: string | null;
       variantId?: string | null;
@@ -168,8 +169,14 @@ export class CartService {
     if (input.sessionId) {
       design = await prisma.design.findUnique({
         where: { sessionId: input.sessionId },
-        select: { id: true, productId: true, variantId: true, sku: true, designConfig: true },
+        select: { id: true, ownerId: true, productId: true, variantId: true, sku: true, designConfig: true },
       });
+    }
+    if (input.sessionId) {
+      const customer = await prisma.customer.findUnique({where: {id: customerId}, select: {userId: true}});
+      if (!design || !customer || design.ownerId !== customer.userId) {
+        throw new AuthorizationError('Design session is not owned by this customer');
+      }
     }
     const designId = design?.id;
     const productId = input.productId ?? design?.productId ?? undefined;

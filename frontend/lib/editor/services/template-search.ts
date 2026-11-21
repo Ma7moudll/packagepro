@@ -63,9 +63,6 @@ export class TemplateSearchService {
     // if (filters.style) {
     //   algoliaFilters.push(`style:${filters.style}`)
     // }
-    // if (filters.minRating) {
-    //   algoliaFilters.push(`avgRating >= ${filters.minRating}`)
-    // }
     // const result = await index.search(query, {
     //   filters: algoliaFilters.join(" AND "),
     //   page: page - 1,

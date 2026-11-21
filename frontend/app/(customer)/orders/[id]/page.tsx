@@ -37,7 +37,7 @@ export default function OrderDetailPage() {
 
   const t = (en: string, ar: string) => (language === "ar" ? ar : en)
 
-  const currency = order ? currencyOf(order) : "USD"
+  const currency = order ? currencyOf(order) : "EGP"
   const shippingCost = order ? shippingOf(order) : 0
   const canGetInvoice = order ? isPaid(order) : false
   const orderTrackNo = order ? trackingNumber(order) : null

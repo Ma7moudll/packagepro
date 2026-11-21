@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     globals: true,
+    setupFiles: ['./vitest.setup.ts'],
     environment: 'node',
     // BCRYPT_COST=12 (auth service default) plus real SMTP attempts can exceed
     // vitest's 5s default on slower machines; give integration tests headroom.

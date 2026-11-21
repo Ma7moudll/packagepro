@@ -1,100 +1,43 @@
 import Redis from 'ioredis';
 
 let redis: Redis | null = null;
-let redisEnabled = false;
-let connectionAttempted = false;
+let stopping = false;
 
 export function getRedisClient(): Redis | null {
-  // Don't attempt connection if disabled or already failed
-  if (process.env.REDIS_ENABLED === 'false' || !process.env.REDIS_URL) {
-    return null;
+  if (process.env.REDIS_ENABLED === 'false' || !process.env.REDIS_URL || stopping) return null;
+  if (!redis) {
+    redis = new Redis(process.env.REDIS_URL, {
+      lazyConnect: true,
+      enableOfflineQueue: false,
+      maxRetriesPerRequest: 0,
+      connectTimeout: 2000,
+      // Retain the client across transient outages. Security callers still
+      // refuse commands until ready; no unbounded offline command buffering.
+      retryStrategy: (attempt) => Math.min(250 * 2 ** Math.min(attempt - 1, 7), 30000),
+    });
+    // ioredis emits errors during backoff. Readiness owns availability, not
+    // presence of a client or a TCP connection before AUTH/ready completes.
+    redis.on('error', () => {});
   }
-
-  if (connectionAttempted && !redis) {
-    return null;
-  }
-
-  if (!redis && !connectionAttempted) {
-    connectionAttempted = true;
-    try {
-      redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-        maxRetriesPerRequest: 0, // Don't retry
-        lazyConnect: true,
-        enableOfflineQueue: false,
-        connectTimeout: 2000,
-        retryStrategy: () => null, // Don't retry on failure
-      });
-
-      redis.on('error', (err) => {
-        // Silently disable Redis on any error
-        if (err.message.includes('NOAUTH') || 
-            err.message.includes('ECONNREFUSED') ||
-            err.message.includes('Connection')) {
-          redisEnabled = false;
-          redis = null;
-        }
-      });
-
-      redis.on('connect', () => {
-        redisEnabled = true;
-        console.log('✅ Redis Client Connected');
-      });
-
-      redis.on('close', () => {
-        redisEnabled = false;
-        redis = null;
-      });
-    } catch (error) {
-      redisEnabled = false;
-      redis = null;
-    }
-  }
-
   return redis;
 }
 
 export async function connectRedis(): Promise<void> {
-  // Skip if explicitly disabled
-  if (process.env.REDIS_ENABLED === 'false' || !process.env.REDIS_URL) {
-    return;
-  }
-
-  try {
-    const client = getRedisClient();
-    if (!client) {
-      return;
-    }
-
-    // Try to connect with timeout
-    await Promise.race([
-      client.connect(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Redis connection timeout')), 2000)
-      ),
-    ]).catch(() => {
-      redisEnabled = false;
-      redis = null;
-    });
-  } catch (error) {
-    // Redis is optional - silently fail
-    redisEnabled = false;
-    redis = null;
-  }
+  stopping = false;
+  const client = getRedisClient();
+  if (!client || client.status !== 'wait') return;
+  // Initial failure starts ioredis' bounded backoff. Never discard this client.
+  try { await client.connect(); } catch { /* auth remains fail closed */ }
 }
 
 export async function disconnectRedis(): Promise<void> {
-  if (redis) {
-    try {
-      await redis.quit();
-    } catch (error) {
-      // Ignore errors on disconnect
-    }
-    redis = null;
-  }
+  stopping = true;
+  const client = redis;
+  redis = null;
+  if (client) client.disconnect();
 }
 
 export function isRedisEnabled(): boolean {
-  return redisEnabled && redis !== null;
+  return !stopping && redis?.status === 'ready';
 }
-
 export default getRedisClient;
