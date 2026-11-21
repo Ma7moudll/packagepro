@@ -96,22 +96,22 @@ export function calculateConversionCost(
   surfaceArea: number,
   complexity: 'simple' | 'medium' | 'complex' = 'medium'
 ): number {
-  // Base conversion costs per unit (in USD)
+  // Base conversion costs per unit (in EGP)
   const baseCosts: Record<string, Record<string, number>> = {
     box: {
-      simple: 0.15,
-      medium: 0.25,
-      complex: 0.40,
+      simple: 8.08,
+      medium: 13.47,
+      complex: 21.56,
     },
     bag: {
-      simple: 0.10,
-      medium: 0.18,
-      complex: 0.30,
+      simple: 5.39,
+      medium: 9.7,
+      complex: 16.17,
     },
     label: {
-      simple: 0.05,
-      medium: 0.08,
-      complex: 0.12,
+      simple: 2.69,
+      medium: 4.31,
+      complex: 6.47,
     },
   };
 
@@ -160,14 +160,16 @@ export function estimateShippingCost(
   // In production, this should integrate with shipping APIs
   const totalWeight = quantity * weightPerUnit;
 
-  let baseShipping = 5; // Base shipping cost in USD
+  // Base shipping cost in EGP, in line with Egyptian courier rates
+  // (Bosta/Mylerz class): ~55 EGP light parcels up to ~150 EGP heavy.
+  let baseShipping = 55;
 
   if (totalWeight > 10) {
-    baseShipping = 15;
+    baseShipping = 150;
   } else if (totalWeight > 5) {
-    baseShipping = 10;
+    baseShipping = 100;
   } else if (totalWeight > 2) {
-    baseShipping = 7;
+    baseShipping = 75;
   }
 
   // Add dimensional weight calculation
@@ -190,7 +192,7 @@ export function estimateShippingCost(
   const chargeableWeight = Math.max(totalWeight, dimensionalWeight);
 
   if (chargeableWeight > 5) {
-    baseShipping += (chargeableWeight - 5) * 2;
+    baseShipping += (chargeableWeight - 5) * 10; // EGP per extra kg
   }
 
   return Math.round(baseShipping * 100) / 100;

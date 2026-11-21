@@ -16,13 +16,13 @@ const EDITOR_SUPPORTED_CATEGORIES = new Set(["box", "carton", "cup", "bag", "tub
 export default function TemplatesPage() {
   const { language, isRTL } = useLanguage()
 
-  // Helper to format currency. These catalog starting prices are USD rate
+  // Helper to format currency. Catalog starting prices are EGP rate
   // cards (same as the seeded materials); label them as such until the Egypt
   // price list lands.
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat(language === "ar" ? "ar-EG" : "en-US", {
       style: "currency",
-      currency: "USD",
+      currency: "EGP",
     }).format(price)
   }
 

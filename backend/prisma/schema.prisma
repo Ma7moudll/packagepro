@@ -336,7 +336,7 @@ model OrderItem {
 model Cart {
   id         String   @id @default(cuid())
   customerId String   @unique
-  currency   String   @default("USD")
+  currency   String   @default("EGP")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -460,7 +460,7 @@ model PurchaseOrder {
 
   // Pricing
   vendorCost Decimal @db.Decimal(10, 2)
-  currency   String  @default("USD")
+  currency   String  @default("EGP")
 
   // Files
   poDocumentUrl  String? // PDF URL
@@ -574,7 +574,7 @@ model Payment {
   orderId               String        @unique
   stripePaymentIntentId String?       @unique
   amount                Decimal       @db.Decimal(10, 2)
-  currency              String        @default("USD")
+  currency              String        @default("EGP")
   status                PaymentStatus @default(pending)
   capturedAt            DateTime?
   refundedAt            DateTime?
@@ -611,7 +611,7 @@ model Settlement {
   orderId                  String
   vendorId                 String
   amount                   Decimal          @db.Decimal(10, 2)
-  currency                 String           @default("USD")
+  currency                 String           @default("EGP")
   convertedAmount          Decimal?         @db.Decimal(10, 2) // EGP amount
   exchangeRate             Decimal?         @db.Decimal(10, 4)
   status                   SettlementStatus @default(pending)
@@ -688,7 +688,7 @@ model Material {
   name        String   @unique
   code        String   @unique
   unitPrice   Decimal  @db.Decimal(10, 6) // Price per square unit
-  currency    String   @default("USD")
+  currency    String   @default("EGP")
   isActive    Boolean  @default(true)
   lastUpdated DateTime @default(now()) @updatedAt
   metadata    Json? // Additional material properties

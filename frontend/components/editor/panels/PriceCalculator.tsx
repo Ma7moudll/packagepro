@@ -78,7 +78,7 @@ export function PriceCalculator({ className }: PriceCalculatorProps) {
     };
   }, [quantity, model.type, model.material, model.dimensions.length, model.dimensions.width, model.dimensions.height]);
 
-  const currency = quote?.material?.currency ?? 'USD';
+  const currency = quote?.material?.currency ?? 'EGP';
   const formatPrice = (amount: number) =>
     new Intl.NumberFormat(language === 'ar' ? 'ar-EG' : 'en-US', {
       style: 'currency',

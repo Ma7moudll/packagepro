@@ -48,7 +48,7 @@ export class CartService {
 
     if (!cart) {
       cart = await prisma.cart.create({
-        data: { customerId, currency: 'USD' },
+        data: { customerId, currency: 'EGP' },
         include: { items: true },
       });
     }

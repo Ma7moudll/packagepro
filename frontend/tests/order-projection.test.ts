@@ -42,7 +42,7 @@ test("currencyOf prefers the payment currency when the order row lacks it", () =
     currencyOf(makeOrder({ currency: undefined as never, payment: { currency: "GBP" } })),
     "GBP",
   )
-  assert.equal(currencyOf(makeOrder({ currency: undefined as never })), "USD")
+  assert.equal(currencyOf(makeOrder({ currency: undefined as never })), "EGP")
 })
 
 test("shippingOf prefers the authoritative shippingCost over legacy shipping", () => {

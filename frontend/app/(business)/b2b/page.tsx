@@ -241,19 +241,19 @@ export default function B2BPage() {
             <CardContent className="space-y-3">
               <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
                 <span className="font-medium">Corrugated Shipping Boxes</span>
-                <Badge variant="secondary">From $2.50</Badge>
+                <Badge variant="secondary">From 135 EGP</Badge>
               </div>
               <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
                 <span className="font-medium">Custom Paper Cups</span>
-                <Badge variant="secondary">From $0.35</Badge>
+                <Badge variant="secondary">From 19 EGP</Badge>
               </div>
               <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
                 <span className="font-medium">Branded Shopping Bags</span>
-                <Badge variant="secondary">From $1.25</Badge>
+                <Badge variant="secondary">From 67 EGP</Badge>
               </div>
               <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
                 <span className="font-medium">Custom Coasters</span>
-                <Badge variant="secondary">From $0.75</Badge>
+                <Badge variant="secondary">From 40 EGP</Badge>
               </div>
             </CardContent>
           </Card>

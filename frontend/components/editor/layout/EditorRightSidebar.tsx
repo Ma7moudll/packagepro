@@ -66,7 +66,7 @@ export function EditorRightSidebar() {
   // Live pricing from the backend pricing engine. The previous hardcoded
   // getBasePrice switch invented prices (and a quantity discount) unrelated
   // to any rate card, then displayed them as SAR while the seeded materials
-  // price in USD.
+  // price in EGP.
   const [quote, setQuote] = useState<{ total: number; unit: number; currency: string } | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
 
@@ -90,7 +90,7 @@ export function EditorRightSidebar() {
             setQuote({
               total: data.totalPrice,
               unit: (data as any).unitPrice ?? data.totalPrice / model.quantity,
-              currency: data.material?.currency ?? "USD",
+              currency: data.material?.currency ?? "EGP",
             })
           } else {
             setQuote(null)
