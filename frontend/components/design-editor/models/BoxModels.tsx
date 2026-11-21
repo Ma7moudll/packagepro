@@ -48,7 +48,8 @@ const faceTextureCache = new Map<string, THREE.MeshStandardMaterial>()
 function resolveFaceMaterial(
   fallback: THREE.MeshStandardMaterial,
   textures: Record<string, string> | undefined,
-  faceId: string
+  faceId: string,
+  emissive?: string | null
 ): THREE.MeshStandardMaterial {
   if (!textures) return fallback
   const dataUrl = textures[faceId] ?? textures[faceId.replace("inside_", "")]
@@ -80,6 +81,7 @@ function resolveFaceMaterial(
       roughness: 0.85,
       metalness: 0,
       side: THREE.FrontSide,
+      emissive: emissive ? new THREE.Color(emissive) : new THREE.Color(0x000000),
     })
     faceTextureCache.set(cacheKey, mat)
   }
@@ -544,6 +546,12 @@ interface BoardLook {
   corrugated: boolean
   fluteTint: string
   wallBright: string | null
+  // Flat light added to white boards: the rig leaves wall faces at ~60% of
+  // texture brightness, which reads grey, not white. Kraft stays untouched.
+  // THREE.Color(hex) converts sRGB to linear, so hex values near white are
+  // needed for a visible lift; walls need much more than the lid.
+  emissive: string | null
+  wallEmissive: string | null
 }
 
 function boardLook(materialType?: string): BoardLook {
@@ -561,6 +569,8 @@ function boardLook(materialType?: string): BoardLook {
       // texture pushes the walls into the same neutral zone (measured:
       // cool color multiplies only darkened and skewed blue).
       wallBright: '#E4E4E6',
+      emissive: '#7A7A7C',
+      wallEmissive: '#A6A6A8',
       textureTone: 'white',
       roughness: 0.9,
       corrugated,
@@ -573,6 +583,8 @@ function boardLook(materialType?: string): BoardLook {
       outsideColor: '#FFFFFF',
       insideColor: '#FFFFFF',
       wallBright: '#EFEFF1',
+      emissive: '#8A8A8C',
+      wallEmissive: '#B0B0B2',
       textureTone: 'white-imported',
       roughness: 0.5,
       corrugated,
@@ -584,6 +596,8 @@ function boardLook(materialType?: string): BoardLook {
     outsideColor: '#FFFFFF',
     insideColor: '#FFFFFF',
     wallBright: null as string | null,
+    emissive: null as string | null,
+    wallEmissive: null as string | null,
     textureTone: 'kraft',
     roughness: 0.92,
     corrugated: true,
@@ -643,6 +657,7 @@ export function MailerBox({
     color: look.outsideColor,
     roughness: look.roughness,
     metalness: 0,
+    emissive: look.emissive ? new THREE.Color(look.emissive) : new THREE.Color(0x000000),
   }), [outsideMap, look])
 
   // Wall-only material with a brighter board texture, so wall faces reach
@@ -654,8 +669,9 @@ export function MailerBox({
   const wallMaterial = useMemo(() => {
     const wm = outsideMaterial.clone()
     wm.map = wallMap
+    if (look.wallEmissive) wm.emissive = new THREE.Color(look.wallEmissive)
     return wm
-  }, [outsideMaterial, wallMap])
+  }, [outsideMaterial, wallMap, look.wallEmissive])
 
   const insideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     map: insideMap,
@@ -668,11 +684,11 @@ export function MailerBox({
   const wall = 0.004 // E-flute corrugated ~4mm
 
   // Per-face art binding — deterministic 2D→3D mapping.
-  const frontMat = resolveFaceMaterial(wallMaterial, textures, "front")
-  const backMat = resolveFaceMaterial(wallMaterial, textures, "back")
-  const leftMat = resolveFaceMaterial(wallMaterial, textures, "left")
-  const rightMat = resolveFaceMaterial(wallMaterial, textures, "right")
-  const topMat = resolveFaceMaterial(outsideMaterial, textures, "top")
+  const frontMat = resolveFaceMaterial(wallMaterial, textures, "front", look.wallEmissive)
+  const backMat = resolveFaceMaterial(wallMaterial, textures, "back", look.wallEmissive)
+  const leftMat = resolveFaceMaterial(wallMaterial, textures, "left", look.wallEmissive)
+  const rightMat = resolveFaceMaterial(wallMaterial, textures, "right", look.wallEmissive)
+  const topMat = resolveFaceMaterial(outsideMaterial, textures, "top", look.emissive)
   const bottomMat = resolveFaceMaterial(insideMaterial, textures, "bottom")
 
   // ===== 0427 roll-end tuck-front mailer =====
@@ -813,6 +829,7 @@ export function ShippingBox({
     color: look.outsideColor,
     roughness: look.roughness,
     metalness: 0,
+    emissive: look.emissive ? new THREE.Color(look.emissive) : new THREE.Color(0x000000),
   }), [outsideMap, look])
 
   const insideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
