@@ -9,14 +9,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Package, ShoppingBag, Coffee, Box } from "lucide-react"
 
+// Product categories the online editor can actually render. Everything else
+// (pouch, envelope, tissue, ...) falls back to a quote request.
+const EDITOR_SUPPORTED_CATEGORIES = new Set(["box", "carton", "cup", "bag", "tube"])
+
 export default function TemplatesPage() {
   const { language, isRTL } = useLanguage()
 
-  // Helper to format currency
+  // Helper to format currency. These catalog starting prices are USD rate
+  // cards (same as the seeded materials); label them as such until the Egypt
+  // price list lands.
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat(language === "ar" ? "ar-SA" : "en-US", {
+    return new Intl.NumberFormat(language === "ar" ? "ar-EG" : "en-US", {
       style: "currency",
-      currency: "SAR",
+      currency: "USD",
     }).format(price)
   }
 
