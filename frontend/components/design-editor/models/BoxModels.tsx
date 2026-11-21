@@ -236,8 +236,8 @@ function createPhotoRealisticCardboard(size = 1024, isInside = false, tone: 'kra
   // white-imported = bright smooth coated liner.
   const tones = {
     kraft:            { out: "#A8855A", inn: "#D9C7A8", line: [96, 70, 42],    lineOut: 0.22, lineIn: 0.13, bandA: 0.12, fiber: [130, 100, 66] },
-    white:            { out: "#C2C2BA", inn: "#D2D2CA", line: [105, 105, 98],  lineOut: 0.22, lineIn: 0.12, bandA: 0.14, fiber: [140, 140, 132] },
-    "white-imported": { out: "#E4E4E0", inn: "#EFEFEB", line: [175, 175, 170], lineOut: 0.09, lineIn: 0.06, bandA: 0.05, fiber: [195, 195, 190] },
+    white:            { out: "#BABFC4", inn: "#CBCDD2", line: [100, 105, 112], lineOut: 0.22, lineIn: 0.12, bandA: 0.14, fiber: [134, 140, 148] },
+    "white-imported": { out: "#DDE1E6", inn: "#E9ECEF", line: [170, 175, 182], lineOut: 0.09, lineIn: 0.06, bandA: 0.05, fiber: [190, 194, 200] },
   } as const
   const t = tones[tone] ?? tones.kraft
   const [lr, lg, lb] = t.line
