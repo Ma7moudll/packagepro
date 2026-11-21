@@ -694,7 +694,10 @@ export function MailerBox({
   // ===== 0427 roll-end tuck-front mailer =====
   // One full lid hinged on the back wall, a tuck flap that folds down behind
   // the front wall, and two dust flaps that fold in from the side walls.
-  const lidDepth = w - wall * 2
+  // Lid covers the wall thickness too: it overhangs the body on all sides,
+  // which is what makes the lid/body seam read in closed state.
+  const lidDepth = w
+  const lidWidth = l + wall * 2
   const tuckDepth = Math.min(h * 0.7, w * 0.55)
   const dustDepth = Math.min(w * 0.48, h * 0.55)
   const dustSpan = w * 0.94
@@ -769,25 +772,30 @@ export function MailerBox({
       <group position={[0, h, -w / 2]}>
         <group rotation={[lidAngle, 0, 0]}>
           <mesh position={[0, wall / 2, lidDepth / 2]} castShadow userData={{ faceId: "top" }}>
-            <boxGeometry args={[l, wall, lidDepth]} />
+            <boxGeometry args={[lidWidth, wall, lidDepth]} />
             <primitive object={topMat} attach="material" />
           </mesh>
           {/* Flute cross-section on the lid's cut side edges (always visible,
               like the Packhelp reference); rides with the lid when opening */}
           {look.corrugated && (
             <>
-              <CorrugatedRim position={[l / 2 - wall / 2, wall / 2, lidDepth / 2]} length={lidDepth} thickness={wall} axis="z" tint={look.fluteTint} />
-              <CorrugatedRim position={[-(l / 2 - wall / 2), wall / 2, lidDepth / 2]} length={lidDepth} thickness={wall} axis="z" tint={look.fluteTint} />
+              <CorrugatedRim position={[l / 2 + wall / 2, wall / 2, lidDepth / 2]} length={lidDepth} thickness={wall} axis="z" tint={look.fluteTint} />
+              <CorrugatedRim position={[-(l / 2 + wall / 2), wall / 2, lidDepth / 2]} length={lidDepth} thickness={wall} axis="z" tint={look.fluteTint} />
+              {/* Front cut edge: the tuck-front seam line, visible across the
+                  top front when closed (Packhelp reference) */}
+              <CorrugatedRim position={[0, wall / 2, lidDepth]} length={lidWidth} thickness={wall} axis="x" tint={look.fluteTint} />
             </>
           )}
           {/* Lid underside (visible when open) */}
           <mesh position={[0, -wall / 2 + 0.0001, lidDepth / 2]} userData={{ faceId: "inside_top" }}>
-            <boxGeometry args={[l, 0.0001, lidDepth]} />
+            <boxGeometry args={[lidWidth, 0.0001, lidDepth]} />
             <primitive object={insideMaterial} attach="material" />
           </mesh>
 
           {/* ===== TUCK FLAP (hinged on the lid's front edge) ===== */}
-          <group position={[0, 0, lidDepth]}>
+          {/* Pivot sits inside the front wall's inner face so the closed flap
+              hangs in the cavity, not over the wall's outer surface */}
+          <group position={[0, 0, lidDepth - wall * 1.5]}>
             <group rotation={[tuckAngle, 0, 0]}>
               <mesh position={[0, wall / 2, tuckDepth / 2]} castShadow userData={{ faceId: "top" }}>
                 <boxGeometry args={[l * 0.96, wall, tuckDepth]} />
