@@ -781,6 +781,7 @@ export function EditorRightSidebar() {
             {quote && (
               <div className="text-[10px] text-slate-400">
                 {quote.unit.toFixed(2)} {quote.currency}/{language === "ar" ? "قطعة" : "pc"}
+                <span className="text-amber-600"> · {language === "ar" ? "تقديري" : "est."}</span>
               </div>
             )}
           </div>

@@ -23,9 +23,14 @@ const COMPARISON_QUANTITIES = [50, 100, 250, 500, 1000];
 
 export function PriceCalculator({ className }: PriceCalculatorProps) {
   const { language } = useLanguage();
-  const [quantity, setQuantity] = useState(100);
 
+  // Quantity is the shared model state (single source of truth) — the footer
+  // summary reads the same value, so panel and footer can never disagree.
   const model = useDesignStore((s) => s.model);
+  const applyCoreState = useDesignStore((s) => s.applyCoreState);
+  const quantity = model.quantity;
+  const setQuantity = (q: number) =>
+    applyCoreState((s) => ({ ...s, model: { ...s.model, quantity: q } }));
 
   const [quote, setQuote] = useState<PricingResponse | null>(null);
   const [tiers, setTiers] = useState<Record<number, number | null>>({});
@@ -103,6 +108,9 @@ export function PriceCalculator({ className }: PriceCalculatorProps) {
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Calculator className="w-4 h-4" />
             {language === 'ar' ? 'حاسبة الأسعار' : 'Price Calculator'}
+            <span className="ml-auto text-[9px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
+              {language === 'ar' ? 'سعر تقديري' : 'Estimated'}
+            </span>
             {loading && <Loader2 className="w-3 h-3 animate-spin text-slate-400" />}
           </CardTitle>
         </CardHeader>
@@ -166,6 +174,13 @@ export function PriceCalculator({ className }: PriceCalculatorProps) {
               <span>{language === 'ar' ? 'المجموع' : 'Total'}</span>
               <span className="text-green-600">{quote ? formatPrice(quote.totalPrice) : '—'}</span>
             </div>
+            {quote && (
+              <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                {language === 'ar'
+                  ? 'سعر تقديري للنموذج الأولي — بانتظار تأكيد المورد قبل الإطلاق.'
+                  : 'Prototype estimate — pending supplier confirmation before launch.'}
+              </p>
+            )}
           </div>
 
           {/* Unit price by quantity, all from the pricing engine */}
