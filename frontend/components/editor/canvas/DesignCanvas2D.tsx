@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useEffect, useCallback, useState } from "react"
-import { fabric } from "fabric"
+import * as fabric from "fabric"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { BLEED_MM, SAFE_MM } from "@/lib/editor/geometry/units"
 import { useLanguage } from "@/providers/language-provider"
@@ -114,43 +114,43 @@ function applyImageFilters(img: any, config?: ImageFilterConfig) {
   const cfg = config ?? DEFAULT_IMAGE_FILTERS
 
   if (cfg.brightness !== 100) {
-    filters.push(new (fabric.Image.filters as any).Brightness({
+    filters.push(new (fabric.filters as any).Brightness({
       brightness: (cfg.brightness - 100) / 100,
     }))
   }
 
   if (cfg.contrast !== 100) {
-    filters.push(new (fabric.Image.filters as any).Contrast({
+    filters.push(new (fabric.filters as any).Contrast({
       contrast: (cfg.contrast - 100) / 100,
     }))
   }
 
   if (cfg.saturation !== 100) {
-    filters.push(new (fabric.Image.filters as any).Saturation({
+    filters.push(new (fabric.filters as any).Saturation({
       saturation: (cfg.saturation - 100) / 100,
     }))
   }
 
   if (cfg.blur > 0) {
-    filters.push(new (fabric.Image.filters as any).Blur({
+    filters.push(new (fabric.filters as any).Blur({
       blur: cfg.blur * 0.05,
     }))
   }
 
   if (cfg.grayscale > 50) {
-    filters.push(new (fabric.Image.filters as any).Grayscale())
+    filters.push(new (fabric.filters as any).Grayscale())
   }
 
   if (cfg.sepia > 50) {
-    filters.push(new (fabric.Image.filters as any).Sepia())
+    filters.push(new (fabric.filters as any).Sepia())
   }
 
   if (cfg.invert > 50) {
-    filters.push(new (fabric.Image.filters as any).Invert())
+    filters.push(new (fabric.filters as any).Invert())
   }
 
   if (cfg.hueRotate !== 0) {
-    filters.push(new (fabric.Image.filters as any).HueRotation({
+    filters.push(new (fabric.filters as any).HueRotation({
       rotation: cfg.hueRotate / 360,
     }))
   }
@@ -287,9 +287,8 @@ export function DesignCanvas2D() {
   // Handle background color changes
   useEffect(() => {
     if (fabricCanvasRef.current) {
-      fabricCanvasRef.current.setBackgroundColor(canvasState.backgroundColor, () => {
-        fabricCanvasRef.current?.renderAll()
-      })
+      fabricCanvasRef.current.backgroundColor = canvasState.backgroundColor
+      fabricCanvasRef.current.renderAll()
     }
   }, [canvasState.backgroundColor])
 
@@ -366,7 +365,9 @@ export function DesignCanvas2D() {
 
   const syncFabricObjectToLayer = useCallback(
     (fabricObj: any, layerId: string) => {
-      const layer = layers.find((l) => l.id === layerId)
+      // Canvas listeners outlive the render that registered them. Read the
+      // current layer, not the initial empty layers closure, when persisting.
+      const layer = useDesignStore.getState().layers.find((l) => l.id === layerId)
       if (!layer) return
 
       if (layer.type === "text" && fabricObj instanceof fabric.Text) {
@@ -467,7 +468,7 @@ export function DesignCanvas2D() {
 
         applyTextPropertiesToFabric(fabricObj as fabric.Text, props, layer.opacity)
       } else if (layer.type === "image" && layer.imageProperties) {
-        fabric.Image.fromURL(layer.imageProperties.src, (img) => {
+        fabric.Image.fromURL(layer.imageProperties.src).then((img) => {
           img.set({
             left: layer.position.x,
             top: layer.position.y,
@@ -491,6 +492,8 @@ export function DesignCanvas2D() {
             fabricCanvasRef.current?.add(img)
           }
           fabricCanvasRef.current?.renderAll()
+        }).catch((error) => {
+          console.warn("Could not load editor image", error)
         })
         return
     } else if (layer.type === "shape" && layer.shapeProperties) {
@@ -870,7 +873,7 @@ export function DesignCanvas2D() {
               backgroundSize: "20px 20px",
             }}
           />
-          <canvas ref={canvasRef} className="shadow-xl border border-slate-300 bg-white relative z-0" />
+          <canvas ref={canvasRef} className="shadow-xl border border-slate-300 relative z-0" />
         </div>
       </div>
     </div>
