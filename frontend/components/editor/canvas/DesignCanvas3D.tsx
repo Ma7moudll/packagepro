@@ -290,7 +290,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         gl={{
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 0.95,
+          toneMappingExposure: 0.85,
         }}
       >
         {/* خلفية رمادية فاتحة */}
@@ -305,7 +305,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         {/* إضاءة رئيسية (key light) */}
         <directionalLight
           position={[5, 8, 6]}
-          intensity={1.5}
+          intensity={1.3}
           castShadow
           shadow-mapSize={[4096, 4096]}
           shadow-camera-far={30}
@@ -331,11 +331,11 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         {/* ظل ناعم على الأرض */}
         <ContactShadows
           position={[0, -0.01, 0]}
-          opacity={0.55}
+          opacity={0.45}
           scale={8}
-          blur={2.5}
+          blur={2.8}
           far={3}
-          color="#5a4a3a"
+          color="#3a3a3a"
         />
 
         {/* أرضية شفافة للظلال */}
