@@ -9,6 +9,7 @@ import {
   Dimensions,
   PricingBreakdown,
   MaterialCost,
+  getConfiguredTaxRate,
 } from './calculations';
 
 export interface PricingRequest {
@@ -28,6 +29,9 @@ export interface PricingResponse {
     code: string;
     name: string;
     unitPrice: number;
+    /** ISO currency of the material rate card; lets clients label the price
+     *  instead of hardcoding one. */
+    currency: string;
   };
   productType: string;
   quantity: number;
@@ -213,7 +217,7 @@ export class PricingService {
       material,
       marginPercent,
       request.complexity || 'medium',
-      request.taxRate || 0.0,
+      request.taxRate ?? getConfiguredTaxRate(),
       request.weightPerUnit
     );
 
@@ -224,6 +228,7 @@ export class PricingService {
         code: material.code,
         name: material.name,
         unitPrice: material.unitPrice,
+        currency: material.currency,
       },
       productType: request.productType,
       quantity: request.quantity,
@@ -541,7 +546,7 @@ export class PricingService {
     const discountApplied = rawUnitCost * quantity * (1 - discountFactor);
     const marginAmount = lineCost * margin;
     const subtotal = lineCost + marginAmount;
-    const tax = calculateTax(subtotal, request.taxRate ?? 0);
+    const tax = calculateTax(subtotal, request.taxRate ?? getConfiguredTaxRate());
     const shippingEstimate = estimateShippingCost(
       dimensions,
       quantity,

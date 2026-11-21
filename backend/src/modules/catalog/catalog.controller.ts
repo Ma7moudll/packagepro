@@ -18,7 +18,7 @@ const quoteSchema = z.object({
       unit: z.enum(['cm', 'mm', 'inch']),
     })
     .optional(),
-  config: z.record(z.string()).optional(),
+  config: z.record(z.string(), z.string()).optional(),
   complexity: z.enum(['simple', 'medium', 'complex']).optional(),
   taxRate: z.number().min(0).max(1).optional(),
 });

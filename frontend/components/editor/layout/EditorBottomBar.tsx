@@ -213,7 +213,8 @@ export function EditorBottomBar() {
           </>
         )}
 
-        {/* Alignment Tools */}
+        {/* Alignment Tools — contextual: only with an active selection */}
+        {hasSelection && (
         <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -260,8 +261,10 @@ export function EditorBottomBar() {
             <TooltipContent>{language === "ar" ? "يمين" : "Right"}</TooltipContent>
           </Tooltip>
         </div>
+        )}
 
-        {/* Face Switcher - Center */}
+        {/* Face Switcher - Center (not in 3D: faces are picked on the box) */}
+        {viewMode !== "3d" && (
         <div className="flex-1 flex items-center justify-center gap-2">
           {/* Inside/Outside Toggle */}
           {(model.printCoverage === "inside" || model.printCoverage === "both") && (
@@ -311,8 +314,10 @@ export function EditorBottomBar() {
             ))}
           </div>
         </div>
+        )}
 
-        {/* Action Tools */}
+        {/* Action Tools — contextual: only with an active selection */}
+        {hasSelection && (
         <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -370,6 +375,7 @@ export function EditorBottomBar() {
             <TooltipContent>{language === "ar" ? "حذف" : "Delete"}</TooltipContent>
           </Tooltip>
         </div>
+        )}
       </footer>
     </TooltipProvider>
   )

@@ -53,7 +53,7 @@ export default function FAQPage() {
         {
           question: "What if I don&apos;t have a design?",
           answer:
-            "Our design team can help create custom artwork for your packaging. We offer design services starting at $75 for simple logos and text layouts. Contact us to discuss your design needs.",
+            "Our design team can help create custom artwork for your packaging. We offer design services starting at 4,000 EGP for simple logos and text layouts. Contact us to discuss your design needs.",
         },
       ],
     },
@@ -78,7 +78,7 @@ export default function FAQPage() {
         {
           question: "Are there any setup fees?",
           answer:
-            "Custom orders may include a one-time setup fee ranging from $25-$100 depending on complexity. This covers design setup, plate creation, and production preparation. The fee is waived for repeat orders of the same design.",
+            "Custom orders may include a one-time setup fee ranging from 1,350-5,400 EGP depending on complexity. This covers design setup, plate creation, and production preparation. The fee is waived for repeat orders of the same design.",
         },
       ],
     },
@@ -103,7 +103,7 @@ export default function FAQPage() {
         {
           question: "Can I request samples?",
           answer:
-            "Yes, we provide samples for most products. Sample packs are available for $15-25 including shipping. For custom designs, we can provide samples after initial design approval.",
+            "Yes, we provide samples for most products. Sample packs are available for 800-1,350 EGP including shipping. For custom designs, we can provide samples after initial design approval.",
         },
       ],
     },

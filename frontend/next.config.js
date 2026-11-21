@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  // tsc and eslint run as separate verified steps; running them inside the
+  // build doubles its memory peak and gets the worker OOM-killed on small boxes.
+  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: true },
   outputFileTracingRoot: __dirname,
   reactStrictMode: true,
   images: {

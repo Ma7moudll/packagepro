@@ -182,18 +182,10 @@ class AnalyticsService {
    */
   private async sendEvent(event: AnalyticsEvent): Promise<void> {
     if (typeof window === "undefined") return
-    try {
-      await fetch("/api/packagepro/analytics/track", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(event),
-        keepalive: true, // Send even if page is unloading
-      })
-    } catch {
-      // Event is stored locally, will be retried later
-    }
+    // No server ingestion endpoint exists: the legacy in-memory mock route
+    // /api/packagepro/analytics/track returns 410 and the real backend exposes
+    // only reporting GETs. Events stay in local storage; re-enable a POST here
+    // when a real ingestion endpoint lands.
   }
 
   /**
