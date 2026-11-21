@@ -96,6 +96,9 @@ export function AddToCart({
         dimensions: { ...dimensions, unit: "mm" },
         materialCode,
         sessionId: sid,
+        // The backend passes config through to the cart line; keep the
+        // entered design name with the item (no dedicated column yet).
+        ...(designName.trim() ? { config: { designName: designName.trim() } } : {}),
       })
       setOpen(false)
       router.push("/cart")
