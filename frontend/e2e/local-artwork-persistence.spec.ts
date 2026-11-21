@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test'
-import {loginViaApi,addTextLayer,addImageLayer,PNG_1PX,BACKEND} from './helpers'
+import {loginViaApi,addTextLayer,addImageLayer,BACKEND} from './helpers'
 test('real local backend retains artwork across reload and cart association',async({page})=>{
- await loginViaApi(page)
+ await loginViaApi(page,process.env.LOCAL_QA_EMAIL || 'qa-tester@packagepro.test')
  await page.goto('/editor?sku=box--mailer-box--23--cardboard-natural--print-monochrome--foil-none&quantity=50')
  const ready=async()=>{await page.waitForFunction(()=>!!(window as any).__editorSetViewMode);await page.evaluate(()=>(window as any).__editorSetViewMode('2d'));await page.waitForFunction(()=>!!(window as any).__fabricCanvas&&!!(window as any).__editorState)}
  await ready()
@@ -16,7 +16,10 @@ test('real local backend retains artwork across reload and cart association',asy
  const sid=new URL(page.url()).searchParams.get('sessionId')!
  const read=async()=>page.evaluate(async({sid,api})=>{const r=await fetch(`${api}/designs/session/${sid}`,{headers:{Authorization:`Bearer ${localStorage.getItem('accessToken')}`}});return {status:r.status,body:await r.json()}},{sid,api:BACKEND})
  await expect.poll(async()=>JSON.stringify((await read()).body)).toContain('Persist artwork')
+ const quoteResponse=page.waitForResponse(r=>r.url().endsWith('/pricing/calculate')&&r.request().method()==='POST'&&r.request().postDataJSON()?.quantity===50&&r.ok())
  await page.reload();await ready()
+ const editorQuote=(await (await quoteResponse).json()).data
+ expect(editorQuote.material.currency).toBe('EGP')
  await page.waitForFunction(()=>(window as any).__editorState().layers.some((l:any)=>l.textProperties?.content==='Persist artwork العربية'))
  const restored=await page.evaluate(()=>(window as any).__editorState().layers.map((l:any)=>({id:l.id,type:l.type,content:l.textProperties?.content,src:l.imageProperties?.src,faceId:l.faceId})))
  expect(restored).toEqual(expected)
@@ -31,11 +34,16 @@ test('real local backend retains artwork across reload and cart association',asy
  await page.waitForURL('**/cart*',{timeout:20000})
  const cart=await page.evaluate(async(api)=>{const r=await fetch(`${api}/cart`,{headers:{Authorization:`Bearer ${localStorage.getItem('accessToken')}`}});return r.json()},BACKEND)
  expect(cart.success).toBe(true)
+ expect(cart.data.currency).toBe('EGP')
+ if(process.env.LOCAL_QA_EMAIL)expect(cart.data.items).toHaveLength(1)
+ expect(cart.data.summary.shipping).toBe(editorQuote.breakdown.shippingEstimate)
+ expect(cart.data.summary.total).toBe(editorQuote.totalPrice)
+ console.log('EDITOR/CART QUOTE',JSON.stringify({currency:cart.data.currency,total:editorQuote.totalPrice,shipping:cart.data.summary.shipping,subtotal:cart.data.summary.subtotal}))
  const item=cart.data.items.find((i:any)=>i.sessionId===sid);expect(item).toBeTruthy();expect(item.designId).toBeTruthy();expect(Number(item.unitPrice)).toBeGreaterThan(0);expect(item.quantity).toBe(50)
  const design=await read();expect(JSON.stringify(design.body)).toContain('Persist artwork العربية');expect(JSON.stringify(design.body)).toContain(item.designId)
  console.log('VERIFIED LOCAL SESSION',sid,'DESIGN',item.designId,'QTY',item.quantity,'UNIT',item.unitPrice)
  await page.reload();await expect(page.getByText('Local artwork association regression').first()).toBeVisible()
  await expect(page.getByRole('heading',{name:/cart/i}).first()).toBeVisible()
- await page.waitForTimeout(500)
+ await page.waitForTimeout(500);await page.evaluate(()=>window.scrollTo(0,0));await page.waitForTimeout(200)
  await page.screenshot({path:'/downloads/packagepro-real-backend-cart.png'})
 })
