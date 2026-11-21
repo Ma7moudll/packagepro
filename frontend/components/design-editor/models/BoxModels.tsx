@@ -92,12 +92,16 @@ function resolveFaceMaterial(
     texture.colorSpace = THREE.SRGBColorSpace
     texture.anisotropy = 16
     const img = new Image()
-    img.onload = () => {
+    // Relief is lighting-responsive through its normal map only. Do not bake
+    // a key-light direction into the artwork, which would contradict orbit.
+    const finishArtwork = () => {
       ctx.drawImage(img, 0, 0, composite.width, composite.height)
       texture.needsUpdate = true
     }
+    img.onload = finishArtwork
     img.src = dataUrl
     mat = fallback.clone()
+    const faceMat = mat
     mat.setValues({
       map: texture,
       color: new THREE.Color(artworkLightScale, artworkLightScale, artworkLightScale),
@@ -109,11 +113,51 @@ function resolveFaceMaterial(
       emissive: emissive ? new THREE.Color(emissive) : new THREE.Color(0x000000),
     })
     if (relief) {
-      const reliefTexture = new THREE.TextureLoader().load(relief)
-      reliefTexture.anisotropy = 8
-      mat.normalMap = null // Three.js ignores bumpMap while a normalMap is attached.
-      mat.bumpMap = reliefTexture
-      mat.bumpScale = 0.003 // illustrative preview, not a manufacturing height
+      // Derive a tangent-space normal map from the greyscale word mask: the
+      // blurred mask is treated as a height field and its gradients become
+      // surface slopes, so the raised word gets readable edge shading. A raw
+      // bump map at printable heights stayed invisible next to the paper
+      // fibre normals. Illustrative preview only - no production height or
+      // application method is implied.
+      const rImg = new Image()
+      rImg.onload = () => {
+        const w = rImg.width, h = rImg.height
+        const src = document.createElement("canvas")
+        src.width = w
+        src.height = h
+        const sctx = src.getContext("2d")!
+        sctx.filter = "blur(5px)"
+        sctx.drawImage(rImg, 0, 0)
+        const data = sctx.getImageData(0, 0, w, h).data
+        const out = sctx.createImageData(w, h)
+        const heightAt = (x: number, y: number) =>
+          data[(((y + h) % h) * w + ((x + w) % w)) * 4] / 255
+        const slope = 24 // bevel steepness of the preview relief, not mm
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const gx = (heightAt(x + 1, y) - heightAt(x - 1, y)) * slope
+            const gy = (heightAt(x, y + 1) - heightAt(x, y - 1)) * slope
+            const inv = 1 / Math.hypot(gx, gy, 1)
+            const i = (y * w + x) * 4
+            out.data[i] = (-gx * inv * 0.5 + 0.5) * 255
+            out.data[i + 1] = (gy * inv * 0.5 + 0.5) * 255
+            out.data[i + 2] = (inv * 0.5 + 0.5) * 255
+            out.data[i + 3] = 255
+          }
+        }
+        const nCanvas = document.createElement("canvas")
+        nCanvas.width = w
+        nCanvas.height = h
+        nCanvas.getContext("2d")!.putImageData(out, 0, 0)
+        const reliefNormal = new THREE.CanvasTexture(nCanvas)
+        reliefNormal.anisotropy = 8
+        faceMat.normalMap = reliefNormal
+        faceMat.normalScale = new THREE.Vector2(1, 1)
+        faceMat.needsUpdate = true
+
+      }
+      rImg.onerror = () => { /* Keep printed artwork if a preview mask fails. */ }
+      rImg.src = relief
     }
     faceTextureCache.set(cacheKey, mat)
   }
@@ -740,10 +784,12 @@ export function MailerBox({
     return wm
   }, [outsideMaterial, wallMap, look.wallEmissive])
 
-  const insideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
+  const insideMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
     map: insideMap,
     color: look.insideColor,
-    roughness: interior?.roughness ?? Math.min(0.95, look.roughness + 0.04),
+    roughness: interior?.id === "white-imported-gloss" ? 0.12 : interior?.roughness ?? Math.min(0.95, look.roughness + 0.04),
+    clearcoat: interior?.id === "white-imported-gloss" ? 1 : 0,
+    clearcoatRoughness: 0.08,
     emissive: interior?.id.includes("white") ? new THREE.Color("#777779") : new THREE.Color(0),
     metalness: 0,
     normalMap: paperNormal,

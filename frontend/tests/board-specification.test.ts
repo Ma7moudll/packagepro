@@ -38,10 +38,11 @@ test('inside caps select inside artwork while cut edges are not printable',async
  assert.equal(intersectionFaceId({object:{userData:{faceId:'front'}},face:{materialIndex:1}}),'front')
 })
 
-test('relief faces do not attach the competing paper normal map',async()=>{
+test('relief normals are mask-derived without fixed light painted into artwork',async()=>{
  const {readFileSync}=await import('node:fs')
  const source=readFileSync('components/design-editor/models/BoxModels.tsx','utf8')
  const reliefBlock=source.slice(source.indexOf('    if (relief) {'),source.indexOf('    faceTextureCache.set'))
- assert.match(reliefBlock,/mat\.normalMap = null/)
- assert.match(reliefBlock,/mat\.bumpMap = reliefTexture/)
+ assert.match(reliefBlock,/faceMat\.normalMap = reliefNormal/)
+ assert.match(reliefBlock,/Math\.hypot/)
+ assert.doesNotMatch(reliefBlock,/putImageData\(comp/)
 })
