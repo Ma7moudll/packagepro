@@ -111,6 +111,7 @@ function resolveFaceMaterial(
     if (relief) {
       const reliefTexture = new THREE.TextureLoader().load(relief)
       reliefTexture.anisotropy = 8
+      mat.normalMap = null // Three.js ignores bumpMap while a normalMap is attached.
       mat.bumpMap = reliefTexture
       mat.bumpScale = 0.003 // illustrative preview, not a manufacturing height
     }
