@@ -14,6 +14,21 @@ export function mailerConstruction(length: number, width: number, height: number
   }
 }
 
+export function mailerFoldAngles(open: number) {
+  const progress = Math.max(0, Math.min(1, open))
+  const lift = progress * Math.PI * 0.59
+  // Keep the locking wings in their receiver slots until their lowest rear
+  // corner is above the side wall. Unfolding them earlier cuts through it.
+  const wingRelease = Math.max(0, (progress - 0.78) / 0.22)
+  const wing = Math.PI / 2 * (1 - wingRelease * 0.76)
+  // The tuck initially lifts vertically out of the front wall. Only after
+  // clearance does it relax towards the opened lid, like a scored paper hinge.
+  const release = Math.max(0, Math.min(1, (lift - 0.5) / (Math.PI * 0.59 - 0.5)))
+  const eased = release * release * (3 - 2 * release)
+  const tuck = (Math.PI / 2 + lift) * (1 - eased) + Math.PI * 0.06 * eased
+  return { lid: -lift, wing, tuck }
+}
+
 export type PanelProfile = "rounded" | "tuck" | "wing" | "notch"
 
 /** Centred die-cut panel in XY. +Z is print/outside, -Z is inside.
