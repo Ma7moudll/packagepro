@@ -54,6 +54,8 @@ async function exportSVG(
   const textures = await generateTextureFromLayers(layers, model, {
     width: (options.resolution / 72) * 800,
     height: (options.resolution / 72) * 600,
+    includeEmptyFaces: true,
+    backgroundColor: useDesignStore.getState().canvas.backgroundColor,
   })
 
   const bleed = options.includeBleed ? options.bleedSize : 0
@@ -143,6 +145,8 @@ async function exportPDF(
   const textures = await generateTextureFromLayers(layers, model, {
     width: (options.resolution / 72) * 800, // Scale based on DPI
     height: (options.resolution / 72) * 600,
+    includeEmptyFaces: true,
+    backgroundColor: useDesignStore.getState().canvas.backgroundColor,
   })
 
   // Export each face
@@ -208,6 +212,8 @@ async function exportImage(
   const textures = await generateTextureFromLayers(layers, model, {
     width: (options.resolution / 72) * 800,
     height: (options.resolution / 72) * 600,
+    includeEmptyFaces: true,
+    backgroundColor: useDesignStore.getState().canvas.backgroundColor,
   })
 
   const firstFace = model.faces[0]

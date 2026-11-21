@@ -180,11 +180,7 @@ function ExportDialogInner() {
                 <SelectItem value="pdf">PDF (Print-ready)</SelectItem>
                 <SelectItem value="png">PNG (High-res)</SelectItem>
                 <SelectItem value="jpg">JPEG</SelectItem>
-                {/* SVG/AI/EPS disabled: exportDesign reads the legacy editor
-                    store (lib/editor/state/store) whose model.faces are empty
-                    in the live design-editor, so vector export would produce
-                    an empty document. Re-enable once wired to the live state. */}
-                <SelectItem value="svg" disabled>SVG (Vector) — {language === "ar" ? "قريبًا" : "soon"}</SelectItem>
+                <SelectItem value="svg">SVG (Vector)</SelectItem>
                 {/* AI/EPS export is not implemented (exportDesign returns null
                     for them); keep disabled instead of failing silently. */}
                 <SelectItem value="ai" disabled>Adobe Illustrator (AI) — {language === "ar" ? "قريبًا" : "soon"}</SelectItem>
