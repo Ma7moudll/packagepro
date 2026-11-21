@@ -120,6 +120,10 @@ jobs:
           NEXT_PUBLIC_API_URL: http://localhost:3000
         run: npm run test:units
 
+      - name: Typecheck frontend
+        working-directory: ./frontend
+        run: npx tsc --noEmit
+
       - name: Build
         working-directory: ./frontend
         env:
