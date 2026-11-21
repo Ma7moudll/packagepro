@@ -371,17 +371,18 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         {/* إضاءة تتبع الكاميرا: ترفع الأوجه المواجهة للمشاهد بدون تسطيح الظلال */}
         <CameraFillLight intensity={0.55} />
 
-        {/* White-board boost rig (layer 1): imported white reads paper-white
-            only under stronger studio light; kraft/Egyptian white stay on the
-            shared rig. Box meshes carry layer 1 (see LayerOneGroup). */}
+        {/* White-board boost rig: imported white reads paper-white only
+            under stronger studio light; kraft/Egyptian white stay on the
+            shared rig. */}
         {boostWhite && (
           <>
             {/* The box is the only lit object in this scene (background is a
                 flat color, shadows are ContactShadows), so mounting this rig
                 only while an imported-white material is active IS the scoping:
                 kraft and Egyptian white never see it. */}
-            <directionalLight position={[4, 7, 5]} intensity={1.0} />
-            <CameraFillLight intensity={0.45} />
+            <directionalLight position={[4, 7, 5]} intensity={5.5} />
+            <directionalLight position={[-1, 3, 8]} intensity={1.8} />
+            <CameraFillLight intensity={2.2} />
           </>
         )}
 
