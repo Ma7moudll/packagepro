@@ -134,7 +134,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
-          path: frontend/.next
+          path: |
+            frontend/.next/**
+            !frontend/.next/cache/**
+            !frontend/.next/**/.env*
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 7
 
   security-scan:
