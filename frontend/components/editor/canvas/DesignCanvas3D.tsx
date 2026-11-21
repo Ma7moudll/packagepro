@@ -289,8 +289,10 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         camera={{ position: camPos, fov: 38 }}
         gl={{
           antialias: true,
-          toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 0.85,
+          // AgX: no ACES warm hue-skew in mid-tones, so white board stays
+          // neutral instead of rendering cream.
+          toneMapping: THREE.AgXToneMapping,
+          toneMappingExposure: 1.0,
         }}
       >
         {/* خلفية رمادية فاتحة */}
@@ -317,13 +319,13 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         />
 
         {/* إضاءة ملء (fill light) */}
-        <directionalLight position={[-4, 5, -4]} intensity={0.5} />
+        <directionalLight position={[-4, 5, -4]} intensity={0.4} />
 
         {/* إضاءة خلفية (rim light) */}
         <directionalLight position={[0, 3, -6]} intensity={0.35} />
 
         {/* إضاءة نصف كروية للمحيط */}
-        <hemisphereLight intensity={0.45} groundColor="#9A8060" color="#ffffff" />
+        <hemisphereLight intensity={0.4} groundColor="#8C8C8C" color="#ffffff" />
 
 
         {/* ظل ناعم على الأرض */}

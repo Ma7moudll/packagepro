@@ -214,6 +214,7 @@ function createCorrugatedEdgeTexture(size = 256): THREE.CanvasTexture {
   ctx.fillRect(0, size - linerH - 0.5, size, 1.5)
 
   const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
   texture.repeat.set(6, 1)
@@ -300,6 +301,7 @@ function createPhotoRealisticCardboard(size = 1024, isInside = false, tone: 'kra
   ctx.putImageData(imgData, 0, 0)
 
   const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
   texture.repeat.set(1.2, 1.2)
@@ -549,7 +551,7 @@ function boardLook(materialType?: string): BoardLook {
   // Board tone is baked into the texture itself; the material colour stays
   // white so the texture shows exactly the tone it was painted with.
   // أبيض مصري — duller, slightly grey, recycled fibre
-  if (m.includes('local')) {
+  if (m.includes('local') || m.startsWith('corrugated-white')) {
     return {
       outsideColor: '#FFFFFF',
       insideColor: '#FFFFFF',
@@ -560,7 +562,7 @@ function boardLook(materialType?: string): BoardLook {
     }
   }
   // أبيض مستورد — bright, smooth coated liner
-  if (m.includes('white') || m.includes('coated') || m.includes('premium')) {
+  if (m.includes('white') || m.includes('coated') || m.includes('premium') || m.startsWith('paper-')) {
     return {
       outsideColor: '#FFFFFF',
       insideColor: '#FFFFFF',
@@ -667,8 +669,10 @@ export function MailerBox({
   // nearly aligned with the lid when open.
   const tuckAngle = (Math.PI / 2) * (1 - t * 0.83)
   // Dust flaps: folded flat inside under the lid when closed; sticking out
-  // ~50deg above horizontal when open.
-  const dustClosed = Math.PI - 0.08
+  // ~50deg above horizontal when open. Slightly PAST flat (PI + 0.05) so the
+  // flap tips drop below the lid — at PI - 0.08 they poked through it and
+  // rendered as pale strips on the closed lid.
+  const dustClosed = Math.PI + 0.05
   const dustOpen = Math.PI / 4 + 0.12
   const dustAngle = dustClosed + t * (dustOpen - dustClosed)
 
@@ -696,8 +700,9 @@ export function MailerBox({
         <primitive object={bottomMat} attach="material" />
       </mesh>
 
-      {/* Cut edges: visible corrugation on the wall tops (seen when open) */}
-      {look.corrugated && (
+      {/* Cut edges: visible corrugation on the wall tops (only when open —
+          under a closed lid they poked through and read as packing tape) */}
+      {look.corrugated && t > 0.05 && (
         <>
           <CorrugatedRim position={[0, h + wall / 2, w / 2]} length={l} thickness={wall} axis="x" tint={look.fluteTint} />
           <CorrugatedRim position={[0, h + wall / 2, -w / 2]} length={l} thickness={wall} axis="x" tint={look.fluteTint} />
@@ -731,6 +736,14 @@ export function MailerBox({
             <boxGeometry args={[l, wall, lidDepth]} />
             <primitive object={topMat} attach="material" />
           </mesh>
+          {/* Flute cross-section on the lid's cut side edges (always visible,
+              like the Packhelp reference); rides with the lid when opening */}
+          {look.corrugated && (
+            <>
+              <CorrugatedRim position={[l / 2 - wall / 2, wall / 2, lidDepth / 2]} length={lidDepth} thickness={wall} axis="z" tint={look.fluteTint} />
+              <CorrugatedRim position={[-(l / 2 - wall / 2), wall / 2, lidDepth / 2]} length={lidDepth} thickness={wall} axis="z" tint={look.fluteTint} />
+            </>
+          )}
           {/* Lid underside (visible when open) */}
           <mesh position={[0, -wall / 2 + 0.0001, lidDepth / 2]} userData={{ faceId: "inside_top" }}>
             <boxGeometry args={[l, 0.0001, lidDepth]} />
