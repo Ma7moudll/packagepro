@@ -213,6 +213,27 @@ function PickBridge() {
   return null
 }
 
+function CameraFillLight({ intensity }: { intensity: number }) {
+  const lightRef = useRef<THREE.DirectionalLight>(null)
+  const targetRef = useRef<THREE.Object3D>(null)
+  useEffect(() => {
+    if (lightRef.current && targetRef.current) {
+      lightRef.current.target = targetRef.current
+    }
+  }, [])
+  useFrame(({ camera }) => {
+    // Headlight: keep the light at the camera so faces toward the viewer
+    // are lit; angle to the key light still varies, preserving shading.
+    lightRef.current?.position.copy(camera.position)
+  })
+  return (
+    <>
+      <directionalLight ref={lightRef} intensity={intensity} />
+      <object3D ref={targetRef} position={[0, 0, 0]} />
+    </>
+  )
+}
+
 export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   const model = useDesignStore((s) => s.model)
   const layers = useDesignStore((s) => s.layers)
@@ -330,6 +351,9 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
 
         {/* إضاءة نصف كروية للمحيط */}
         <hemisphereLight intensity={0.4} groundColor="#8C8C8C" color="#ffffff" />
+
+        {/* إضاءة تتبع الكاميرا: ترفع الأوجه المواجهة للمشاهد بدون تسطيح الظلال */}
+        <CameraFillLight intensity={0.55} />
 
 
         {/* ظل ناعم على الأرض */}
