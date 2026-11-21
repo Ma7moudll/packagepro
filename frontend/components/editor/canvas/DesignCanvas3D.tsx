@@ -243,6 +243,28 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   const layers = useDesignStore((s) => s.layers)
   const canvas = useDesignStore((s) => s.canvas)
   const boxOpenState = useDesignStore((s) => s.ui.boxOpenState)
+
+  // Open-lid framing compensation: the opened lid doubles the box height, so
+  // with the closed-box camera the lid clips the top of the canvas. Dolly the
+  // camera out and raise the orbit target in proportion to openState (the
+  // footer slider drives partial states too). Relative scaling keeps user
+  // zoom intact and never remounts the Canvas.
+  const controlsRef = useRef<any>(null)
+  const openZoomAppliedRef = useRef(1)
+  useEffect(() => {
+    const want = 1 + 0.55 * boxOpenState
+    const f = want / openZoomAppliedRef.current
+    const c = controlsRef.current
+    if (c && Math.abs(f - 1) > 0.001) {
+      c.object.position.multiplyScalar(f)
+      c.update()
+    }
+    openZoomAppliedRef.current = want
+    if (c) {
+      c.target.y = ((model.dimensions.height / 100) / 2) * (1 + 0.6 * boxOpenState)
+      c.update()
+    }
+  }, [boxOpenState])
   const selectedFace = useDesignStore((s) => s.ui.selectedFace)
   const setSelectedFace = useDesignStore((s) => s.setSelectedFace)
   const isValidFace = useFaceValidity()
@@ -440,6 +462,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
 
         {/* تحكم الكاميرا */}
         <OrbitControls
+          ref={controlsRef}
           enablePan={true}
           enableZoom={true}
           enableRotate={true}
