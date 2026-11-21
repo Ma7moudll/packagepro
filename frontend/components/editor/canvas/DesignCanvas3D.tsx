@@ -270,15 +270,23 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   const type = model.type.replace(/_/g, "-")
   const BoxModel = getBoxModel(type)
 
+  // Camera distance follows the box size: small cartons and large shipping
+  // boxes must both fit the frame (previously fixed, which cropped big boxes
+  // and swallowed small ones, and an open lid filled the whole view).
+  const dims = model.dimensions
+  const maxDim = Math.max(dims.length, dims.width, dims.height || 1) / 100
+  const camDist = Math.max(1.6, maxDim * 2.4 + 0.9)
+  const camPos: [number, number, number] = [camDist * 0.62, camDist * 0.5, camDist * 0.62]
   // Calculate box center for camera target
   const boxCenterY = (model.dimensions.height / 100) / 2
 
   return (
     <div className="w-full h-full" style={{ background: "#f8f8f8" }}>
       <Canvas
+        key={camDist.toFixed(2)}
         shadows
         dpr={[1, 2]}
-        camera={{ position: [2.2, 1.8, 2.2], fov: 38 }}
+        camera={{ position: camPos, fov: 38 }}
         gl={{
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
@@ -365,8 +373,8 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
           enablePan={true}
           enableZoom={true}
           enableRotate={true}
-          minDistance={0.8}
-          maxDistance={8}
+          minDistance={camDist * 0.35}
+          maxDistance={camDist * 2.6}
           minPolarAngle={Math.PI / 8}
           maxPolarAngle={Math.PI / 2.1}
           autoRotate={false}
