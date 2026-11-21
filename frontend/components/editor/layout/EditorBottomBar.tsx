@@ -264,7 +264,8 @@ export function EditorBottomBar() {
         )}
 
         {/* Face Switcher - Center (not in 3D: faces are picked on the box) */}
-        <div className="flex-1 flex items-center justify-center gap-2" hidden={viewMode === "3d"}>
+        {viewMode !== "3d" && (
+        <div className="flex-1 flex items-center justify-center gap-2">
           {/* Inside/Outside Toggle */}
           {(model.printCoverage === "inside" || model.printCoverage === "both") && (
             <div className="flex bg-slate-100 p-0.5 rounded-lg">
@@ -313,6 +314,7 @@ export function EditorBottomBar() {
             ))}
           </div>
         </div>
+        )}
 
         {/* Action Tools — contextual: only with an active selection */}
         {hasSelection && (
