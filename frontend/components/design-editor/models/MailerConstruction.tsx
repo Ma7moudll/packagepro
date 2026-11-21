@@ -81,7 +81,7 @@ export function MailerConstruction({ l,w,h,open, outside,inside,front,back,left,
   const p = { thickness:b, inside, edge, radius:c.cornerRadius }
   return <group name="mailer-construction">
     <Board {...p} width={l-b*2} height={h} outside={front} position={[0,h/2,w/2-b/2]} profile="notch" faceId="front" />
-    <Board {...p} width={l-b*2} height={h-b} outside={back} position={[0,(h-b)/2,-w/2+b/2]} rotation={[0,Math.PI,0]} faceId="back" />
+    <Board {...p} width={l-b*2} height={h} outside={back} position={[0,h/2,-w/2+b/2]} rotation={[0,Math.PI,0]} faceId="back" />
     <Board {...p} width={w} height={h} outside={left} position={[-l/2+b/2,h/2,0]} rotation={[0,-Math.PI/2,0]} faceId="left" />
     <Board {...p} width={w} height={h} outside={right} position={[l/2-b/2,h/2,0]} rotation={[0,Math.PI/2,0]} faceId="right" />
     <Board {...p} width={l-b*2} height={w-b*2} outside={bottom} position={[0,b/2,0]} rotation={[-Math.PI/2,0,0]} faceId="bottom" />
@@ -103,6 +103,11 @@ export function MailerConstruction({ l,w,h,open, outside,inside,front,back,left,
     {/* Front return corners have actual overlaps, not painted vertical lines. */}
     {[-1,1].map(side => <Board key={side} {...p} width={Math.min(l*.13,h*.3)} height={h-b*2.2} outside={inside} position={[side*(l/2-Math.min(l*.13,h*.3)/2-b*2),h/2,w/2-b*3]} />)}
 
+    {/* Compressed paper hinge joins the rear wall to the rotating lid. */}
+    <mesh position={[0,h,-w/2+b*.8]} rotation={[0,0,Math.PI/2]} castShadow receiveShadow>
+      <cylinderGeometry args={[b*.62,b*.62,lidWidth-b,12]} />
+      <primitive object={inside} attach="material" />
+    </mesh>
     <group ref={lidRef} position={[0,h+b*.55,-w/2+b*.8]} rotation={[lidAngle,0,0]} name="hinged-lid">
       <Board {...p} width={lidWidth} height={lidDepth} outside={top} position={[0,0,lidDepth/2]} rotation={[-Math.PI/2,0,0]} faceId="top" />
       {/* Double score hinge, locally compressed board. */}
