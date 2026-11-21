@@ -59,6 +59,7 @@ export interface BaseLayer {
   rotation: number
   scale: { x: number; y: number }
   faceId: FaceId
+  raisedPrint?: { text: string; method: "unspecified" }
 }
 
 export interface TextShadow {
@@ -220,6 +221,7 @@ export interface ModelState {
   category: ProductCategory
   dimensions: ModelDimensions
   material: string
+  boardSpecification?: import("../material-specification").BoardSpecification
   faces: Face[]
   printCoverage: "outside" | "inside" | "both"
   adhesiveStrip: "none" | "single" | "double"

@@ -159,7 +159,7 @@ export default function WholesalePage() {
                   <TableCell className="text-slate-600">
                     {language === "ar"
                       ? `سعر القطعة الواحدة: 10 جنيه → ${(10 * (1 - tier.discount / 100)).toFixed(2)} جنيه`
-                      : `Unit price: $10 → $${(10 * (1 - tier.discount / 100)).toFixed(2)}`}
+                      : `Unit price: 539 EGP → ${(539 * (1 - tier.discount / 100)).toFixed(2)} EGP`}
                   </TableCell>
                 </TableRow>
               ))}

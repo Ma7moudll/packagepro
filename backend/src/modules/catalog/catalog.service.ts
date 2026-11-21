@@ -284,7 +284,7 @@ export class CatalogService {
       pricing: {
         unitPrice: Number(quote.unitPrice),
         totalPrice: Number(quote.totalPrice),
-        currency: quote.material?.currency ?? 'USD',
+        currency: quote.material?.currency ?? 'EGP',
       },
     };
   }

@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       tax,
       shipping,
       total,
-      currency: "SAR",
+      currency: "EGP",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }

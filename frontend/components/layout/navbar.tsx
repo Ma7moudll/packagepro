@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -33,6 +34,11 @@ export function Navbar() {
   const { user, logout } = useAuth()
   const { t, isRTL } = useLanguage()
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
+  const pathname = usePathname()
+
+  // The design editor is a full-screen app surface: the marketing nav only
+  // crowds it (Packhelp-style editor has no site chrome over the canvas).
+  if (pathname?.startsWith("/editor")) return null
 
   return (
     <header

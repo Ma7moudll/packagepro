@@ -1,3 +1,4 @@
+import { assertSpecificationPriced } from "../../utils/production-specification";
 import { prisma } from '../../lib/prisma';
 import {
   AuthorizationError,
@@ -41,7 +42,7 @@ export function serializeOrder<T extends Record<string, any>>(order: T): T {
       ? (PAYMENT_STATUS_MAP[rawPaymentStatus] ?? rawPaymentStatus)
       : 'pending',
     paymentMethod: 'stripe',
-    currency: order.payment?.currency || 'USD',
+    currency: order.payment?.currency || 'EGP',
     shipping: order.shippingCost ?? 0,
     trackingNumber:
       order.shipment?.dhlTrackingNumber ??
@@ -127,6 +128,17 @@ export class OrderService {
     // productType lines fall back to the legacy heuristic.
     const orderItems = await Promise.all(
       data.items.map(async (item) => {
+        // Check every design reference, including the order-level session.
+        // An explicit item ID must not hide an unpriced order-level design.
+        const references = [
+          ...(item.designId ? [{id: item.designId}] : []),
+          ...Array.from(new Set([item.sessionId, data.designSessionId].filter(Boolean))).map(sessionId => ({sessionId})),
+        ];
+        for (const where of references) {
+          const design = await prisma.design.findUnique({where, select: {designData: true}});
+          if (!design) throw new NotFoundError('Design');
+          assertSpecificationPriced(design.designData);
+        }
         const isCatalog = Boolean(item.variantId) && Boolean(item.productId);
         const pricing = isCatalog
           ? await pricingService.quoteCatalog({

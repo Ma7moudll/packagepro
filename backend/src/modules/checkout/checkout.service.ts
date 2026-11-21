@@ -2,7 +2,7 @@ import { prisma } from '../../lib/prisma';
 import { ValidationError, NotFoundError } from '../../utils/errors';
 import { cartService } from '../cart/cart.service';
 import { orderService } from '../orders/order.service';
-import { stripeService } from '../../integrations/stripe/stripe.service';
+import { getPaymentProvider } from '../../integrations/payments/registry';
 
 export interface CheckoutShippingAddress {
   name: string;
@@ -32,9 +32,9 @@ export class CheckoutService {
 
   /**
    * Checkout is order-first: a real `pending_review` order is created from the
-   * server cart, then a Stripe PaymentIntent is created against it, then the
-   * cart is cleared. The order lifecycle (payment webhook -> awaiting_approval)
-   * is unchanged.
+   * server cart, then a payment is created against it through the configured
+   * payment provider, then the cart is cleared. The order lifecycle (payment
+   * webhook -> awaiting_approval) is unchanged.
    */
   async checkout(customerId: string, input: CheckoutInput) {
     const cart = await cartService.getCart(customerId);
@@ -75,10 +75,10 @@ export class CheckoutService {
       designSessionId: input.designSessionId,
     });
 
-    const paymentIntent = await stripeService.createPaymentIntent({
+    const payment = await getPaymentProvider().createPayment({
       orderId: order.id,
       amount: Number(order.total),
-      currency: 'usd',
+      currency: (process.env.DEFAULT_CURRENCY || 'usd').toLowerCase(),
       customerEmail: customer.user.email,
     });
 
@@ -89,8 +89,8 @@ export class CheckoutService {
       orderNumber: order.orderNumber,
       total: Number(order.total),
       status: order.status,
-      clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id,
+      clientSecret: payment.clientSecret,
+      paymentIntentId: payment.providerRef,
     };
   }
 }

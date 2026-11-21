@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     //   intent: "CAPTURE",
     //   purchase_units: [{
     //     amount: {
-    //       currency_code: "SAR",
+    //       currency_code: "EGP",
     //       value: amount.toFixed(2),
     //     },
     //   }],

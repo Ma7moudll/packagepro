@@ -1,5 +1,7 @@
 "use client"
 
+import { parseImageDpi } from "./dpi"
+
 export interface ImageProcessingOptions {
   maxWidth?: number
   maxHeight?: number
@@ -121,24 +123,15 @@ export async function processImageServer(
 }
 
 /**
- * Check image DPI (requires server-side analysis)
+ * Check image DPI by reading the file's embedded density metadata
+ * client-side (PNG pHYs chunk / JPEG JFIF segment). Returns null when the
+ * file declares no density, which is common for web images and is treated
+ * as "unknown", never as a pass or a fail.
  */
 export async function checkImageDPI(file: File): Promise<number | null> {
   try {
-    const formData = new FormData()
-    formData.append("file", file)
-
-    const response = await fetch("/api/packagepro/check-image-dpi", {
-      method: "POST",
-      body: formData,
-    })
-
-    if (!response.ok) {
-      return null
-    }
-
-    const data = await response.json()
-    return data.dpi || null
+    const buffer = await file.arrayBuffer()
+    return parseImageDpi(buffer, file.type)
   } catch (error) {
     console.error("DPI check failed:", error)
     return null
