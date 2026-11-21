@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import { scheduleAutoSave, cancelAutoSave, ensureCloudSession } from "@/lib/editor/services/storage"
 import { useLanguage } from "@/providers/language-provider"
+import { useAuth } from "@/providers/auth-provider"
 import { MockupGallery } from "@/components/editor/preview/MockupGallery"
 import { ShareDialog } from "@/components/editor/collaboration/ShareDialog"
 import { TutorialOverlay } from "@/components/editor/TutorialOverlay"
@@ -58,6 +59,7 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
   const setLeftSidebarOpen = useDesignStore((s) => s.setLeftSidebarOpen)
   const setRightSidebarOpen = useDesignStore((s) => s.setRightSidebarOpen)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const { user } = useAuth()
   // Manual Save must stay clickable while the autosave debounce is pending
   // (the pill reads "Saving..." for the whole 30s window); disable only while
   // an actual manual save request is in flight.
@@ -206,7 +208,11 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
                 </>
               )}
               {saveStatus === "idle" && (
-                <span>{language === "ar" ? "محفوظ تلقائياً" : "Auto-saved"}</span>
+                <span>
+                  {user
+                    ? language === "ar" ? "محفوظ تلقائياً" : "Auto-saved"
+                    : language === "ar" ? "محفوظ على هذا الجهاز" : "Saved on this device"}
+                </span>
               )}
             </div>
           </div>

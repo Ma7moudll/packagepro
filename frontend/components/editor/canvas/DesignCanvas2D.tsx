@@ -855,18 +855,21 @@ export function DesignCanvas2D() {
             showBleed={showBleed}
             showSafeZone={showSafeZone}
           />
-          {gridVisible && (
-            <div
-              className="absolute inset-0 pointer-events-none opacity-20 z-0"
-              style={{
-                backgroundImage: `
-                  linear-gradient(to right, #94a3b8 1px, transparent 1px),
-                  linear-gradient(to bottom, #94a3b8 1px, transparent 1px)
-                `,
-                backgroundSize: "20px 20px",
-              }}
-            />
-          )}
+          {/* Grid overlay: always mounted, visibility toggled via display.
+              Fabric wraps <canvas> in its own container on init, so React
+              inserting/removing this div (with the canvas as anchor) crashes
+              with insertBefore NotFoundError. */}
+          <div
+            className="absolute inset-0 pointer-events-none opacity-20 z-0"
+            style={{
+              display: gridVisible ? "block" : "none",
+              backgroundImage: `
+                linear-gradient(to right, #94a3b8 1px, transparent 1px),
+                linear-gradient(to bottom, #94a3b8 1px, transparent 1px)
+              `,
+              backgroundSize: "20px 20px",
+            }}
+          />
           <canvas ref={canvasRef} className="shadow-xl border border-slate-300 bg-white relative z-0" />
         </div>
       </div>
