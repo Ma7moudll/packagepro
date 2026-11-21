@@ -250,6 +250,7 @@ export default function EditorPage() {
           initialDesign={{
             colors: { primary: "#d2b48c", secondary: "#1f2937" },
             dimensions: dimensions,
+            quantity: Number(quantityParam || qtyParam) || 30,
           }}
           onSave={(design) => {
             console.log("Design saved:", design)

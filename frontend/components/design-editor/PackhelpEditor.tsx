@@ -17,6 +17,7 @@ interface PackhelpEditorProps {
     elements?: any[]
     colors?: { primary: string; secondary: string }
     dimensions?: { length: number; width: number; height: number }
+    quantity?: number
   }
   onSave?: (design: any) => void
   onAddText?: () => void
@@ -91,6 +92,12 @@ export function PackhelpEditor({
           ...newState.model,
           dimensions: initialDesign.dimensions,
         }
+      }
+
+      // SKU entry has no catalog initializer. Preserve the quantity the user
+      // selected instead of silently submitting the default30 in the cart.
+      if (Number.isSafeInteger(initialDesign?.quantity) && initialDesign!.quantity! > 0) {
+        newState.model = { ...newState.model, quantity: initialDesign!.quantity! }
       }
 
       // 2. Apply model type
