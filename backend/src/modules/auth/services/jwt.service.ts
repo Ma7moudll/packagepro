@@ -13,13 +13,24 @@ export class JWTService {
   private refreshTokenExpiry: string;
 
   constructor() {
-    this.accessTokenSecret = process.env.JWT_SECRET || 'dev-secret-change-in-prod';
-    this.refreshTokenSecret = process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-in-prod';
+    const accessSecret = process.env.JWT_SECRET;
+    const refreshSecret = process.env.JWT_REFRESH_SECRET;
+
+    // SEC: never fall back to hardcoded secrets outside development/test.
+    // A default secret lets anyone who can read the repo mint valid tokens.
+    if (process.env.NODE_ENV === 'production' && (!accessSecret || !refreshSecret)) {
+      throw new Error(
+        'JWT_SECRET and JWT_REFRESH_SECRET must be set in production. Refusing to start.'
+      );
+    }
+
+    this.accessTokenSecret = accessSecret || 'dev-secret-change-in-prod';
+    this.refreshTokenSecret = refreshSecret || 'dev-refresh-secret-change-in-prod';
     this.accessTokenExpiry = process.env.JWT_EXPIRES_IN || '15m';
     this.refreshTokenExpiry = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 
-    if (!this.accessTokenSecret || !this.refreshTokenSecret) {
-      console.warn('⚠️  JWT secrets not configured. Using defaults (unsafe for production)');
+    if (!accessSecret || !refreshSecret) {
+      console.warn('⚠️  JWT secrets not configured. Using development defaults (never do this in production)');
     }
   }
 
