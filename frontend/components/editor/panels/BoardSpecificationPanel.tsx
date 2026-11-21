@@ -7,7 +7,10 @@ import { Input } from "@/components/ui/input"
 export function BoardSpecificationPanel({arabic}:{arabic:boolean}) {
  const model=useDesignStore(s=>s.model),apply=useDesignStore(s=>s.applyCoreState)
  const spec=model.boardSpecification
- const write=(next:BoardSpecification)=>apply(s=>({...s,model:{...s.model,boardSpecification:next}}))
+ const write=(next:BoardSpecification)=>{
+  const selectedLayerIds=useDesignStore.getState().selectedLayerIds
+  apply(s=>({...s,selectedLayerIds,model:{...s.model,boardSpecification:next}}))
+ }
  if(!spec)return <div className="border-t pt-3 space-y-2"><Button variant="outline" size="sm" className="w-full text-xs" onClick={()=>write(initialBoardSpecification(model.material))}>{arabic?"تخصيص الخامة من الداخل والخارج":"Configure inside and outside stock"}</Button><p className="text-[10px] text-slate-500">{arabic?"مواصفات تصنيع مستقلة، تحتاج عرض سعر قبل الطلب.":"Independent manufacturing specification. A quote is required before ordering."}</p></div>
  return <fieldset className="border-t pt-3 space-y-3" aria-label={arabic?"مواصفات الخامة والطباعة":"Stock and printing specification"}>
   {!model.type.includes("mailer")&&<p role="status" className="text-[10px] text-amber-800">{arabic?"المعاينة المستقلة للخامة مدعومة لعلبة البريد فقط حاليا؛ تحفظ المواصفات لباقي المنتجات بدون معاينة مطابقة.":"Independent stock preview currently supports mailer boxes only. Other products save the specification without a matching preview."}</p>}

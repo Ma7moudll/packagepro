@@ -227,7 +227,8 @@ export default function EditorPage() {
   }, [skuParam, skuData, productParam])
 
   const displayType = edConfig?.type ?? (skuData?.type ?? "mailer-box")
-  const displayMaterial = edConfig?.material ?? (skuData?.material ?? "cardboard-natural")
+  const independentStock = useDesignStore(s => !!s.model.boardSpecification)
+  const displayMaterial = independentStock ? (language === "ar" ? "خامة داخل وخارج مخصصة" : "Custom inside/outside stock") : edConfig?.material ?? (skuData?.material ?? "cardboard-natural")
 
   return (
     <EditorShell
