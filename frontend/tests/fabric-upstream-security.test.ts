@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Rect, Gradient, Pattern, version } from 'fabric'
+import { Rect, Gradient, Pattern, FabricImage, version } from 'fabric'
 import { JSDOM } from 'jsdom'
 
 const hostile = '\"><script data-attack="yes">throw 1</script><g onload="throw 1'
@@ -32,4 +32,10 @@ test('upstream serializer escapes pattern IDs and image URLs', () => {
   const svg = pattern.toSVG({ width: 100, height: 100 })
   safeMarkup(svg)
   assert.match(svg, /&quot;/)
+})
+
+test('upstream image serializer escapes source URLs', () => {
+  const image = new FabricImage({width: 20, height: 20, src: hostile, classList: {add() {}}} as unknown as HTMLImageElement)
+  safeMarkup(image.toSVG())
+  assert.match(image.toSVG(), /&quot;/)
 })
