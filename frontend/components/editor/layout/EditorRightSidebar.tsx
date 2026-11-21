@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
+import { pricingApi } from "@/lib/api/pricing"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -62,25 +63,51 @@ export function EditorRightSidebar() {
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
   const [productCategory, setProductCategory] = useState<ProductCategory>("all")
 
-  // Price calculation
-  const getBasePrice = (type: string) => {
-    switch (type) {
-      case "mailer_box": return 1.25
-      case "rigid_box": return 4.50
-      case "pouch": return 0.45
-      case "tube": return 1.50
-      case "cup": return 0.25
-      case "bag": return 0.65
-      case "folding_carton": return 0.85
-      case "envelope": return 0.35
-      default: return 1.00
-    }
-  }
+  // Live pricing from the backend pricing engine. The previous hardcoded
+  // getBasePrice switch invented prices (and a quantity discount) unrelated
+  // to any rate card, then displayed them as SAR while the seeded materials
+  // price in USD.
+  const [quote, setQuote] = useState<{ total: number; unit: number; currency: string } | null>(null)
+  const [quoteLoading, setQuoteLoading] = useState(false)
 
-  const basePrice = getBasePrice(model.type)
-  const discountPercent = Math.min(25, Math.floor((model.quantity / 500) * 5))
-  const finalUnitPrice = basePrice * (1 - discountPercent / 100)
-  const totalPrice = finalUnitPrice * model.quantity
+  useEffect(() => {
+    let cancelled = false
+    setQuoteLoading(true)
+    const timer = setTimeout(() => {
+      const t = (model.type || "").toLowerCase()
+      const productType = t.includes("bag") || t.includes("pouch") ? "bag" : t.includes("label") ? "label" : "box"
+      pricingApi
+        .calculate({
+          productType,
+          quantity: model.quantity,
+          dimensions: { ...model.dimensions, unit: "mm" },
+          materialCode: model.material,
+        })
+        .then((res) => {
+          if (cancelled) return
+          const data = res.data
+          if (res.success && data) {
+            setQuote({
+              total: data.totalPrice,
+              unit: (data as any).unitPrice ?? data.totalPrice / model.quantity,
+              currency: data.material?.currency ?? "USD",
+            })
+          } else {
+            setQuote(null)
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setQuote(null)
+        })
+        .finally(() => {
+          if (!cancelled) setQuoteLoading(false)
+        })
+    }, 400)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [model.type, model.material, model.dimensions.length, model.dimensions.width, model.dimensions.height, model.quantity])
 
   const currentProduct = getProductById(model.type)
   const filteredProducts = productCategory === "all" 
@@ -737,14 +764,25 @@ export function EditorRightSidebar() {
             </Select>
           </div>
           <div className="text-right">
-            {discountPercent > 0 && (
-              <span className="text-[8px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded-full">
-                -{discountPercent}%
-              </span>
-            )}
             <div className="text-xl font-bold text-slate-900">
-              {totalPrice.toFixed(0)} <span className="text-xs font-normal">{language === "ar" ? "ر.س" : "SAR"}</span>
+              {quoteLoading && !quote ? (
+                <span className="text-sm font-normal text-slate-400">…</span>
+              ) : quote ? (
+                <>
+                  {quote.total.toFixed(2)}{" "}
+                  <span className="text-xs font-normal">{quote.currency}</span>
+                </>
+              ) : (
+                <span className="text-sm font-normal text-slate-400">
+                  {language === "ar" ? "السعر غير متاح" : "Price unavailable"}
+                </span>
+              )}
             </div>
+            {quote && (
+              <div className="text-[10px] text-slate-400">
+                {quote.unit.toFixed(2)} {quote.currency}/{language === "ar" ? "قطعة" : "pc"}
+              </div>
+            )}
           </div>
         </div>
         <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white h-10">

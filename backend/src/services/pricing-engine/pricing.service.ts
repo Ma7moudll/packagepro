@@ -29,6 +29,9 @@ export interface PricingResponse {
     code: string;
     name: string;
     unitPrice: number;
+    /** ISO currency of the material rate card; lets clients label the price
+     *  instead of hardcoding one. */
+    currency: string;
   };
   productType: string;
   quantity: number;
@@ -225,6 +228,7 @@ export class PricingService {
         code: material.code,
         name: material.name,
         unitPrice: material.unitPrice,
+        currency: material.currency,
       },
       productType: request.productType,
       quantity: request.quantity,
