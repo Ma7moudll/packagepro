@@ -40,9 +40,44 @@ export function toEditorTemplate(t: BackendTemplate): Template {
     createdBy: "",
     isPublic: t.isPublic,
     tags: t.tags ?? [],
+    productType: t.productType,
+    boxType: t.boxType ?? undefined,
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
   }
+}
+
+/**
+ * Resolve the catalog product slug whose editor config (blueprint die-cut,
+ * 2D face structure, 3D model) a template belongs to. A template is artwork
+ * for one specific product; loading it must load that product's die-cut, so
+ * the dieline view, the 2D canvas and the 3D preview all show the same net.
+ *
+ * `gift-box` maps to the rigid-box product: the catalog's gifting product is
+ * the rigid box, no separate gift-box product exists.
+ */
+const BOX_TYPE_TO_PRODUCT_SLUG: Record<string, string> = {
+  "mailer-box": "custom-mailer-box",
+  "shipping-box": "custom-shipping-box",
+  "rigid-box": "custom-rigid-box",
+  "gift-box": "custom-rigid-box",
+  "folding-carton": "custom-product-box",
+  "pizza-box": "custom-pizza-box",
+}
+
+const PRODUCT_TYPE_TO_PRODUCT_SLUG: Record<string, string> = {
+  bag: "custom-paper-bag",
+  label: "custom-label-sticker",
+}
+
+export function templateProductSlug(template: Template): string | null {
+  if (template.boxType && BOX_TYPE_TO_PRODUCT_SLUG[template.boxType]) {
+    return BOX_TYPE_TO_PRODUCT_SLUG[template.boxType]
+  }
+  if (template.productType && PRODUCT_TYPE_TO_PRODUCT_SLUG[template.productType]) {
+    return PRODUCT_TYPE_TO_PRODUCT_SLUG[template.productType]
+  }
+  return null
 }
 
 /**

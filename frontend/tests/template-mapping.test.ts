@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { toEditorTemplate, loadTemplateIntoEditor, slugify } from "../lib/editor/services/template-mapping.ts"
+import { toEditorTemplate, loadTemplateIntoEditor, slugify, templateProductSlug } from "../lib/editor/services/template-mapping.ts"
 
 // The editor template service maps backend Template rows (designData) onto the
 // editor Template shape (designState). Catalog seed rows carry a fabric-style
@@ -109,4 +109,39 @@ test("template without usable metadata leaves the live state untouched", () => {
 
 test("slugify matches the legacy mock route slug format", () => {
   assert.equal(slugify("Classic Mailer Box!"), "classic-mailer-box")
+})
+
+test("templateProductSlug resolves the catalog product behind each boxType", () => {
+  const t = (boxType: string, productType = "box") =>
+    templateProductSlug(toEditorTemplate({ ...baseBackend, boxType, productType } as any))
+  assert.equal(t("mailer-box"), "custom-mailer-box")
+  assert.equal(t("shipping-box"), "custom-shipping-box")
+  assert.equal(t("rigid-box"), "custom-rigid-box")
+  assert.equal(t("folding-carton"), "custom-product-box")
+  assert.equal(t("pizza-box"), "custom-pizza-box")
+})
+
+test("templateProductSlug maps gift-box to the rigid-box product", () => {
+  const template = toEditorTemplate({ ...baseBackend, boxType: "gift-box" } as any)
+  assert.equal(templateProductSlug(template), "custom-rigid-box")
+})
+
+test("templateProductSlug falls back to productType for bag and label", () => {
+  const bag = toEditorTemplate({ ...baseBackend, boxType: null, productType: "bag" } as any)
+  const label = toEditorTemplate({ ...baseBackend, boxType: null, productType: "label" } as any)
+  assert.equal(templateProductSlug(bag), "custom-paper-bag")
+  assert.equal(templateProductSlug(label), "custom-label-sticker")
+})
+
+test("templateProductSlug returns null for unknown products", () => {
+  const unknown = toEditorTemplate({ ...baseBackend, boxType: "hovercraft", productType: "box" } as any)
+  const none = toEditorTemplate({ ...baseBackend, boxType: null, productType: "mystery" } as any)
+  assert.equal(templateProductSlug(unknown), null)
+  assert.equal(templateProductSlug(none), null)
+})
+
+test("editor templates carry the backend productType and boxType", () => {
+  const template = toEditorTemplate({ ...baseBackend } as any)
+  assert.equal(template.productType, "box")
+  assert.equal(template.boxType, "mailer-box")
 })

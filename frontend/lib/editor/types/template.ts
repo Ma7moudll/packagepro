@@ -44,6 +44,10 @@ export interface Template {
   tags: string[]
   closureType?: ClosureType
   cardboardColor?: CardboardColor
+  /** Backend catalog identity: which product (and therefore which die-cut,
+   * 2D faces and 3D model) this template belongs to. */
+  productType?: string
+  boxType?: string
   createdAt: string
   updatedAt: string
 }
