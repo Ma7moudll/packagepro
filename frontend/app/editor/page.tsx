@@ -90,8 +90,7 @@ export default function EditorPage() {
     if (templateId) {
       getTemplate(templateId)
         .then((template) => {
-          const designState = loadTemplateIntoEditor(template)
-          applyCoreState(() => designState)
+          applyCoreState(loadTemplateIntoEditor(template))
         })
         .catch((error) => {
           console.error("Error loading template:", error)
