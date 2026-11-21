@@ -32,7 +32,17 @@ export async function exportDesign(options: Partial<ExportOptions> = {}): Promis
   const opts = { ...defaultExportOptions, ...options }
   const state = useDesignStore.getState()
   const layers = state.layers.filter((l) => l.visible)
-  const model = state.model
+  // Honor print coverage: outside-only jobs must not ship inside faces and
+  // vice versa; "both" keeps everything. Faces stay labeled Inside/Outside
+  // via their names.
+  const coverage = state.model.printCoverage ?? "outside"
+  const faces = state.model.faces.filter((f) => {
+    const isInside = f.id.startsWith("inside_")
+    if (coverage === "outside") return !isInside
+    if (coverage === "inside") return isInside
+    return true
+  })
+  const model = { ...state.model, faces }
 
   if (opts.format === "pdf") {
     return await exportPDF(layers, model, opts)

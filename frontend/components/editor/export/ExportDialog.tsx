@@ -177,16 +177,21 @@ function ExportDialogInner() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="pdf">PDF (Print-ready)</SelectItem>
-                <SelectItem value="png">PNG (High-res)</SelectItem>
-                <SelectItem value="jpg">JPEG</SelectItem>
-                <SelectItem value="svg">SVG (Vector)</SelectItem>
+                <SelectItem value="pdf">PDF ({language === "ar" ? "معاينة" : "Preview"})</SelectItem>
+                <SelectItem value="png">PNG ({language === "ar" ? "معاينة" : "Preview"})</SelectItem>
+                <SelectItem value="jpg">JPEG ({language === "ar" ? "معاينة" : "Preview"})</SelectItem>
+                <SelectItem value="svg">SVG ({language === "ar" ? "معاينة" : "Preview"})</SelectItem>
                 {/* AI/EPS export is not implemented (exportDesign returns null
                     for them); keep disabled instead of failing silently. */}
                 <SelectItem value="ai" disabled>Adobe Illustrator (AI) — {language === "ar" ? "قريبًا" : "soon"}</SelectItem>
                 <SelectItem value="eps" disabled>EPS Vector — {language === "ar" ? "قريبًا" : "soon"}</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {language === "ar"
+                ? "ملف معاينة مرجعي. ملف القص الإنتاجي هو المخطط المُعتمد أعلاه."
+                : "Reference preview only. The certified dieline above is the production cutting file."}
+            </p>
           </div>
 
           <div>
