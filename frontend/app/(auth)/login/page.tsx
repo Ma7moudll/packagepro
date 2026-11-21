@@ -75,7 +75,7 @@ export default function SignInPage() {
   const handleResend = async () => {
     setResendState("sending")
     try {
-      await fetch("/api/auth/resend-verification", {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api"}/auth/resend-verification`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
