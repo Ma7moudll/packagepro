@@ -59,7 +59,7 @@ export class InvoiceService {
    * Generate an A4 PDF invoice for a customer order.
    */
   async generateInvoice(order: any): Promise<Buffer> {
-    const currency = order.payment?.currency || 'USD';
+    const currency = order.payment?.currency || 'EGP';
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({

@@ -1,5 +1,6 @@
+import {hashApprovalToken} from '../../services/pre-press-checker/approval-tokens';
 import { prisma } from '../../lib/prisma';
-import { NotFoundError, ValidationError } from '../../utils/errors';
+import { AuthorizationError, ConflictError, NotFoundError, ValidationError } from '../../utils/errors';
 import { emailService } from '../../services/email/email.service';
 import { getReminderQueue } from '../../lib/queues';
 import { proofGeneratorService } from '../../services/pre-press-checker/proof-generator';
@@ -10,27 +11,29 @@ export class ApprovalService {
   /**
    * Generate proof and send approval request
    */
-  async requestApproval(orderId: string): Promise<void> {
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      include: {
-        design: true,
-        customer: {
-          include: {
-            user: true,
-          },
-        },
-      },
+  async requestApproval(orderId: string, actor: { role: string }): Promise<void> {
+    if (actor.role !== 'ADMIN') throw new AuthorizationError('Only admins may request approval');
+    const order = await prisma.$transaction(async (tx) => {
+      // Row lock plus a durable claim serializes all workers without holding a
+      // database transaction open during PDF generation, email or queue calls.
+      await tx.$queryRaw`SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`;
+      const current = await tx.order.findUnique({
+        where: { id: orderId },
+        include: { design: true, payment: true, customer: { include: { user: true } } },
+      });
+      if (!current) throw new NotFoundError('Order');
+      if (!['pending_review', 'awaiting_approval'].includes(current.status)) {
+        throw new ValidationError('Order is not in a reviewable state');
+      }
+      if ((current.metadata as any)?.approvalRequestClaimedAt) {
+        throw new ConflictError('Approval request already claimed; reconcile before retrying');
+      }
+      await tx.order.update({
+        where: { id: orderId },
+        data: { metadata: { ...(current.metadata as any), approvalRequestClaimedAt: new Date().toISOString() } },
+      });
+      return current;
     });
-
-    if (!order) {
-      throw new NotFoundError('Order');
-    }
-
-    if (order.status !== 'pending_review') {
-      throw new ValidationError('Order is not in pending_review status');
-    }
-
     // Generate proof
     const proof = await proofGeneratorService.generateProof(orderId);
 
@@ -82,33 +85,18 @@ export class ApprovalService {
       throw new ValidationError('Invalid or expired approval token');
     }
 
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-    });
-
-    if (!order) {
-      throw new NotFoundError('Order');
-    }
-
-    if (order.status !== 'awaiting_approval') {
-      throw new ValidationError('Order is not awaiting approval');
-    }
-
-    // Update order status
-    await prisma.order.update({
-      where: { id: orderId },
-      data: {
-        status: 'ready_for_routing',
-        approvedAt: new Date(),
-        metadata: {
-          ...(order.metadata as any),
-          approval: {
-            ipAddress,
-            userAgent,
-            approvedAt: new Date().toISOString(),
-          },
-        },
-      },
+    const order = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`;
+      const current = await tx.order.findUnique({where:{id:orderId}});
+      if (!current) throw new NotFoundError('Order');
+      if (current.status !== 'awaiting_approval') throw new ValidationError('Order is not awaiting approval');
+      const consumed = await tx.orderApprovalToken.updateMany({
+        where:{tokenHash:hashApprovalToken(token),orderId,consumedAt:null,expiresAt:{gt:new Date()}},
+        data:{consumedAt:new Date()},
+      });
+      if (consumed.count !== 1) throw new ValidationError('Invalid or expired approval token');
+      await tx.order.update({where:{id:orderId},data:{status:'ready_for_routing',approvedAt:new Date(),metadata:{...(current.metadata as any),approval:{ipAddress,userAgent,approvedAt:new Date().toISOString()}}}});
+      return current;
     });
 
     // Cancel reminder jobs

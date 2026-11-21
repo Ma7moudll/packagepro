@@ -292,7 +292,7 @@ export class POService {
   /**
    * Get PO by ID
    */
-  async getPO(poId: string): Promise<any> {
+  async getPO(poId: string, actor: { userId: string; role: UserRole }): Promise<any> {
     const po = await prisma.purchaseOrder.findUnique({
       where: { id: poId },
       include: {
@@ -316,6 +316,10 @@ export class POService {
       throw new NotFoundError('Purchase Order');
     }
 
+    if (actor.role !== 'ADMIN') {
+      const vendor = actor.role === 'VENDOR' ? await prisma.vendor.findUnique({ where: { userId: actor.userId } }) : null;
+      if (!vendor || vendor.id !== po.vendorId) throw new AuthorizationError('You do not own this purchase order');
+    }
     return po;
   }
 

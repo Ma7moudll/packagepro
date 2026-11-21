@@ -6,9 +6,13 @@ interface TextureOptions {
   backgroundColor?: string
   width?: number
   height?: number
+  // Exports set this: every face is rendered (artboard filled with
+  // backgroundColor) so downloaded files never come out empty. The 3D
+  // preview leaves it off so empty faces keep the raw board material.
+  includeEmptyFaces?: boolean
 }
 
-function getFaceDimensions(faceId: string, dimensions: ModelDimensions) {
+export function getFaceDimensions(faceId: string, dimensions: ModelDimensions) {
   const { length, width, height } = dimensions
   // Normalize faceId if it's internal
   const id = faceId.replace("inside_", "")
@@ -80,8 +84,9 @@ export async function generateTextureFromLayers(
         return aIndex - bIndex
       })
 
-    // Skip faces without layers - let the 3D model use its default material
-    if (faceLayers.length === 0) {
+    // Skip faces without layers in the 3D preview - the model shows its
+    // default material there. Exports (includeEmptyFaces) render them.
+    if (faceLayers.length === 0 && !options.includeEmptyFaces) {
       continue
     }
 
@@ -93,8 +98,14 @@ export async function generateTextureFromLayers(
 
     if (!ctx) continue
 
-    // Transparent background so the base material shows through
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    if (options.includeEmptyFaces) {
+      // Export: opaque artboard so the file shows the background the user saw
+      ctx.fillStyle = backgroundColor
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+    } else {
+      // Transparent background so the base material shows through in 3D
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+    }
 
     // Render each layer
     for (const layer of faceLayers) {

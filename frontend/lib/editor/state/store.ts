@@ -93,7 +93,9 @@ function createInitialCoreState(): DesignCoreState {
   }
 
   const ui: UIState = {
-    leftSidebarOpen: true,
+    // Progressive disclosure: panels open on demand from the icon rails,
+    // so the editor's first screen is just the preview + product settings.
+    leftSidebarOpen: false,
     rightSidebarOpen: true,
     gridVisible: true,
     guidesVisible: true,
@@ -541,25 +543,17 @@ export const useDesignStore = create<DesignStore>((set, get) => {
 
     submitDesign: async (designId: string) => {
       try {
-        const response = await fetch(`/api/designs/${designId}/submit`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("token") : ""}`,
-          },
-        })
-
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.error || "Failed to submit design")
-        }
-
-        const data = await response.json()
+        // Real backend via the shared client (auth + refresh + /api base);
+        // the previous relative fetch hit the Next.js origin, where no
+        // /api/designs routes exist, and read the wrong localStorage key.
+        const { designsApi } = await import("@/lib/api/designs")
+        const res = await designsApi.submit(designId)
+        const data = (res as any).data
         set({
-          lifecycleStatus: data.data.lifecycleStatus,
+          lifecycleStatus: data.lifecycleStatus,
         })
 
-        return data.data
+        return data
       } catch (error) {
         console.error("Submit design error:", error)
         throw error
@@ -568,25 +562,14 @@ export const useDesignStore = create<DesignStore>((set, get) => {
 
     recallDesign: async (designId: string) => {
       try {
-        const response = await fetch(`/api/designs/${designId}/recall`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("token") : ""}`,
-          },
-        })
-
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.error || "Failed to recall design")
-        }
-
-        const data = await response.json()
+        const { designsApi } = await import("@/lib/api/designs")
+        const res = await designsApi.recall(designId)
+        const data = (res as any).data
         set({
-          lifecycleStatus: data.data.lifecycleStatus,
+          lifecycleStatus: data.lifecycleStatus,
         })
 
-        return data.data
+        return data
       } catch (error) {
         console.error("Recall design error:", error)
         throw error

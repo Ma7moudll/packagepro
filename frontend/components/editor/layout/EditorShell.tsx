@@ -24,9 +24,10 @@ export function EditorShell({ headerExtra, center }: EditorShellProps) {
       <EditorHeader extra={headerExtra} />
 
       <div className="flex-1 flex overflow-hidden relative">
+        {/* Left: persistent icon rail (w-14); panel widens it when open */}
         <div
           className={`overflow-hidden transition-all duration-300 ease-in-out bg-white border-r border-slate-200 max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-40 max-lg:shadow-xl ${
-            leftSidebarOpen ? "w-72 xl:w-72 lg:w-64" : "w-0"
+            leftSidebarOpen ? "w-80 xl:w-80 lg:w-72" : "w-14"
           }`}
         >
           <div className="w-full h-full overflow-y-auto">
