@@ -97,7 +97,8 @@ function resolveFaceMaterial(
       texture.needsUpdate = true
     }
     img.src = dataUrl
-    mat = new THREE.MeshStandardMaterial({
+    mat = fallback.clone()
+    mat.setValues({
       map: texture,
       color: new THREE.Color(artworkLightScale, artworkLightScale, artworkLightScale),
       roughness: fallback.roughness,
@@ -712,10 +713,12 @@ export function MailerBox({
   const paperRoughness = useMemo(() => createNoiseTexture(256, 0.08), [])
   const paperDepth = look.textureTone === "white-imported" ? 0.045 : 0.12
 
-  const outsideMaterial = useMemo(() => new THREE.MeshStandardMaterial({
+  const outsideMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
     map: outsideMap,
     color: look.outsideColor,
-    roughness: look.roughness,
+    roughness: exterior?.id === "white-imported-gloss" ? 0.12 : look.roughness,
+    clearcoat: exterior?.id === "white-imported-gloss" ? 1 : 0,
+    clearcoatRoughness: 0.08,
     metalness: 0,
     normalMap: paperNormal,
     normalScale: new THREE.Vector2(paperDepth, paperDepth),

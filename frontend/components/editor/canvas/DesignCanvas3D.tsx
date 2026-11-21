@@ -1,5 +1,6 @@
 "use client"
 
+import { BoardStudioEnvironment } from "./BoardStudioEnvironment"
 import { Canvas, useThree, useFrame } from "@react-three/fiber"
 import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react"
 import { getBoxModel, setArtworkLightScale } from "@/components/design-editor/models/BoxModels"
@@ -388,6 +389,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         <FaceHighlight selectedFace={selectedFace} />
 
         {/* إضاءة واقعية للكرتون */}
+        {model.boardSpecification && <BoardStudioEnvironment />}
         <ambientLight intensity={0.3} />
 
         {/* إضاءة رئيسية (key light) */}
