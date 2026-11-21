@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { stripeService } from '../../integrations/stripe/stripe.service';
+import { getPaymentProvider } from '../../integrations/payments/registry';
 import { z } from 'zod';
 import { authenticate, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { handleStripeWebhook } from '../../integrations/stripe/webhooks';
@@ -38,18 +39,18 @@ export class PaymentController {
       });
     }
 
-    const paymentIntent = await stripeService.createPaymentIntent({
+    const payment = await getPaymentProvider().createPayment({
       orderId: body.orderId,
       amount: Number(order.total),
-      currency: body.currency || 'usd',
+      currency: (body.currency || process.env.DEFAULT_CURRENCY || 'usd').toLowerCase(),
       customerEmail: user.email,
     });
 
     return reply.send({
       success: true,
       data: {
-        clientSecret: paymentIntent.client_secret,
-        paymentIntentId: paymentIntent.id,
+        clientSecret: payment.clientSecret,
+        paymentIntentId: payment.providerRef,
       },
     });
   }

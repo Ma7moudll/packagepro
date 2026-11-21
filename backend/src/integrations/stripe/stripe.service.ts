@@ -349,6 +349,27 @@ export class StripeService {
   }
 
   /**
+   * Provider-authoritative status for a PaymentIntent, without applying any
+   * state transitions (unlike confirmPayment). Used by the payment provider
+   * boundary.
+   */
+  async retrievePaymentIntentStatus(
+    paymentIntentId: string
+  ): Promise<'succeeded' | 'failed' | 'pending' | 'canceled'> {
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    switch (paymentIntent.status) {
+      case 'succeeded':
+        return 'succeeded';
+      case 'canceled':
+        return 'canceled';
+      case 'requires_payment_method':
+        return 'failed';
+      default:
+        return 'pending';
+    }
+  }
+
+  /**
    * Refund payment
    */
   async refundPayment(orderId: string, amount?: number): Promise<Stripe.Refund> {
