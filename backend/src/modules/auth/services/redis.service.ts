@@ -1,3 +1,4 @@
+import { AppError } from '../../../utils/errors';
 import { getRedisClient, isRedisEnabled } from '../../../lib/redis';
 
 /**
@@ -39,7 +40,7 @@ export class AuthRedisService {
   ): Promise<number> {
     const redis = getRedisClient();
     if (!redis || !isRedisEnabled()) {
-      return 1; // Fallback: treat as single attempt
+      throw new AppError(503, 'Authentication security storage is unavailable', 'AUTH_STORAGE_UNAVAILABLE');
     }
 
     const key = KEY_PATTERNS.failedLogin(email, ip);
@@ -61,7 +62,7 @@ export class AuthRedisService {
   async getFailedLoginAttempts(email: string, ip: string): Promise<number> {
     const redis = getRedisClient();
     if (!redis || !isRedisEnabled()) {
-      return 0; // Fallback: no attempts
+      throw new AppError(503, 'Authentication security storage is unavailable', 'AUTH_STORAGE_UNAVAILABLE');
     }
 
     const key = KEY_PATTERNS.failedLogin(email, ip);
@@ -77,7 +78,7 @@ export class AuthRedisService {
   async clearFailedLoginAttempts(email: string, ip: string): Promise<void> {
     const redis = getRedisClient();
     if (!redis || !isRedisEnabled()) {
-      return;
+      throw new AppError(503, 'Authentication security storage is unavailable', 'AUTH_STORAGE_UNAVAILABLE');
     }
 
     const key = KEY_PATTERNS.failedLogin(email, ip);
@@ -97,7 +98,7 @@ export class AuthRedisService {
   ): Promise<void> {
     const redis = getRedisClient();
     if (!redis || !isRedisEnabled()) {
-      return;
+      throw new AppError(503, 'Authentication security storage is unavailable', 'AUTH_STORAGE_UNAVAILABLE');
     }
 
     const key = KEY_PATTERNS.captchaRequired(email, ip);
@@ -114,7 +115,7 @@ export class AuthRedisService {
   async isCaptchaRequired(email: string, ip: string): Promise<boolean> {
     const redis = getRedisClient();
     if (!redis || !isRedisEnabled()) {
-      return false; // Fallback: no CAPTCHA required
+      throw new AppError(503, 'Authentication security storage is unavailable', 'AUTH_STORAGE_UNAVAILABLE');
     }
 
     const key = KEY_PATTERNS.captchaRequired(email, ip);
@@ -130,7 +131,7 @@ export class AuthRedisService {
   async clearCaptchaRequirement(email: string, ip: string): Promise<void> {
     const redis = getRedisClient();
     if (!redis || !isRedisEnabled()) {
-      return;
+      throw new AppError(503, 'Authentication security storage is unavailable', 'AUTH_STORAGE_UNAVAILABLE');
     }
 
     const key = KEY_PATTERNS.captchaRequired(email, ip);
@@ -145,7 +146,7 @@ export class AuthRedisService {
   async blacklistRefreshToken(jti: string, expiresInSeconds: number): Promise<void> {
     const redis = getRedisClient();
     if (!redis || !isRedisEnabled()) {
-      return;
+      throw new AppError(503, 'Authentication security storage is unavailable', 'AUTH_STORAGE_UNAVAILABLE');
     }
 
     const key = KEY_PATTERNS.refreshTokenBlacklist(jti);
@@ -160,7 +161,7 @@ export class AuthRedisService {
   async isRefreshTokenBlacklisted(jti: string): Promise<boolean> {
     const redis = getRedisClient();
     if (!redis || !isRedisEnabled()) {
-      return false; // Fallback: allow token
+      throw new AppError(503, 'Authentication security storage is unavailable', 'AUTH_STORAGE_UNAVAILABLE');
     }
 
     const key = KEY_PATTERNS.refreshTokenBlacklist(jti);
@@ -181,7 +182,7 @@ export class AuthRedisService {
   ): Promise<number> {
     const redis = getRedisClient();
     if (!redis || !isRedisEnabled()) {
-      return 1; // Fallback
+      throw new AppError(503, 'Authentication security storage is unavailable', 'AUTH_STORAGE_UNAVAILABLE');
     }
 
     const key = KEY_PATTERNS.verificationAttempts(email);
@@ -201,7 +202,7 @@ export class AuthRedisService {
   async getEmailVerificationAttempts(email: string): Promise<number> {
     const redis = getRedisClient();
     if (!redis || !isRedisEnabled()) {
-      return 0;
+      throw new AppError(503, 'Authentication security storage is unavailable', 'AUTH_STORAGE_UNAVAILABLE');
     }
 
     const key = KEY_PATTERNS.verificationAttempts(email);
@@ -216,7 +217,7 @@ export class AuthRedisService {
   async clearEmailVerificationAttempts(email: string): Promise<void> {
     const redis = getRedisClient();
     if (!redis || !isRedisEnabled()) {
-      return;
+      throw new AppError(503, 'Authentication security storage is unavailable', 'AUTH_STORAGE_UNAVAILABLE');
     }
 
     const key = KEY_PATTERNS.verificationAttempts(email);
@@ -235,7 +236,7 @@ export class AuthRedisService {
   ): Promise<number> {
     const redis = getRedisClient();
     if (!redis || !isRedisEnabled()) {
-      return 1; // Fallback
+      throw new AppError(503, 'Authentication security storage is unavailable', 'AUTH_STORAGE_UNAVAILABLE');
     }
 
     const key = KEY_PATTERNS.passwordResetAttempts(email);
@@ -255,7 +256,7 @@ export class AuthRedisService {
   async getPasswordResetAttempts(email: string): Promise<number> {
     const redis = getRedisClient();
     if (!redis || !isRedisEnabled()) {
-      return 0;
+      throw new AppError(503, 'Authentication security storage is unavailable', 'AUTH_STORAGE_UNAVAILABLE');
     }
 
     const key = KEY_PATTERNS.passwordResetAttempts(email);
@@ -270,7 +271,7 @@ export class AuthRedisService {
   async clearPasswordResetAttempts(email: string): Promise<void> {
     const redis = getRedisClient();
     if (!redis || !isRedisEnabled()) {
-      return;
+      throw new AppError(503, 'Authentication security storage is unavailable', 'AUTH_STORAGE_UNAVAILABLE');
     }
 
     const key = KEY_PATTERNS.passwordResetAttempts(email);

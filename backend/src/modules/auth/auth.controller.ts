@@ -1,3 +1,4 @@
+import { AppError } from '../../utils/errors';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { authService } from './auth.service';
@@ -96,6 +97,9 @@ export class AuthController {
         message: result.message,
       });
     } catch (error) {
+      if (error instanceof AppError && error.statusCode === 503) {
+        return reply.status(503).send({ success: false, error: error.code, message: error.message });
+      }
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
@@ -151,6 +155,9 @@ export class AuthController {
         message: result.message,
       });
     } catch (error) {
+      if (error instanceof AppError && error.statusCode === 503) {
+        return reply.status(503).send({ success: false, error: error.code, message: error.message });
+      }
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
@@ -226,6 +233,9 @@ export class AuthController {
         message: result.message,
       });
     } catch (error) {
+      if (error instanceof AppError && error.statusCode === 503) {
+        return reply.status(503).send({ success: false, error: error.code, message: error.message });
+      }
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
@@ -278,6 +288,9 @@ export class AuthController {
         message: result.message,
       });
     } catch (error) {
+      if (error instanceof AppError && error.statusCode === 503) {
+        return reply.status(503).send({ success: false, error: error.code, message: error.message });
+      }
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
@@ -323,6 +336,9 @@ export class AuthController {
         message: result.message,
       });
     } catch (error) {
+      if (error instanceof AppError && error.statusCode === 503) {
+        return reply.status(503).send({ success: false, error: error.code, message: error.message });
+      }
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
@@ -368,6 +384,9 @@ export class AuthController {
         message: result.message,
       });
     } catch (error) {
+      if (error instanceof AppError && error.statusCode === 503) {
+        return reply.status(503).send({ success: false, error: error.code, message: error.message });
+      }
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
@@ -430,6 +449,9 @@ export class AuthController {
         message: result.message,
       });
     } catch (error) {
+      if (error instanceof AppError && error.statusCode === 503) {
+        return reply.status(503).send({ success: false, error: error.code, message: error.message });
+      }
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
@@ -523,6 +545,9 @@ export class AuthController {
         message: result.message,
       });
     } catch (error) {
+      if (error instanceof AppError && error.statusCode === 503) {
+        return reply.status(503).send({ success: false, error: error.code, message: error.message });
+      }
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
@@ -573,6 +598,9 @@ export class AuthController {
         data: authRequest.user,
       });
     } catch (error) {
+      if (error instanceof AppError && error.statusCode === 503) {
+        return reply.status(503).send({ success: false, error: error.code, message: error.message });
+      }
       logger.error('Get current user endpoint error', error);
       return reply.status(500).send({
         success: false,
@@ -615,6 +643,9 @@ export class AuthController {
         data: logs,
       });
     } catch (error) {
+      if (error instanceof AppError && error.statusCode === 503) {
+        return reply.status(503).send({ success: false, error: error.code, message: error.message });
+      }
       logger.error('Get audit logs endpoint error', error);
       return reply.status(500).send({
         success: false,
