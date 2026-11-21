@@ -123,20 +123,22 @@ export class BulkUploadService {
   }
 
   /**
-   * Upload single file with progress tracking
+   * Import a single file with progress tracking.
+   *
+   * There is no server-side upload endpoint for editor artwork today: the
+   * editor keeps artwork as data URLs inside the design's layer state, which
+   * is what gets persisted when the design is saved. Importing therefore
+   * reads the file locally (the same path the single-file picker uses) and
+   * reports progress while the browser reads it. If a real upload API is
+   * added later, this method is the only place that needs to change.
    */
   private async uploadFile(uploadFile: UploadFile): Promise<void> {
     uploadFile.status = 'uploading';
     this.onProgress?.(uploadFile);
 
     try {
-      if (uploadFile.size > (this.options.maxFileSize || 50) * 1024 * 1024) {
-        // Use chunked upload for large files
-        await this.uploadInChunks(uploadFile);
-      } else {
-        // Regular upload
-        await this.uploadRegular(uploadFile);
-      }
+      uploadFile.url = await this.readFileAsDataUrl(uploadFile);
+      uploadFile.thumbnail = await BulkUploadService.generateThumbnail(uploadFile.file).catch(() => '');
 
       uploadFile.status = 'completed';
       uploadFile.progress = 100;
@@ -151,93 +153,33 @@ export class BulkUploadService {
   }
 
   /**
-   * Regular file upload
+   * Read a file as a data URL, reporting progress as the browser reads it.
    */
-  private async uploadRegular(uploadFile: UploadFile): Promise<void> {
-    const formData = new FormData();
-    formData.append('file', uploadFile.file);
-
-    const xhr = new XMLHttpRequest();
-
+  private readFileAsDataUrl(uploadFile: UploadFile): Promise<string> {
     return new Promise((resolve, reject) => {
-      xhr.upload.addEventListener('progress', (event) => {
+      const reader = new FileReader();
+
+      reader.addEventListener('progress', (event) => {
         if (event.lengthComputable) {
           uploadFile.progress = Math.round((event.loaded / event.total) * 100);
           this.onProgress?.(uploadFile);
         }
       });
 
-      xhr.addEventListener('load', () => {
-        if (xhr.status === 200) {
-          try {
-            const response = JSON.parse(xhr.responseText);
-            uploadFile.url = response.url;
-            uploadFile.thumbnail = response.thumbnail;
-            resolve();
-          } catch (error) {
-            reject(new Error('Invalid response'));
-          }
+      reader.addEventListener('load', () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result);
         } else {
-          reject(new Error(`Upload failed: ${xhr.status}`));
+          reject(new Error('Failed to read file'));
         }
       });
 
-      xhr.addEventListener('error', () => {
-        reject(new Error('Network error'));
+      reader.addEventListener('error', () => {
+        reject(new Error('Failed to read file'));
       });
 
-      xhr.addEventListener('abort', () => {
-        reject(new Error('Upload aborted'));
-      });
-
-      xhr.open('POST', '/api/upload');
-      xhr.send(formData);
+      reader.readAsDataURL(uploadFile.file);
     });
-  }
-
-  /**
-   * Chunked upload for large files
-   */
-  private async uploadInChunks(uploadFile: UploadFile): Promise<void> {
-    const chunkSize = this.options.chunkSize || 1024 * 1024;
-    const totalChunks = Math.ceil(uploadFile.size / chunkSize);
-
-    for (let i = 0; i < totalChunks; i++) {
-      const start = i * chunkSize;
-      const end = Math.min(start + chunkSize, uploadFile.size);
-      const chunk = uploadFile.file.slice(start, end);
-
-      await this.uploadChunk(uploadFile, chunk, i, totalChunks);
-
-      uploadFile.progress = Math.round(((i + 1) / totalChunks) * 100);
-      this.onProgress?.(uploadFile);
-    }
-  }
-
-  /**
-   * Upload single chunk
-   */
-  private async uploadChunk(
-    uploadFile: UploadFile,
-    chunk: Blob,
-    chunkIndex: number,
-    totalChunks: number
-  ): Promise<void> {
-    const formData = new FormData();
-    formData.append('file', chunk);
-    formData.append('chunkIndex', chunkIndex.toString());
-    formData.append('totalChunks', totalChunks.toString());
-    formData.append('fileName', uploadFile.name);
-    formData.append('fileId', uploadFile.id);
-
-    const response = await fetch('/api/upload/chunk', {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Chunk upload failed: ${response.status}`);
-    }
   }
 
   /**

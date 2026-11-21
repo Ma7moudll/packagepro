@@ -17,7 +17,7 @@ const ROLE_MAP: Record<string, string> = {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password } = body
+    const { email, password, captchaToken } = body
 
     if (!email || !password) {
       return NextResponse.json(
@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         email,
         password,
+        ...(typeof captchaToken === "string" ? { captchaToken } : {}),
       }),
     })
 

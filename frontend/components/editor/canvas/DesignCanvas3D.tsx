@@ -1,11 +1,12 @@
 "use client"
 
 import { Canvas, useThree, useFrame } from "@react-three/fiber"
-import { useState, useEffect, useCallback, useRef, Suspense } from "react"
-import { getBoxModel } from "@/components/design-editor/models/BoxModels"
+import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react"
+import { getBoxModel, setArtworkLightScale } from "@/components/design-editor/models/BoxModels"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { generateTextureFromLayers } from "@/lib/editor/services/texture-generator"
-import { Stage, Environment, ContactShadows, OrbitControls } from "@react-three/drei"
+import { setTexturesPending } from "@/lib/editor/services/texture-status"
+import { Stage, ContactShadows, OrbitControls } from "@react-three/drei"
 import * as THREE from "three"
 import type { FaceId } from "@/lib/editor/state/types"
 
@@ -50,25 +51,28 @@ function FaceHighlight({ selectedFace }: { selectedFace: FaceId }) {
   const layers = useDesignStore((s) => s.layers)
 
   useEffect(() => {
-    const restores: Array<() => void> = []
+    // Outline the selected face instead of tinting it: an amber emissive
+    // clone repainted the whole face tan and masked the real board color.
+    const attached: Array<{ mesh: THREE.Mesh; line: THREE.LineSegments }> = []
     scene.traverse((o) => {
       const mesh = o as THREE.Mesh
       if (!mesh.isMesh) return
       const fid = (mesh.userData as any)?.faceId
       if (!fid || fid !== selectedFace) return
-      const base = mesh.material as THREE.Material
-      if (!base || (base as any).__m7dHighlightClone) return
-      const clone = base.clone()
-      ;(clone as THREE.MeshStandardMaterial).emissive = new THREE.Color("#ffb300")
-      ;(clone as THREE.MeshStandardMaterial).emissiveIntensity = 0.45
-      ;(clone as any).__m7dHighlightClone = true
-      mesh.material = clone
-      restores.push(() => {
-        if (mesh.material === clone) mesh.material = base
-      })
+      const line = new THREE.LineSegments(
+        new THREE.EdgesGeometry(mesh.geometry, 30),
+        new THREE.LineBasicMaterial({ color: "#1d4ed8" })
+      )
+      ;(line as any).__m7dFaceOutline = true
+      mesh.add(line)
+      attached.push({ mesh, line })
     })
     return () => {
-      restores.forEach((r) => r())
+      attached.forEach(({ mesh, line }) => {
+        mesh.remove(line)
+        line.geometry.dispose()
+        ;(line.material as THREE.Material).dispose()
+      })
     }
   }, [scene, selectedFace, model, layers])
 
@@ -212,11 +216,55 @@ function PickBridge() {
   return null
 }
 
+function CameraFillLight({ intensity, layer }: { intensity: number; layer?: number }) {
+  const lightRef = useRef<THREE.DirectionalLight>(null)
+  const targetRef = useRef<THREE.Object3D>(null)
+  useEffect(() => {
+    if (lightRef.current && targetRef.current) {
+      lightRef.current.target = targetRef.current
+      if (layer !== undefined) lightRef.current.layers.set(layer)
+    }
+  }, [layer])
+  useFrame(({ camera }) => {
+    // Headlight: keep the light at the camera so faces toward the viewer
+    // are lit; angle to the key light still varies, preserving shading.
+    lightRef.current?.position.copy(camera.position)
+  })
+  return (
+    <>
+      <directionalLight ref={lightRef} intensity={intensity} />
+      <object3D ref={targetRef} position={[0, 0, 0]} />
+    </>
+  )
+}
+
 export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   const model = useDesignStore((s) => s.model)
   const layers = useDesignStore((s) => s.layers)
   const canvas = useDesignStore((s) => s.canvas)
   const boxOpenState = useDesignStore((s) => s.ui.boxOpenState)
+
+  // Open-lid framing compensation: the opened lid doubles the box height, so
+  // with the closed-box camera the lid clips the top of the canvas. Dolly the
+  // camera out and raise the orbit target in proportion to openState (the
+  // footer slider drives partial states too). Relative scaling keeps user
+  // zoom intact and never remounts the Canvas.
+  const controlsRef = useRef<any>(null)
+  const openZoomAppliedRef = useRef(1)
+  useEffect(() => {
+    const want = 1 + 0.55 * boxOpenState
+    const f = want / openZoomAppliedRef.current
+    const c = controlsRef.current
+    if (c && Math.abs(f - 1) > 0.001) {
+      c.object.position.multiplyScalar(f)
+      c.update()
+    }
+    openZoomAppliedRef.current = want
+    if (c) {
+      c.target.y = ((model.dimensions.height / 100) / 2) * (1 + 0.6 * boxOpenState)
+      c.update()
+    }
+  }, [boxOpenState])
   const selectedFace = useDesignStore((s) => s.ui.selectedFace)
   const setSelectedFace = useDesignStore((s) => s.setSelectedFace)
   const isValidFace = useFaceValidity()
@@ -249,6 +297,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   useEffect(() => {
     let active = true
     const updateTextures = async () => {
+      setTexturesPending(true)
       try {
         const textures = await generateTextureFromLayers(layers, model, {
           scale: 4,
@@ -259,6 +308,8 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         }
       } catch (error) {
         console.error("Error generating textures:", error)
+      } finally {
+        setTexturesPending(false)
       }
     }
     updateTextures()
@@ -270,19 +321,59 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   const type = model.type.replace(/_/g, "-")
   const BoxModel = getBoxModel(type)
 
+  // Camera distance follows the box size: small cartons and large shipping
+  // boxes must both fit the frame (previously fixed, which cropped big boxes
+  // and swallowed small ones, and an open lid filled the whole view).
+  const boostWhite = useMemo(() => {
+    const m = (model.material || "").toLowerCase()
+    // أبيض مستورد family only; Egyptian white (local / corrugated-white)
+    // intentionally stays duller, and kraft is untouched.
+    return (
+      (m.includes("white") || m.includes("coated") || m.includes("premium") || m.startsWith("paper-")) &&
+      !m.includes("local") &&
+      !m.startsWith("corrugated-white")
+    )
+  }, [model.material])
+
+  // Gated test hooks (editorDebug URL param only): __editorStore handle and a
+  // noBoost override for same-build boost on/off comparisons.
+  const debugOn = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("editorDebug")
+  const boostActive = boostWhite && !(debugOn && new URLSearchParams(window.location.search).has("noBoost"))
+  // Set during render (not an effect) so child BoxModels resolve printed-face
+  // materials with the current scale in the same pass.
+  setArtworkLightScale(boostActive ? 0.32 : 1)
+
+  // Test/debug handle, same pattern as __editorSpinBox: lets Playwright
+  // deselect layers and switch materials without fighting sidebar UI.
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("editorDebug")) return
+    ;(window as any).__editorStore = useDesignStore
+    return () => {
+      delete (window as any).__editorStore
+    }
+  }, [])
+
+  const dims = model.dimensions
+  const maxDim = Math.max(dims.length, dims.width, dims.height || 1) / 100
+  const camDist = Math.max(1.6, maxDim * 2.4 + 0.9)
+  const camPos: [number, number, number] = [camDist * 0.62, camDist * 0.5, camDist * 0.62]
   // Calculate box center for camera target
   const boxCenterY = (model.dimensions.height / 100) / 2
 
   return (
     <div className="w-full h-full" style={{ background: "#f8f8f8" }}>
       <Canvas
+        key={camDist.toFixed(2)}
         shadows
         dpr={[1, 2]}
-        camera={{ position: [2.2, 1.8, 2.2], fov: 38 }}
+        camera={{ position: camPos, fov: 38 }}
+        onCreated={({ camera }) => camera.layers.enable(1)}
         gl={{
           antialias: true,
-          toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.15,
+          // AgX: no ACES warm hue-skew in mid-tones, so white board stays
+          // neutral instead of rendering cream.
+          toneMapping: THREE.AgXToneMapping,
+          toneMappingExposure: 1.0,
         }}
       >
         {/* خلفية رمادية فاتحة */}
@@ -292,12 +383,12 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         <FaceHighlight selectedFace={selectedFace} />
 
         {/* إضاءة واقعية للكرتون */}
-        <ambientLight intensity={0.5} />
+        <ambientLight intensity={0.3} />
 
         {/* إضاءة رئيسية (key light) */}
         <directionalLight
           position={[5, 8, 6]}
-          intensity={1.5}
+          intensity={1.1}
           castShadow
           shadow-mapSize={[4096, 4096]}
           shadow-camera-far={30}
@@ -309,36 +400,45 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         />
 
         {/* إضاءة ملء (fill light) */}
-        <directionalLight position={[-4, 5, -4]} intensity={0.5} />
+        <directionalLight position={[-4, 5, -4]} intensity={0.4} />
 
         {/* إضاءة خلفية (rim light) */}
         <directionalLight position={[0, 3, -6]} intensity={0.35} />
 
         {/* إضاءة نصف كروية للمحيط */}
-        <hemisphereLight intensity={0.4} groundColor="#9A8060" color="#ffffff" />
+        <hemisphereLight intensity={0.4} groundColor="#8C8C8C" color="#ffffff" />
 
-        {/* بيئة للانعكاسات */}
-        <Environment preset="studio" background={false} />
+        {/* إضاءة تتبع الكاميرا: ترفع الأوجه المواجهة للمشاهد بدون تسطيح الظلال */}
+        <CameraFillLight intensity={0.55} />
+
+        {/* White-board boost rig: imported white reads paper-white only
+            under stronger studio light; kraft/Egyptian white stay on the
+            shared rig. */}
+        {boostActive && (
+          <>
+            {/* The box is the only lit object in this scene (background is a
+                flat color, shadows are ContactShadows), so mounting this rig
+                only while an imported-white material is active IS the scoping:
+                kraft and Egyptian white never see it. */}
+            <directionalLight position={[4, 7, 5]} intensity={5.5} />
+            <directionalLight position={[-1, 3, 8]} intensity={1.8} />
+            <CameraFillLight intensity={2.2} />
+          </>
+        )}
+
 
         {/* ظل ناعم على الأرض */}
         <ContactShadows
           position={[0, -0.01, 0]}
           opacity={0.45}
           scale={8}
-          blur={2.5}
+          blur={2.8}
           far={3}
-          color="#5a4a3a"
+          color="#3a3a3a"
         />
 
-        {/* أرضية شفافة للظلال */}
-        <mesh
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[0, -0.01, 0]}
-          receiveShadow
-        >
-          <planeGeometry args={[15, 15]} />
-          <shadowMaterial transparent opacity={0.12} />
-        </mesh>
+        {/* الظل الأرضي: ContactShadows فقط — مستوى shadowMaterial كان يرسم
+            ظلًا صلب الحواف يبدو كورقة بيضاء بجانب الصندوق */}
 
         {/* نموذج الصندوق */}
         <Suspense fallback={<LoadingBox />}>
@@ -362,11 +462,12 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
 
         {/* تحكم الكاميرا */}
         <OrbitControls
+          ref={controlsRef}
           enablePan={true}
           enableZoom={true}
           enableRotate={true}
-          minDistance={0.8}
-          maxDistance={8}
+          minDistance={camDist * 0.35}
+          maxDistance={camDist * 2.6}
           minPolarAngle={Math.PI / 8}
           maxPolarAngle={Math.PI / 2.1}
           autoRotate={false}

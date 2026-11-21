@@ -11,8 +11,8 @@ export default function ShippingPage() {
       states: ["California", "Nevada", "Arizona"],
       standardTime: "1-2 business days",
       expressTime: "Next day",
-      standardCost: "$5.99",
-      expressCost: "$15.99",
+      standardCost: "55 EGP",
+      expressCost: "120 EGP",
     },
     {
       zone: "Zone 2 - Regional",

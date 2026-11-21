@@ -1,6 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
+import { isTexturesPending, subscribeTexturesPending } from "@/lib/editor/services/texture-status"
+import { sanitizeEditorSvg } from "@/lib/editor/sanitize-svg"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -22,6 +24,7 @@ export function ExportDialog() {
 }
 
 function ExportDialogInner() {
+  const texturesPending = useSyncExternalStore(subscribeTexturesPending, isTexturesPending, () => false)
   const { language } = useLanguage()
   const [open, setOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -54,7 +57,7 @@ function ExportDialogInner() {
         if (canvasEl) {
           const fabricCanvas = (window as any).__fabricCanvas || null
           if (fabricCanvas) {
-            const svg = fabricCanvas.toSVG()
+            const svg = sanitizeEditorSvg(fabricCanvas.toSVG())
             const w = fabricCanvas.getWidth()
             const h = fabricCanvas.getHeight()
             if (fmt === "ai") {
@@ -70,6 +73,10 @@ function ExportDialogInner() {
         }
       }
       const blob = await exportDesign(options)
+      if (!blob) {
+        alert(language === "ar" ? "هذا التنسيق غير متاح بعد" : "This export format is not available yet")
+        return
+      }
       if (blob) {
         const url = URL.createObjectURL(blob)
         const link = document.createElement("a")
@@ -173,14 +180,21 @@ function ExportDialogInner() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="pdf">PDF (Print-ready)</SelectItem>
-                <SelectItem value="png">PNG (High-res)</SelectItem>
-                <SelectItem value="jpg">JPEG</SelectItem>
-                <SelectItem value="svg">SVG (Vector)</SelectItem>
-                <SelectItem value="ai">Adobe Illustrator (AI)</SelectItem>
-                <SelectItem value="eps">EPS Vector</SelectItem>
+                <SelectItem value="pdf">PDF ({language === "ar" ? "معاينة" : "Preview"})</SelectItem>
+                <SelectItem value="png">PNG ({language === "ar" ? "معاينة" : "Preview"})</SelectItem>
+                <SelectItem value="jpg">JPEG ({language === "ar" ? "معاينة" : "Preview"})</SelectItem>
+                <SelectItem value="svg">SVG ({language === "ar" ? "معاينة" : "Preview"})</SelectItem>
+                {/* AI/EPS export is not implemented (exportDesign returns null
+                    for them); keep disabled instead of failing silently. */}
+                <SelectItem value="ai" disabled>Adobe Illustrator (AI) — {language === "ar" ? "قريبًا" : "soon"}</SelectItem>
+                <SelectItem value="eps" disabled>EPS Vector — {language === "ar" ? "قريبًا" : "soon"}</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {language === "ar"
+                ? "ملف معاينة مرجعي. ملف القص الإنتاجي هو المخطط المُعتمد أعلاه."
+                : "Reference preview only. The certified dieline above is the production cutting file."}
+            </p>
           </div>
 
           <div>
@@ -256,7 +270,7 @@ function ExportDialogInner() {
 
           <div className="flex items-center justify-between">
             <Label htmlFor="die">
-              {language === "ar" ? "تضمين خطوط القطع" : "Include Die Lines"}
+              {language === "ar" ? "تضمين خطوط إرشاد (ليست للقص)" : "Include alignment guides (not for cutting)"}
             </Label>
             <Switch
               id="die"
@@ -267,10 +281,15 @@ function ExportDialogInner() {
 
           <Button
             onClick={handleExport}
-            disabled={exporting}
+            disabled={exporting || texturesPending}
             className="w-full bg-emerald-600 hover:bg-emerald-700"
           >
-            {exporting ? (
+            {texturesPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                {language === "ar" ? "جاري تحديث المعاينة..." : "Updating preview..."}
+              </>
+            ) : exporting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 {language === "ar" ? "جارٍ التصدير..." : "Exporting..."}
