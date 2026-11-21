@@ -62,24 +62,24 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
 
   const title = `${model.type.replace(/_/g, " ")} ${model.dimensions.length}×${model.dimensions.width}×${model.dimensions.height}mm`
 
-  // Auto-save on state changes
+  // Auto-save on state changes. The status pill reflects the real write: the
+  // debounced IndexedDB save fires 30s after the last change, and only then do
+  // we show "Saved" — previously the pill flipped to saved after 500ms while
+  // nothing had been written yet.
   useEffect(() => {
     const designId = "current-design"
     const name = title
     const state = useDesignStore.getState()
     const coreState = state.history.present
 
-    scheduleAutoSave(designId, name, coreState, false)
     setSaveStatus("saving")
-
-    const timer = setTimeout(() => {
+    scheduleAutoSave(designId, name, coreState, false, () => {
       setSaveStatus("saved")
       setTimeout(() => setSaveStatus("idle"), 2000)
-    }, 500)
+    })
 
     return () => {
       cancelAutoSave()
-      clearTimeout(timer)
     }
   }, [model.dimensions, layersCount, title])
 
