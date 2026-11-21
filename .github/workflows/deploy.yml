@@ -75,6 +75,11 @@ jobs:
         # `railway up` packages backend/ and ships it to the "backend" service.
         # Start command in Railway should be: npm start (runs src/index.ts prod build)
 
+      - name: Require deployed backend health before frontend release
+        env:
+          BACKEND_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+        run: bash scripts/check-deployment-health.sh
+
   frontend:
     name: Frontend → Vercel
     runs-on: ubuntu-latest
