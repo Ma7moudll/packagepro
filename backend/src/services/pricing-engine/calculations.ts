@@ -227,6 +227,24 @@ export function groupShippingByProductType(
 /**
  * Calculate tax (simplified - adjust based on business logic)
  */
+/**
+ * Server-configured default tax rate (DEFAULT_TAX_RATE env, decimal 0-1,
+ * e.g. 0.14 for Egyptian VAT). Applied whenever a caller does not pass an
+ * explicit taxRate, so cart quotes, order totals and the public calculator
+ * all agree. Unset means 0 (pre-change behavior).
+ */
+export function getConfiguredTaxRate(): number {
+  const raw = process.env.DEFAULT_TAX_RATE;
+  if (!raw) {
+    return 0;
+  }
+  const rate = Number(raw);
+  if (!Number.isFinite(rate) || rate < 0 || rate > 1) {
+    throw new Error('DEFAULT_TAX_RATE must be a decimal between 0 and 1');
+  }
+  return rate;
+}
+
 export function calculateTax(subtotal: number, taxRate: number = 0.0): number {
   return subtotal * taxRate;
 }

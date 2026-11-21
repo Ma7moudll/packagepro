@@ -9,6 +9,7 @@ import {
   Dimensions,
   PricingBreakdown,
   MaterialCost,
+  getConfiguredTaxRate,
 } from './calculations';
 
 export interface PricingRequest {
@@ -213,7 +214,7 @@ export class PricingService {
       material,
       marginPercent,
       request.complexity || 'medium',
-      request.taxRate || 0.0,
+      request.taxRate ?? getConfiguredTaxRate(),
       request.weightPerUnit
     );
 
@@ -541,7 +542,7 @@ export class PricingService {
     const discountApplied = rawUnitCost * quantity * (1 - discountFactor);
     const marginAmount = lineCost * margin;
     const subtotal = lineCost + marginAmount;
-    const tax = calculateTax(subtotal, request.taxRate ?? 0);
+    const tax = calculateTax(subtotal, request.taxRate ?? getConfiguredTaxRate());
     const shippingEstimate = estimateShippingCost(
       dimensions,
       quantity,
