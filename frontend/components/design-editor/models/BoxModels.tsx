@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useMemo } from "react"
+import { useRef, useMemo, type ReactNode } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
@@ -45,6 +45,15 @@ function getCachedMaterial(key: string, factory: () => THREE.Material): THREE.Ma
 // ============================================
 const faceTextureCache = new Map<string, THREE.MeshStandardMaterial>()
 
+// Scales printed-face brightness when the imported-white boost rig is active.
+// Without the old flat emissive, inks render saturated under normal light,
+// but the boost rig pushes them into AgX's desaturating highlight zone; this
+// multiplier pulls them back while plain walls keep the full studio light.
+let artworkLightScale = 1
+export function setArtworkLightScale(v: number) {
+  artworkLightScale = v
+}
+
 function resolveFaceMaterial(
   fallback: THREE.MeshStandardMaterial,
   textures: Record<string, string> | undefined,
@@ -54,8 +63,14 @@ function resolveFaceMaterial(
   if (!textures) return fallback
   const dataUrl = textures[faceId] ?? textures[faceId.replace("inside_", "")]
   if (!dataUrl) return fallback
+  // Printed faces get NO flat emissive: white-board looks add ~65-69% white
+  // emissive so plain walls read paper-white, but the same additive lift on a
+  // printed face washes every ink toward pastel and erases dark text. The
+  // composite texture already carries the bright board base, and the light
+  // rig (shared or boost) supplies the face's brightness.
+  emissive = null
 
-  const cacheKey = `${fallback.uuid}|${dataUrl}`
+  const cacheKey = `${fallback.uuid}|${artworkLightScale}|${dataUrl}`
   let mat = faceTextureCache.get(cacheKey)
   if (!mat) {
     // Print sits ON the board: draw the face's cardboard texture first,
@@ -78,6 +93,7 @@ function resolveFaceMaterial(
     img.src = dataUrl
     mat = new THREE.MeshStandardMaterial({
       map: texture,
+      color: new THREE.Color(artworkLightScale, artworkLightScale, artworkLightScale),
       roughness: 0.85,
       metalness: 0,
       side: THREE.FrontSide,
@@ -554,6 +570,23 @@ interface BoardLook {
   wallEmissive: string | null
 }
 
+/**
+ * Enables THREE layer 1 on every mesh in the box so the white-board boost
+ * rig (DesignCanvas3D) can light the box harder for imported white without
+ * touching other materials. Meshes keep layer 0, so camera, picking,
+ * shadows and ContactShadows are unaffected. Re-runs periodically because
+ * open-state rims mount/unmount during the lid animation.
+ */
+function LayerOneGroup({ children }: { children: ReactNode }) {
+  const ref = useRef<THREE.Group>(null)
+  const frame = useRef(0)
+  useFrame(() => {
+    if (frame.current++ % 30 !== 0) return
+    ref.current?.traverse((o) => o.layers.enable(1))
+  })
+  return <group ref={ref}>{children}</group>
+}
+
 function boardLook(materialType?: string): BoardLook {
   const m = (materialType || 'kraft').toLowerCase()
   const corrugated = m.includes('corrugated')
@@ -716,6 +749,7 @@ export function MailerBox({
   const dustAngle = dustClosed + t * (dustOpen - dustClosed)
 
   return (
+    <LayerOneGroup>
     <group>
       {/* ===== BODY: 4 walls + bottom ===== */}
       <mesh position={[0, h / 2, w / 2]} castShadow userData={{ faceId: "front" }}>
@@ -810,6 +844,7 @@ export function MailerBox({
         </group>
       </group>
     </group>
+      </LayerOneGroup>
   )
 }
 

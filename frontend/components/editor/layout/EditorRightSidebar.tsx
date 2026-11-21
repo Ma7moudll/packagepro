@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
   Box,
   Trash2,
+  Undo2,
 } from "lucide-react"
 import { PRODUCTS, PRODUCT_CATEGORIES, COLOR_VARIANTS, FINISHING_OPTIONS, LAMINATION_OPTIONS, MATERIAL_TYPES, getProductById } from "@/lib/editor/data/products-data"
 import { ProductCategory } from "@/lib/editor/state/types"
@@ -124,14 +125,26 @@ export function EditorRightSidebar() {
           <h3 className="text-xs font-bold text-slate-600">
             {language === "ar" ? "خصائص العنصر" : "Element Properties"}
           </h3>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-red-500 hover:bg-red-50"
-            onClick={() => removeLayer(selected.id)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              title={language === "ar" ? "رجوع لإعدادات المنتج" : "Back to product settings"}
+              aria-label={language === "ar" ? "رجوع لإعدادات المنتج" : "Back to product settings"}
+              onClick={() => applyCoreState((core) => ({ ...core, selectedLayerIds: [] }))}
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-red-500 hover:bg-red-50"
+              onClick={() => removeLayer(selected.id)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
 
         {/* Name */}

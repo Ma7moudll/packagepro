@@ -1,8 +1,8 @@
 "use client"
 
 import { Canvas, useThree, useFrame } from "@react-three/fiber"
-import { useState, useEffect, useCallback, useRef, Suspense } from "react"
-import { getBoxModel } from "@/components/design-editor/models/BoxModels"
+import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react"
+import { getBoxModel, setArtworkLightScale } from "@/components/design-editor/models/BoxModels"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { generateTextureFromLayers } from "@/lib/editor/services/texture-generator"
 import { setTexturesPending } from "@/lib/editor/services/texture-status"
@@ -216,14 +216,15 @@ function PickBridge() {
   return null
 }
 
-function CameraFillLight({ intensity }: { intensity: number }) {
+function CameraFillLight({ intensity, layer }: { intensity: number; layer?: number }) {
   const lightRef = useRef<THREE.DirectionalLight>(null)
   const targetRef = useRef<THREE.Object3D>(null)
   useEffect(() => {
     if (lightRef.current && targetRef.current) {
       lightRef.current.target = targetRef.current
+      if (layer !== undefined) lightRef.current.layers.set(layer)
     }
-  }, [])
+  }, [layer])
   useFrame(({ camera }) => {
     // Headlight: keep the light at the camera so faces toward the viewer
     // are lit; angle to the key light still varies, preserving shading.
@@ -242,6 +243,28 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   const layers = useDesignStore((s) => s.layers)
   const canvas = useDesignStore((s) => s.canvas)
   const boxOpenState = useDesignStore((s) => s.ui.boxOpenState)
+
+  // Open-lid framing compensation: the opened lid doubles the box height, so
+  // with the closed-box camera the lid clips the top of the canvas. Dolly the
+  // camera out and raise the orbit target in proportion to openState (the
+  // footer slider drives partial states too). Relative scaling keeps user
+  // zoom intact and never remounts the Canvas.
+  const controlsRef = useRef<any>(null)
+  const openZoomAppliedRef = useRef(1)
+  useEffect(() => {
+    const want = 1 + 0.55 * boxOpenState
+    const f = want / openZoomAppliedRef.current
+    const c = controlsRef.current
+    if (c && Math.abs(f - 1) > 0.001) {
+      c.object.position.multiplyScalar(f)
+      c.update()
+    }
+    openZoomAppliedRef.current = want
+    if (c) {
+      c.target.y = ((model.dimensions.height / 100) / 2) * (1 + 0.6 * boxOpenState)
+      c.update()
+    }
+  }, [boxOpenState])
   const selectedFace = useDesignStore((s) => s.ui.selectedFace)
   const setSelectedFace = useDesignStore((s) => s.setSelectedFace)
   const isValidFace = useFaceValidity()
@@ -301,6 +324,35 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   // Camera distance follows the box size: small cartons and large shipping
   // boxes must both fit the frame (previously fixed, which cropped big boxes
   // and swallowed small ones, and an open lid filled the whole view).
+  const boostWhite = useMemo(() => {
+    const m = (model.material || "").toLowerCase()
+    // أبيض مستورد family only; Egyptian white (local / corrugated-white)
+    // intentionally stays duller, and kraft is untouched.
+    return (
+      (m.includes("white") || m.includes("coated") || m.includes("premium") || m.startsWith("paper-")) &&
+      !m.includes("local") &&
+      !m.startsWith("corrugated-white")
+    )
+  }, [model.material])
+
+  // Gated test hooks (editorDebug URL param only): __editorStore handle and a
+  // noBoost override for same-build boost on/off comparisons.
+  const debugOn = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("editorDebug")
+  const boostActive = boostWhite && !(debugOn && new URLSearchParams(window.location.search).has("noBoost"))
+  // Set during render (not an effect) so child BoxModels resolve printed-face
+  // materials with the current scale in the same pass.
+  setArtworkLightScale(boostActive ? 0.32 : 1)
+
+  // Test/debug handle, same pattern as __editorSpinBox: lets Playwright
+  // deselect layers and switch materials without fighting sidebar UI.
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("editorDebug")) return
+    ;(window as any).__editorStore = useDesignStore
+    return () => {
+      delete (window as any).__editorStore
+    }
+  }, [])
+
   const dims = model.dimensions
   const maxDim = Math.max(dims.length, dims.width, dims.height || 1) / 100
   const camDist = Math.max(1.6, maxDim * 2.4 + 0.9)
@@ -315,6 +367,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         shadows
         dpr={[1, 2]}
         camera={{ position: camPos, fov: 38 }}
+        onCreated={({ camera }) => camera.layers.enable(1)}
         gl={{
           antialias: true,
           // AgX: no ACES warm hue-skew in mid-tones, so white board stays
@@ -358,6 +411,21 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         {/* إضاءة تتبع الكاميرا: ترفع الأوجه المواجهة للمشاهد بدون تسطيح الظلال */}
         <CameraFillLight intensity={0.55} />
 
+        {/* White-board boost rig: imported white reads paper-white only
+            under stronger studio light; kraft/Egyptian white stay on the
+            shared rig. */}
+        {boostActive && (
+          <>
+            {/* The box is the only lit object in this scene (background is a
+                flat color, shadows are ContactShadows), so mounting this rig
+                only while an imported-white material is active IS the scoping:
+                kraft and Egyptian white never see it. */}
+            <directionalLight position={[4, 7, 5]} intensity={5.5} />
+            <directionalLight position={[-1, 3, 8]} intensity={1.8} />
+            <CameraFillLight intensity={2.2} />
+          </>
+        )}
+
 
         {/* ظل ناعم على الأرض */}
         <ContactShadows
@@ -394,6 +462,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
 
         {/* تحكم الكاميرا */}
         <OrbitControls
+          ref={controlsRef}
           enablePan={true}
           enableZoom={true}
           enableRotate={true}
