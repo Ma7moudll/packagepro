@@ -115,6 +115,12 @@
   },
   "overrides": {
     "canvas": "^3.2.3",
-    "postcss": "$postcss"
+    "postcss": "$postcss",
+    "@sentry/bundler-plugins": {
+      "glob": "^14.0.6"
+    },
+    "glob@>=9": {
+      "minimatch": "^11.0.9"
+    }
   }
 }
