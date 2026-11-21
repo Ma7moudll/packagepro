@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react"
 import { getBoxModel } from "@/components/design-editor/models/BoxModels"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { generateTextureFromLayers } from "@/lib/editor/services/texture-generator"
+import { setTexturesPending } from "@/lib/editor/services/texture-status"
 import { Stage, ContactShadows, OrbitControls } from "@react-three/drei"
 import * as THREE from "three"
 import type { FaceId } from "@/lib/editor/state/types"
@@ -249,6 +250,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   useEffect(() => {
     let active = true
     const updateTextures = async () => {
+      setTexturesPending(true)
       try {
         const textures = await generateTextureFromLayers(layers, model, {
           scale: 4,
@@ -259,6 +261,8 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         }
       } catch (error) {
         console.error("Error generating textures:", error)
+      } finally {
+        setTexturesPending(false)
       }
     }
     updateTextures()

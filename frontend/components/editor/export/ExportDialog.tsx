@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
+import { isTexturesPending, subscribeTexturesPending } from "@/lib/editor/services/texture-status"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -22,6 +23,7 @@ export function ExportDialog() {
 }
 
 function ExportDialogInner() {
+  const texturesPending = useSyncExternalStore(subscribeTexturesPending, isTexturesPending, () => false)
   const { language } = useLanguage()
   const [open, setOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -267,7 +269,7 @@ function ExportDialogInner() {
 
           <div className="flex items-center justify-between">
             <Label htmlFor="die">
-              {language === "ar" ? "تضمين خطوط القطع" : "Include Die Lines"}
+              {language === "ar" ? "تضمين خطوط إرشاد (ليست للقص)" : "Include alignment guides (not for cutting)"}
             </Label>
             <Switch
               id="die"
@@ -278,10 +280,15 @@ function ExportDialogInner() {
 
           <Button
             onClick={handleExport}
-            disabled={exporting}
+            disabled={exporting || texturesPending}
             className="w-full bg-emerald-600 hover:bg-emerald-700"
           >
-            {exporting ? (
+            {texturesPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                {language === "ar" ? "جاري تحديث المعاينة..." : "Updating preview..."}
+              </>
+            ) : exporting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 {language === "ar" ? "جارٍ التصدير..." : "Exporting..."}

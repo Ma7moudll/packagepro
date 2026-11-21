@@ -172,7 +172,7 @@ export function AddToCart({
               <>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">
-                    {language === "ar" ? "السعر لكل وحدة" : "Price per unit"}
+                    {language === "ar" ? "السعر لكل وحدة (شامل الشحن)" : "Price per unit (incl. shipping)"}
                   </span>
                   <span>{language === "ar" ? `${price.unit.toFixed(2)} ج.م` : `EGP ${price.unit.toFixed(2)}`}</span>
                 </div>
