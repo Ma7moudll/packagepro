@@ -97,6 +97,31 @@ function resolveFaceMaterial(
     const finishArtwork = () => {
       ctx.drawImage(img, 0, 0, composite.width, composite.height)
       texture.needsUpdate = true
+      // Ink is a separate optical layer from the liner. Keep the glossy stock
+      // reflection around artwork, but do not let a white clearcoat reflection
+      // replace the ink colour at the lid's open angle. This is an illustrative
+      // preview response, not a specified manufacturing finish.
+      if (faceMat instanceof THREE.MeshPhysicalMaterial && faceMat.clearcoat > 0) {
+        const opticalMap = (board: number, ink: number) => {
+          const c = document.createElement("canvas")
+          c.width = composite.width; c.height = composite.height
+          const cctx = c.getContext("2d")!
+          cctx.drawImage(img, 0, 0, c.width, c.height)
+          cctx.globalCompositeOperation = "source-in"
+          cctx.fillStyle = `rgb(${ink},${ink},${ink})`
+          cctx.fillRect(0, 0, c.width, c.height)
+          cctx.globalCompositeOperation = "destination-over"
+          cctx.fillStyle = `rgb(${board},${board},${board})`
+          cctx.fillRect(0, 0, c.width, c.height)
+          const t = new THREE.CanvasTexture(c)
+          t.anisotropy = 16
+          return t
+        }
+        faceMat.roughnessMap = opticalMap(Math.round(fallback.roughness * 255), 166)
+        faceMat.roughness = 1
+        faceMat.clearcoatMap = opticalMap(255, 0)
+        faceMat.needsUpdate = true
+      }
     }
     img.onload = finishArtwork
     img.src = dataUrl

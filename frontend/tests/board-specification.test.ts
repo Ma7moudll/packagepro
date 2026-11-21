@@ -46,3 +46,16 @@ test('relief normals are mask-derived without fixed light painted into artwork',
  assert.match(reliefBlock,/Math\.hypot/)
  assert.doesNotMatch(reliefBlock,/putImageData\(comp/)
 })
+
+test('glossy print keeps artwork colour and masks optical glare by artwork alpha',async()=>{
+ const {readFileSync}=await import('node:fs')
+ const source=readFileSync('components/design-editor/models/BoxModels.tsx','utf8')
+ const optical=source.slice(source.indexOf('const finishArtwork = () =>'),source.indexOf('    img.onload'))
+ assert.match(optical,/ctx\.drawImage\(img, 0, 0, composite.width, composite.height\)/)
+ assert.match(optical,/MeshPhysicalMaterial && faceMat.clearcoat > 0/)
+ assert.match(optical,/source-in/)
+ assert.match(optical,/destination-over/)
+ assert.match(optical,/faceMat\.clearcoatMap = opticalMap\(255, 0\)/)
+ assert.match(optical,/faceMat\.roughnessMap = opticalMap/)
+ assert.doesNotMatch(optical,/getImageData|putImageData/)
+})
