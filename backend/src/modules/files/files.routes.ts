@@ -28,14 +28,24 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ success: false, error: 'NOT_FOUND' });
     }
 
-    const mimeType = MIME_BY_EXTENSION[file.extension.toLowerCase()];
+    const extension = file.extension.toLowerCase();
+    const mimeType = MIME_BY_EXTENSION[extension];
     if (!mimeType) {
       return reply.status(404).send({ success: false, error: 'NOT_FOUND' });
     }
 
-    return reply
+    reply
       .header('Content-Type', mimeType)
-      .header('Cache-Control', 'public, max-age=31536000, immutable')
-      .send(file.buffer);
+      .header('X-Content-Type-Options', 'nosniff');
+
+    // SEC: SVG can carry active script. Never render user-uploaded SVG inline
+    // on our origin — force a download instead (stored-XSS guard).
+    if (extension === 'svg') {
+      reply.header('Content-Disposition', 'attachment');
+    } else {
+      reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+
+    return reply.send(file.buffer);
   });
 };
