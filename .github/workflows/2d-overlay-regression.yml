@@ -48,10 +48,16 @@ jobs:
       CI: 'true'
       DATABASE_URL: postgresql://packagepro:ci-only-packagepro@localhost:5432/packagepro_overlay_test
       REDIS_URL: redis://localhost:6379
-      JWT_SECRET: ci-only-overlay-jwt
+      JWT_SECRET: ci-only-overlay-jwt-not-for-production-0001
+      NEXTAUTH_SECRET: ci-only-overlay-nextauth-not-for-production-0001
+      NEXTAUTH_URL: http://localhost:3001
+      S3_ENDPOINT: http://127.0.0.1:9000
+      S3_ACCESS_KEY_ID: ci-only-overlay-storage
+      S3_SECRET_ACCESS_KEY: ci-only-overlay-storage-placeholder
       JWT_REFRESH_SECRET: ci-only-overlay-refresh
       STRIPE_SECRET_KEY: sk_test_ci_overlay_placeholder
       STRIPE_WEBHOOK_SECRET: whsec_ci_overlay_placeholder
+      STRIPE_PUBLISHABLE_KEY: pk_test_ci_overlay_placeholder
       DHL_API_KEY: ci-only-placeholder
       DHL_API_SECRET: ci-only-placeholder
       EMAIL_PROVIDER: smtp
