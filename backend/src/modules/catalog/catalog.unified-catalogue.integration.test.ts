@@ -98,6 +98,8 @@ describe('unified catalogue — 55 products, honest readiness', () => {
   it('all 47 quote-only products have own candidates and cannot be quoted generically',async()=>{
     for(const entry of CATALOGUE_PRODUCTS.filter(p=>p.readiness.pricing==='quote_required')){
       const cfg=await catalogService.getEditorConfig(entry.slug,entry.moq);
+      expect(cfg.product.editorType,entry.id).toBe(entry.id);
+      expect(cfg.product.id,entry.id).toBe(entry.productId);
       expect(cfg.product.candidateMaterials.length,entry.id).toBeGreaterThan(0);
       expect(cfg.product.candidateMaterials,entry.id).toContain(cfg.material.code);
       expect(cfg.pricing.totalPrice,entry.id).toBeNull();

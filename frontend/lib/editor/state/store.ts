@@ -470,7 +470,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
         zones: config.product.structure?.zones,
         productConfig: {
           selectedSize: config.variant.sizeCode ?? undefined,
-          selectedMaterial: config.material.code,
+          selectedMaterial: model.material,
           selectedFinish: config.variant.finish !== "none" ? config.variant.finish : undefined,
           quantity: config.quantity,
           variantId: config.variant.id,
