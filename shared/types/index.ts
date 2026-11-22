@@ -373,7 +373,9 @@ export interface CartItem {
   finish?: string | null
   name?: string | null
   thumbnail?: string | null
+  /** Display unit price after pricing adjustments, excluding tax and shipping. */
   unitPrice: number
+  /** Authoritative line amount excluding tax and shipping; not rounded unitPrice x quantity. */
   totalPrice: number
   shipping: number
   tax: number
@@ -381,7 +383,9 @@ export interface CartItem {
 }
 
 export interface CartSummary {
+  /** Sum of tax-exclusive, shipping-exclusive cart line amounts. */
   subtotal: number
+  /** Separate line taxes, added once to subtotal. */
   tax: number
   shipping: number
   total: number
