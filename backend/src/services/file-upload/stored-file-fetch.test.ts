@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-vi.mock('./upload.service', () => ({ fileUploadService: { readLocalFile: async () => null } }));
+const s3 = vi.hoisted(() => ({ configured: false }));
+vi.mock('./upload.service', () => ({ fileUploadService: { readLocalFile: async () => null }, isS3Configured: () => s3.configured }));
 
 import { fetchStoredFile, isPublicAddress, createGuardedLookup, StoredFileFetchError, MAX_STORED_FILE_BYTES } from './stored-file-fetch';
 
@@ -62,14 +63,25 @@ describe('guarded lookup (the address the socket uses is the one validated)', ()
 
 describe('origin allowlist (production, fail closed)', () => {
   const env = { ...process.env };
-  afterEach(() => { process.env = { ...env }; });
+  afterEach(() => { process.env = { ...env }; s3.configured = false; });
   const prod = () => { process.env.NODE_ENV = 'production'; delete process.env.CDN_URL; delete process.env.S3_ENDPOINT; delete process.env.STORED_FILE_ALLOWED_HOSTS; delete process.env.S3_BUCKET_NAME; };
 
-  it('nothing is allowed when storage is not configured, including the old default bucket host', async () => {
+  it('unconfigured storage allows nothing, including the default bucket host', async () => {
     prod();
     expect(await codeOf(fetchStoredFile('https://packagepro-files.s3.amazonaws.com/a.jpg'))).toBe('HOST_NOT_ALLOWED');
     process.env.S3_BUCKET_NAME = 'packagepro-files';
     expect(await codeOf(fetchStoredFile('https://packagepro-files.s3.amazonaws.com/a.jpg'))).toBe('HOST_NOT_ALLOWED');
+  });
+  it('configured S3 without CDN allows exactly the uploader bucket host (explicit or default name)', async () => {
+    prod();
+    s3.configured = true;
+    process.env.S3_BUCKET_NAME = 'acme-prints';
+    // Policy passes; nothing resolvable here, so it fails at download, not at policy.
+    expect(await codeOf(fetchStoredFile('https://acme-prints.s3.amazonaws.com/a.jpg', { timeoutMs: 200 }))).not.toBe('HOST_NOT_ALLOWED');
+    expect(await codeOf(fetchStoredFile('https://other-bucket.s3.amazonaws.com/a.jpg'))).toBe('HOST_NOT_ALLOWED');
+    expect(await codeOf(fetchStoredFile('https://acme-prints.s3.amazonaws.com:8443/a.jpg'))).toBe('HOST_NOT_ALLOWED');
+    delete process.env.S3_BUCKET_NAME;
+    expect(await codeOf(fetchStoredFile('https://packagepro-files.s3.amazonaws.com/a.jpg', { timeoutMs: 200 }))).not.toBe('HOST_NOT_ALLOWED');
   });
   it('plain http, credentials, bad urls and loopback are refused', async () => {
     prod();

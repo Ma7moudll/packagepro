@@ -45,6 +45,14 @@ describe('local /api/files reads on a real filesystem', () => {
     expect(await codeOf(fetchStoredFile('/api/files/designs/link.txt'))).toBe('LOCAL_FILE_NOT_FOUND');
     expect(await codeOf(fetchStoredFile('/api/files/linkdir/secret.txt'))).toBe('LOCAL_FILE_NOT_FOUND');
   });
+  it('a file over the cap is refused through the descriptor path (small cap)', async () => {
+    const { fileUploadService } = await import('./upload.service');
+    const f = path.join(tmp, '.data/uploads/designs/grow.bin');
+    fs.writeFileSync(f, Buffer.alloc(10));
+    expect(await fileUploadService.readLocalFile('designs/grow.bin', { maxBytes: 16 })).not.toBeNull();
+    fs.writeFileSync(f, Buffer.alloc(17));
+    expect(await fileUploadService.readLocalFile('designs/grow.bin', { maxBytes: 16 })).toBeNull();
+  });
   it('enforces the 50MB cap and refuses directories and missing files', async () => {
     expect(await codeOf(fetchStoredFile('/api/files/designs/big.bin'))).toBe('LOCAL_FILE_NOT_FOUND');
     expect(await codeOf(fetchStoredFile('/api/files/designs'))).toBe('LOCAL_FILE_NOT_FOUND');

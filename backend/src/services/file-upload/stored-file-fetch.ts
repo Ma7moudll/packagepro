@@ -4,7 +4,7 @@ import type http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
 import ipaddr from 'ipaddr.js';
-import { fileUploadService } from './upload.service';
+import { fileUploadService, isS3Configured } from './upload.service';
 
 /**
  * Server-side download of a stored design file (print_file, preview).
@@ -13,9 +13,10 @@ import { fileUploadService } from './upload.service';
  *  - /api/files/<key> is read from local storage (realpath contained, size
  *    capped), never over HTTP.
  *  - Anything else must be https on an origin (host AND port) that the
- *    operator configured: CDN_URL, S3_ENDPOINT or STORED_FILE_ALLOWED_HOSTS
- *    ("host" means port 443, "host:port" is exact). Nothing is allowed by
- *    default, so an unconfigured deployment fails closed.
+ *    operator configured: CDN_URL, S3_ENDPOINT, STORED_FILE_ALLOWED_HOSTS, or
+ *    the uploader's own <bucket>.s3.amazonaws.com when S3 credentials are set
+ *    ("host" means port 443, "host:port" is exact). Nothing is allowed
+ *    without configuration, so an unconfigured deployment fails closed.
  *  - The address the socket connects to is validated inside the connection's
  *    own DNS lookup (no second resolution, so no rebinding window). Only
  *    globally routable unicast addresses pass (ipaddr.js range === 'unicast',
@@ -77,6 +78,15 @@ function configuredOrigins(): { allowed: Set<Origin>; privateOk: Origin | null }
   if (cdn) allowed.add(cdn);
   for (const e of (process.env.STORED_FILE_ALLOWED_HOSTS || '').split(',')) {
     const o = parseEntry(e);
+    if (o) allowed.add(o);
+  }
+  // The upload service hands out https://<bucket>.s3.amazonaws.com/<key> when
+  // real S3 credentials are configured and no CDN_URL is set. Mirror exactly
+  // that policy: the derived host is allowed only when S3 is configured, with
+  // the same bucket name the uploader uses. Unconfigured => nothing derived.
+  if (isS3Configured()) {
+    const bucket = process.env.S3_BUCKET_NAME || 'packagepro-files';
+    const o = parseEntry(`${bucket}.s3.amazonaws.com`);
     if (o) allowed.add(o);
   }
   const s3 = process.env.S3_ENDPOINT ? parseEntry(process.env.S3_ENDPOINT) : null;
