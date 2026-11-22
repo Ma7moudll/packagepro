@@ -81,6 +81,14 @@ describe('saved review artifact on real Postgres and private storage',()=>{
     await expect(designService.saveDesign({sessionId:design.sessionId!,designData:fixture,files:[{fileType:REVIEW_FILE_TYPE,fileName:'forged.pdf',fileUrl:'x'}]},ownerId)).rejects.toMatchObject({statusCode:400});
     expect(await prisma.designFile.count({where:{designId:design.id}})).toBe(0);
   });
+  it('dormant generic upload rejects the reserved role before lookup, storage or attachment',async()=>{
+    const lookup=vi.spyOn(designService,'getDesign');
+    const upload=vi.spyOn(fileUploadService,'uploadFile');
+    try {
+      await expect(designService.uploadFile('not-a-real-design',{buffer:Buffer.from('not-a-review'),fileName:'forged.txt',mimeType:'text/plain',fileType:REVIEW_FILE_TYPE})).rejects.toMatchObject({statusCode:400});
+      expect(lookup).not.toHaveBeenCalled();expect(upload).not.toHaveBeenCalled();
+    } finally {lookup.mockRestore();upload.mockRestore();}
+  });
   it('HTTP retrieval needs authentication and returns exact bytes with no-store',async()=>{
     const {design,body,bytes}=await setup();const record=await artworkReviewService.create(design.id,ownerId,body);
     const url=`/api/designs/${design.id}/artwork-reviews/${record.id}`;

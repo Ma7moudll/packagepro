@@ -380,6 +380,7 @@ export class DesignService {
       fileType: string;
     }
   ): Promise<any> {
+    if (file.fileType === 'artwork_review') throw new AppError(400, 'Review artifacts must use the owner-bound review endpoint');
     // Verify design exists
     await this.getDesign(designId);
 

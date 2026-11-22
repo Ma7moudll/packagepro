@@ -15,7 +15,7 @@ The canonical geometry fingerprint is pinned to the existing committed mailer se
 5. Store bytes under the separate `artwork_review` role. Creation is owner-authorized, serialized under the design row lock and idempotent for the snapshot. Store a server-computed byte hash and private storage key.
 6. Retrieve through the authenticated owner endpoint, check current snapshot and stored checksum, and download the exact returned bytes. The design Files page uses the same endpoint after navigation/reload.
 
-The artifact role is deliberately ignored by existing production file consumers. No `print_file`, `dieline`, prepress result, approval token, order status, PO, price or rate is created or changed. Generic save cannot inject the reserved artifact role.
+The artifact role is deliberately ignored by existing production file consumers. No `print_file`, `dieline`, prepress result, approval token, order status, PO, price or rate is created or changed. Generic save and the currently dormant generic upload writer both reject the reserved artifact role before writing files.
 
 ## Storage boundary
 
@@ -26,7 +26,7 @@ The review upload is an owner-supplied review artifact, not server attestation t
 ## Verification
 
 - Backend build passes.
-- Backend full suite after private-boundary follow-up: 54 files, 506 tests passed, none skipped/failed.
+- Backend full suite after private-boundary follow-up: 54 files, 507 tests passed, none skipped/failed.
 - Backend lint: 0 errors and the same 26 existing warnings.
 - Frontend TypeScript passes; 219 frontend unit tests pass.
 - Production frontend compile and static generation pass in separate Next build phases with one build worker. Earlier combined attempts hit memory/time limits. Temporary build-worker settings were restored byte-for-byte and are not part of the patch.
