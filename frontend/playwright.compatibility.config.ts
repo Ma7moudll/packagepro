@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test'
 // production credentials, database, payment provider or external mutation.
 export default defineConfig({
   testDir: './e2e',
-  testMatch: 'fabric-compatibility.spec.ts',
+  testMatch: ['fabric-compatibility.spec.ts', 'mobile-layout.spec.ts'],
   workers: 1,
   timeout: 90_000,
   expect: {timeout: 20_000},
