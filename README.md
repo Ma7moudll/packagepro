@@ -180,7 +180,7 @@ API endpoints are available at `/api`. Main endpoints:
 
 - **Marketplace catalog** — search, categories, verified factories, featured products, sample requests.
 - **Dynamic Pricing Engine** — real-time quoting over materials and specs (`/api/pricing/calculate`).
-- **Custom Design Editor** — design sessions, save/session API, 15 built-in templates (as of this revision; see `frontend/lib/editor/data/templates.ts`).
+- **Custom Design Editor** — design sessions, save/session API. There are 15 starting-point design presets (`frontend/lib/editor/data/templates.ts`). That is separate from the product catalogue (`shared/catalog/products.ts`), which lists 55 product types. Catalogue readiness at this revision is 1 supported, 30 in progress and 24 unavailable, so the catalogue size is not a count of finished or orderable products.
 - **Order lifecycle** — orders → pre-press quality check → soft-proof approval → vendor router (multi-criteria scoring + 4h handshake) → PO (PDF) → production/QA → DHL shipment → settlement (72h) → reviews.
 - **Payments** — Stripe payment intents + webhooks (also PayPal/COD scaffolding).
 - **Security baseline** — JWT (15 min access + 7d refresh), bcrypt cost 12, Redis rate limiting with exponential backoff + reCAPTCHA v3, persistent AuditLog.

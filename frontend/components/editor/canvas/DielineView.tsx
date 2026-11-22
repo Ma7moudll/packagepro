@@ -66,6 +66,9 @@ export function DielineView({
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [zoom, setZoom] = useState(1)
+  // Inside panels share the outside panels' flat coordinates (they are the
+  // reverse side of the same sheet). Only one print side is on top at a time.
+  const [printSide, setPrintSide] = useState<"outside" | "inside">("outside")
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 })
@@ -175,6 +178,17 @@ export function DielineView({
             {language === "ar" ? "القياسات" : "Annotations"}
           </Button>
           <div className="w-px h-6 bg-slate-200 mx-1" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPrintSide((v) => (v === "outside" ? "inside" : "outside"))}
+            data-print-side-toggle={printSide}
+          >
+            {printSide === "outside"
+              ? (language === "ar" ? "الطباعة الخارجية" : "Outside print")
+              : (language === "ar" ? "الطباعة الداخلية" : "Inside print")}
+          </Button>
+          <div className="w-px h-6 bg-slate-200 mx-1" />
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="h-4 w-4 mr-1" />
             {language === "ar" ? "تصدير" : "Export SVG"}
@@ -216,6 +230,8 @@ export function DielineView({
           {Object.entries(geometry.panels).map(([faceId, panel]) => {
             const isFlap = faceId.startsWith("inside_")
             const id = faceId as FaceId
+            // Visible side sits above the other; selection ring stays on top.
+            const onTop = isFlap === (printSide === "inside")
             return (
               <div
                 key={faceId}
@@ -231,11 +247,12 @@ export function DielineView({
                   top: panel.y,
                   width: panel.w,
                   height: panel.h,
-                  backgroundColor: isFlap ? "#e2e8f0" : backgroundColor,
+                  backgroundColor: isFlap && printSide === "outside" ? "#e2e8f0" : backgroundColor,
+                  zIndex: onTop ? (selectedFace === id && !isFlap ? 3 : 2) : 0,
                   borderColor: selectedFace === id ? "#3b82f6" : "#cbd5e1",
                 }}
               >
-                {!isFlap && faceArtwork?.[faceId] && (
+                {faceArtwork?.[faceId] && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={faceArtwork[faceId]}
@@ -245,11 +262,11 @@ export function DielineView({
                     className="absolute inset-0 w-full h-full pointer-events-none select-none"
                   />
                 )}
-                <div className="absolute inset-0 flex items-center justify-center">
+                <div className={faceArtwork?.[faceId] ? "absolute top-0.5 left-0.5 pointer-events-none" : "absolute inset-0 flex items-center justify-center"}>
                   <span
                     className={`
                       text-[9px] font-medium px-1 py-0.5 rounded bg-white/80
-                      ${isFlap ? "text-slate-400" : "text-slate-600"}
+                      ${isFlap ? "text-slate-500" : "text-slate-600"}
                     `}
                   >
                     {FACE_LABEL[id] ?? id}

@@ -13,7 +13,9 @@ test("dieline shows store artwork on outside panels, display only", () => {
 
   const view = read("components/editor/canvas/DielineView.tsx")
   assert.equal(view.includes("data-dieline-artwork"), true)
-  assert.equal(view.includes("!isFlap && faceArtwork?.[faceId]"), true, "inside/flap panels get no artwork")
+  assert.equal(view.includes("faceArtwork?.[faceId]"), true, "inside print is reachable through the print-side toggle")
+  assert.equal(view.includes("data-print-side-toggle"), true)
+  assert.equal(canvas.includes('product?.support === "deferred"'), true, "deferred products never get artwork")
   const exportBlock = /const handleExport = \(\) => \{([\s\S]*?)\n  \}\n/.exec(view)?.[1] ?? ""
   assert.equal(exportBlock.includes("faceArtwork"), false, "SVG export must not include artwork")
 })

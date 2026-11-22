@@ -28,26 +28,23 @@ export function DielineCanvas({ resolution }: DielineCanvasProps) {
   const layers = useDesignStore((s) => s.layers)
   const model = useDesignStore((s) => s.model)
 
-  // Display-only artwork per outside face, rendered from the same layers the
+  // Display-only artwork per face (outside and inside), rendered from the same layers the
   // 3D preview uses. Transparent where nothing is drawn. It is never part of
   // the SVG export and never changes the canonical geometry.
   const [faceArtwork, setFaceArtwork] = useState<Record<string, string>>({})
   useEffect(() => {
+    if (product?.support === "deferred") { setFaceArtwork({}); return }
     let cancelled = false
     const timer = setTimeout(() => {
       generateTextureFromLayers(layers, model, { scale: 2 })
         .then((textures) => {
           if (cancelled) return
-          const outside: Record<string, string> = {}
-          for (const [id, url] of Object.entries(textures)) {
-            if (!id.startsWith("inside_")) outside[id] = url
-          }
-          setFaceArtwork(outside)
+          setFaceArtwork(textures)
         })
         .catch(() => { if (!cancelled) setFaceArtwork({}) })
     }, 150)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [layers, model])
+  }, [layers, model, product?.support])
 
   // M8-J (spec §14): deferred products never render a net — not the canonical
   // DielineView, and not the frozen M7 generic fallback. Show the deferral
