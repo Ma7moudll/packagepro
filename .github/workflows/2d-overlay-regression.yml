@@ -1,0 +1,111 @@
+name: 2D overlay review regression
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - frontend/components/editor/canvas/DesignCanvas2D.tsx
+      - frontend/e2e/fabric-compatibility.spec.ts
+      - .github/workflows/2d-overlay-regression.yml
+
+# Separate, unprivileged verification. No deployment or production environment.
+permissions:
+  contents: read
+
+concurrency:
+  group: 2d-overlay-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  browser-regression:
+    name: Main-based 2D overlay build and browser regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: packagepro
+          POSTGRES_PASSWORD: ci-only-packagepro
+          POSTGRES_DB: packagepro_overlay_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      CI: 'true'
+      DATABASE_URL: postgresql://packagepro:ci-only-packagepro@localhost:5432/packagepro_overlay_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-only-overlay-jwt-not-for-production-0001
+      NEXTAUTH_SECRET: ci-only-overlay-nextauth-not-for-production-0001
+      NEXTAUTH_URL: http://localhost:3001
+      S3_ENDPOINT: http://127.0.0.1:9000
+      S3_ACCESS_KEY_ID: ci-only-overlay-storage
+      S3_SECRET_ACCESS_KEY: ci-only-overlay-storage-placeholder
+      JWT_REFRESH_SECRET: ci-only-overlay-refresh
+      STRIPE_SECRET_KEY: sk_test_ci_overlay_placeholder
+      STRIPE_WEBHOOK_SECRET: whsec_ci_overlay_placeholder
+      STRIPE_PUBLISHABLE_KEY: pk_test_ci_overlay_placeholder
+      DHL_API_KEY: ci-only-placeholder
+      DHL_API_SECRET: ci-only-placeholder
+      EMAIL_PROVIDER: smtp
+      SMTP_HOST: 127.0.0.1
+      SMTP_PORT: '9'
+      SMTP_USER: ci-only-placeholder
+      SMTP_PASS: ci-only-placeholder
+      FRONTEND_URL: http://localhost:3001
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+    steps:
+      - name: Checkout review merge commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Install locked backend dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Generate Prisma client and apply disposable database migrations
+        working-directory: backend
+        run: |
+          npm run prisma:generate
+          npx prisma migrate deploy
+      - name: Install locked frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Install Chromium and browser system dependencies
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      # Existing config builds/starts both apps, with DB/Redis preflight.
+      # No alternate bundler, calendar patch or dependency override is applied.
+      - name: Run the narrow regression against the actual app
+        working-directory: frontend
+        run: npx playwright test e2e/fabric-compatibility.spec.ts --project=chromium
+      - name: Retain browser review evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2d-overlay-browser-review
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          if-no-files-found: warn
+          retention-days: 7
