@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { getRedisClient } from '../../lib/redis';
 import { fileUploadService } from '../../services/file-upload/upload.service';
 import { DesignLifecycleService, DesignLifecycleState } from '../../services/design-lifecycle/design-lifecycle.service';
-import { isDesignOwner, designOwnerMatches } from '../../middleware/auth.middleware';
+import { isDesignOwner } from '../../middleware/auth.middleware';
 import { certifiedDielineReceipt } from './dieline-delivery';
 import { prePressCheckService } from '../../services/pre-press-checker/prepress.service';
 
@@ -46,48 +46,53 @@ export class DesignService {
     const sessionId = randomUUID();
     const redis = getRedisClient();
 
-    // An authenticated user may only attach a design to an order they own,
-    // and may only reuse a design that is theirs. Anything ambiguous fails
-    // closed (and never reveals whether the order exists).
+    // An authenticated user may only attach a design to an order they own.
+    // Order.customerId never changes, so check-then-write is safe for the
+    // order itself. Unknown and foreign orders give the same 403 (no oracle).
     if (data.orderId && ownerId) {
       const order = await prisma.order.findUnique({
         where: { id: data.orderId },
-        select: { customer: { select: { userId: true } }, design: { select: { ownerId: true } } },
+        select: { customer: { select: { userId: true } } },
       });
-      const orderUserId = order?.customer?.userId ?? null;
-      if (!order || orderUserId !== ownerId) {
-        throw new AppError(403, 'You do not have access to this order');
-      }
-      const existingOwner = order.design?.ownerId;
-      if (existingOwner && existingOwner !== ownerId) {
+      if (!order || order.customer?.userId !== ownerId) {
         throw new AppError(403, 'You do not have access to this order');
       }
     }
 
     // Durable database record (owner-scoped). Without an order the design sits
     // in `draft` until it is saved or eventually linked to an order.
-    const design =
-      data.orderId && ownerId
-        ? await prisma.design.upsert({
-            where: { orderId: data.orderId },
-            update: { sessionId, ownerId, updatedAt: new Date() },
-            create: {
-              orderId: data.orderId,
-              ownerId,
-              sessionId,
-              name: data.name,
-              description: data.description,
-            },
-          })
-        : await prisma.design.create({
-            data: {
-              orderId: data.orderId ?? null,
-              ownerId: ownerId ?? null,
-              sessionId,
-              name: data.name,
-              description: data.description,
-            },
-          });
+    let design: any;
+    if (data.orderId && ownerId) {
+      // Order-bound: Design.orderId is unique. Try to create; if one exists,
+      // take over its session ONLY through one guarded UPDATE whose WHERE
+      // clause holds the ownership rule (unowned, or already this user), so
+      // two concurrent callers cannot both pass a stale check.
+      try {
+        design = await prisma.design.create({
+          data: { orderId: data.orderId, ownerId, sessionId, name: data.name, description: data.description },
+        });
+      } catch (error: any) {
+        if (error?.code !== 'P2002') throw error;
+        const claimed = await prisma.design.updateMany({
+          where: { orderId: data.orderId, OR: [{ ownerId: null }, { ownerId }] },
+          data: { sessionId, ownerId, updatedAt: new Date() },
+        });
+        if (claimed.count !== 1) {
+          throw new AppError(403, 'You do not have access to this order');
+        }
+        design = await prisma.design.findUnique({ where: { orderId: data.orderId } });
+      }
+    } else {
+      design = await prisma.design.create({
+        data: {
+          orderId: data.orderId ?? null,
+          ownerId: ownerId ?? null,
+          sessionId,
+          name: data.name,
+          description: data.description,
+        },
+      });
+    }
 
     // Mirror session in Redis (24 hour TTL) for fast lookups
     if (redis) {
@@ -195,24 +200,6 @@ export class DesignService {
     });
 
     if (design) {
-      // Never let a save take over or write into someone else's design, and
-      // never reassign an existing owner.
-      if (ownerId) {
-        const linked = design.orderId
-          ? await prisma.order.findUnique({
-              where: { id: design.orderId },
-              select: { customer: { select: { userId: true } } },
-            })
-          : null;
-        if (
-          (design.ownerId || linked) &&
-          !designOwnerMatches(design.ownerId, linked?.customer?.userId ?? null, ownerId)
-        ) {
-          throw new AppError(403, 'You do not have access to this design');
-        }
-      } else if (design.ownerId) {
-        throw new AppError(403, 'You do not have access to this design');
-      }
       // M8-H: lifecycle save gate — only DRAFT designs are editable. The editor
       // mirrors this via isReadOnly(), but the backend is authoritative: a
       // SUBMITTED/IN_REVIEW/APPROVED session must reject saves (AC4). The client
@@ -225,8 +212,21 @@ export class DesignService {
         );
       }
 
-      design = await prisma.design.update({
-        where: { id: design.id },
+      // Ownership and write happen in ONE guarded UPDATE. The WHERE clause is
+      // the rule, evaluated by the database under the row lock, so concurrent
+      // savers cannot both pass: the first claims an unowned design, the second
+      // matches 0 rows. An existing owner is never reassigned.
+      const ownerGuard: any = ownerId
+        ? {
+            OR: [{ ownerId: null }, { ownerId }],
+            // Order-bound designs must also belong to the caller's order.
+            ...(design.orderId
+              ? { orderId: design.orderId, order: { is: { customer: { is: { userId: ownerId } } } } }
+              : { orderId: null }),
+          }
+        : { ownerId: null };
+      const written = await prisma.design.updateMany({
+        where: { id: design.id, lifecycleStatus: 'DRAFT', ...ownerGuard },
         data: {
           designData: data.designData as any,
           status: 'saved',
@@ -236,9 +236,18 @@ export class DesignService {
           ...(data.sku ? { sku: data.sku } : {}),
           ...(data.designConfig ? { designConfig: data.designConfig as any } : {}),
         },
-        include: { files: true },
       });
+      if (written.count !== 1) {
+        // Distinguish a lost race on state from an ownership refusal.
+        const current = await prisma.design.findUnique({ where: { id: design.id }, select: { lifecycleStatus: true } });
+        if (current && current.lifecycleStatus !== 'DRAFT') {
+          throw new AppError(400, `Cannot save design in ${current.lifecycleStatus} status. Only DRAFT designs can be edited.`);
+        }
+        throw new AppError(403, 'You do not have access to this design');
+      }
+      design = await prisma.design.findUnique({ where: { id: design.id }, include: { files: true } });
     } else {
+      try {
       design = await prisma.design.create({
         data: {
           orderId: session.orderId ?? null,
@@ -255,6 +264,12 @@ export class DesignService {
         },
         include: { files: true },
       });
+      } catch (error: any) {
+        // Two first-saves of the same session raced: the loser must retry
+        // (it then goes through the guarded update), never overwrite.
+        if (error?.code === 'P2002') throw new AppError(409, 'Design session is being saved by another request; retry');
+        throw error;
+      }
     }
 
     // Mirror session in Redis
