@@ -217,7 +217,7 @@ export interface SizePreset {
 
 // Color variant
 export type ColorVariant = 
-  | "one_colour" | "white" | "multicolour_muted" | "multicolour_saturated" | "multicolour_premium"
+  | "none" | "full_colour" | "one_colour" | "white" | "multicolour_muted" | "multicolour_saturated" | "multicolour_premium"
 
 export interface ModelState {
   type: ProductType
