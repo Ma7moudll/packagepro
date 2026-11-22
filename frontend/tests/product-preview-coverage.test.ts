@@ -10,7 +10,7 @@ test('known box families use independent stock and text relief without changing 
  }
 })
 test('unknown and distinct unprepared subtypes never masquerade as mailer boxes',()=>{
- for(const type of ['poly-mailer','poly_mailer_bag','pillow_box','rigid_magnetic_box','cotton_bag','smoothie_cup','business_card','not-real']){
+ for(const type of ['pillow_box','rigid_magnetic_box','cotton_bag','smoothie_cup','not-real']){
   const c=productPreviewCoverage(type)
   assert.equal(c.geometry,'unavailable',type);assert.equal(c.family,undefined,type);assert.equal(c.twoSidedStock,false,type)
  }
@@ -27,7 +27,7 @@ test('every product picker entry has an explicit supported or unavailable route'
 test('cut edges retain no printable face and inside faces are distinct',()=>{
  const source=readFileSync('components/design-editor/models/StockPanel.tsx','utf8')
  assert.match(source,/material=\{\[outside,inside,edge\]\}/)
- assert.match(source,/insideFaceId:`inside_\$\{faceId\}`/)
+ assert.match(source,/insideFaceId:insideFaceId\?\?`inside_\$\{faceId\}`/)
  assert.match(source,/geometry\.dispose/)
 })
 test('shipping top artwork is cropped across two flaps, not repeated as a complete logo',()=>{
@@ -35,4 +35,10 @@ test('shipping top artwork is cropped across two flaps, not repeated as a comple
  const section=s.slice(s.indexOf('export function ShippingBox'),s.indexOf('export function RigidBox'))
  assert.match(section,/uvRect=\{\[0,0,1,\.5\]\}/)
  assert.match(section,/uvRect=\{\[0,\.5,1,1\]\}/)
+})
+test('nonpaper material policy does not pretend film/foil are cardboard liners',()=>{
+ for(const type of ['poly_mailer_bag','bio_poly_mailer_bag','stand_up_pouch','doypack_valve']){
+  const c=productPreviewCoverage(type);assert.equal(c.twoSidedStock,false);assert.equal(c.selectiveTextRelief,true);assert.equal(c.family===undefined,false)
+ }
+ for(const type of ['paper_bag','paper_mailer_bag','cup','tube','envelope','business_card'])assert.equal(productPreviewCoverage(type).twoSidedStock,true)
 })

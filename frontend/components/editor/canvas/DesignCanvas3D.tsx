@@ -3,6 +3,7 @@
 import { BoardStudioEnvironment } from "./BoardStudioEnvironment"
 import { Canvas, useThree, useFrame } from "@react-three/fiber"
 import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react"
+import { productPreviewCoverage } from "@/lib/editor/product-preview-coverage"
 import { getBoxModel, setArtworkLightScale } from "@/components/design-editor/models/BoxModels"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { intersectionFaceId } from "@/lib/editor/geometry/intersection-face"
@@ -330,7 +331,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   // boxes must both fit the frame (previously fixed, which cropped big boxes
   // and swallowed small ones, and an open lid filled the whole view).
   const boostWhite = useMemo(() => {
-    if (model.boardSpecification) return false
+    if (model.boardSpecification || productPreviewCoverage(model.type).family !== "mailer") return false
     const m = (model.material || "").toLowerCase()
     // أبيض مستورد family only; Egyptian white (local / corrugated-white)
     // intentionally stays duller, and kraft is untouched.
@@ -339,7 +340,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
       !m.includes("local") &&
       !m.startsWith("corrugated-white")
     )
-  }, [model.material, model.boardSpecification])
+  }, [model.material, model.boardSpecification, model.type])
 
   // Gated test hooks (editorDebug URL param only): __editorStore handle and a
   // noBoost override for same-build boost on/off comparisons.
@@ -389,7 +390,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         <FaceHighlight selectedFace={selectedFace} />
 
         {/* إضاءة واقعية للكرتون */}
-        {model.boardSpecification && <BoardStudioEnvironment />}
+        {(model.boardSpecification || (productPreviewCoverage(model.type).family && productPreviewCoverage(model.type).family !== "mailer")) && <BoardStudioEnvironment />}
         <ambientLight intensity={0.3} />
 
         {/* إضاءة رئيسية (key light) */}

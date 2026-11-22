@@ -6,6 +6,10 @@ import * as THREE from "three"
 import { LINERS, type BoardSpecification } from "@/lib/editor/material-specification"
 import { MailerConstruction } from "./MailerConstruction"
 import { StockPanel } from "./StockPanel"
+import { PouchShape } from "./PouchProduct"
+import { CupShape, TubeShape } from "./CurvedProducts"
+import { FlatProductShape } from "./FlatProducts"
+import { PaperBagShape, MailerBagShape, EnvelopeShape } from "./SoftProducts"
 import { Html } from "@react-three/drei"
 import { productPreviewCoverage } from "@/lib/editor/product-preview-coverage"
 
@@ -860,13 +864,15 @@ function createProductPaper(colour:string){
 
 /** Shared optical stock and artwork binding. Product geometry remains separate.
  * Requested liner/finish is illustrative and does not certify process suitability. */
-function useProductStock({boardSpecification, material, textures, reliefMasks}: BoxModelProps) {
+function useProductStock({boardSpecification:requestedBoard, material, textures, reliefMasks, type}: BoxModelProps) {
+  // A paperboard liner request must not turn a film/foil product into cardboard.
+  const boardSpecification=productPreviewCoverage(type).twoSidedStock?requestedBoard:undefined
   const legacy = useMemo(() => boardLook(material), [material])
   const exterior = LINERS.find(l => l.id === boardSpecification?.outside)
   const interior = LINERS.find(l => l.id === boardSpecification?.inside)
-  const outsideMap = useMemo(() => createProductPaper(exterior?.colour ?? (legacy.textureTone==="kraft"?"#a8855a":"#e9ecef")), [legacy.textureTone, exterior])
-  const insideMap = useMemo(() => createProductPaper(interior?.colour ?? (legacy.textureTone==="kraft"?"#d9c7a8":"#e9ecef")), [legacy.textureTone, interior])
-  const outside = useMemo(() => new THREE.MeshPhysicalMaterial({map:outsideMap,color:exterior?"#ffffff":legacy.outsideColor,roughness:exterior?.id==="white-imported-gloss"?.12:exterior?.roughness??legacy.roughness,clearcoat:exterior?.id==="white-imported-gloss"?1:0,clearcoatRoughness:.08,metalness:0}), [outsideMap,exterior,legacy])
+  const outsideMap = useMemo(() => createProductPaper(exterior?.colour ?? (material?.includes("kraft")?"#a8855a":"#e9ecef")), [legacy.textureTone, exterior, material])
+  const insideMap = useMemo(() => createProductPaper(interior?.colour ?? (material?.includes("kraft")?"#d9c7a8":"#e9ecef")), [legacy.textureTone, interior, material])
+  const outside = useMemo(() => new THREE.MeshPhysicalMaterial({map:outsideMap,color:exterior?"#ffffff":legacy.outsideColor,roughness:exterior?.id==="white-imported-gloss"?.12:exterior?.roughness??(material?.includes("gloss")?.12:material?.includes("matte")?.85:legacy.roughness),clearcoat:exterior?.id==="white-imported-gloss"||(!exterior&&material?.includes("gloss"))?1:0,clearcoatRoughness:.08,metalness:0}), [outsideMap,exterior,legacy])
   const inside = useMemo(() => new THREE.MeshPhysicalMaterial({map:insideMap,color:interior?"#ffffff":legacy.insideColor,roughness:interior?.id==="white-imported-gloss"?.12:interior?.roughness??.92,clearcoat:interior?.id==="white-imported-gloss"?1:0,clearcoatRoughness:.08,metalness:0}), [insideMap,interior,legacy])
   const edge = useMemo(() => new THREE.MeshStandardMaterial({color:exterior?.id.includes("white")?"#cbbfa9":"#aa8c63",roughness:1}), [exterior])
   return {outside,inside,edge,face:(id:string)=>resolveFaceMaterial(outside,textures,id,null,reliefMasks?.[id],true),inner:(id:string)=>resolveFaceMaterial(inside,textures,`inside_${id}`,null,reliefMasks?.[`inside_${id}`],true)}
@@ -963,214 +969,15 @@ export function PizzaBox(props:BoxModelProps){
  </group>
 }
 
-// ============================================
-// PAPER CUP
-// ============================================
-export function PaperCup({
-  dimensions,
-  backgroundColor,
-  material: materialType
-}: BoxModelProps) {
-  
-
-  const topR = dimensions.width / 200
-  const bottomR = dimensions.length / 250
-  const h = dimensions.height / 100
-
-  const isKraft = materialType?.includes("kraft")
-  const cupColor = isKraft ? "#8B7355" : "#FFFFFF"
-
-  return (
-    <group>
-      <mesh position={[0, h / 2, 0]} castShadow>
-        <cylinderGeometry args={[topR, bottomR, h, 48, 1, true]} />
-        <meshStandardMaterial color={cupColor} roughness={0.7} side={THREE.DoubleSide} />
-      </mesh>
-
-      {/* Bottom */}
-      <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[bottomR, 48]} />
-        <meshStandardMaterial color={cupColor} roughness={0.7} />
-      </mesh>
-
-      {/* Rim */}
-      <mesh position={[0, h, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[topR, 0.006, 12, 48]} />
-        <meshStandardMaterial color={cupColor} roughness={0.5} />
-      </mesh>
-    </group>
-  )
-}
-
-// ============================================
-// CARRIER BAG
-// ============================================
-export function CarrierBag({
-  dimensions,
-  backgroundColor,
-  material: materialType
-}: BoxModelProps) {
-  
-
-  const l = dimensions.length / 100
-  const w = dimensions.width / 100
-  const h = dimensions.height / 100
-
-  const isKraft = materialType?.includes("kraft")
-  const bagColor = isKraft ? "#8B7355" : "#FFFFFF"
-
-  return (
-    <group>
-      <mesh position={[0, h / 2, 0]} castShadow>
-        <boxGeometry args={[l, h, w * 0.15]} />
-        <meshStandardMaterial color={bagColor} roughness={0.85} />
-      </mesh>
-
-      {/* Handles */}
-      {[-1, 1].map((side) => (
-        <mesh key={side} position={[side * l * 0.25, h + l * 0.08, 0]}>
-          <torusGeometry args={[l * 0.1, 0.006, 8, 24, Math.PI]} />
-          <meshStandardMaterial color={bagColor} roughness={0.9} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-// ============================================
-// STAND UP POUCH
-// ============================================
-export function StandUpPouch({
-  dimensions,
-  backgroundColor,
-  material: materialType
-}: BoxModelProps) {
-  
-
-  const l = dimensions.length / 100
-  const h = dimensions.height / 100
-
-  const pouchColor = materialType?.includes("kraft") ? "#8B7355" : "#FFFFFF"
-
-  return (
-    <group>
-      <mesh position={[0, h / 2, 0]} castShadow>
-        <boxGeometry args={[l * 0.9, h, 0.025]} />
-        <meshStandardMaterial color={pouchColor} roughness={0.4} metalness={0.1} />
-      </mesh>
-
-      {/* Bottom gusset */}
-      <mesh position={[0, 0.015, 0]} rotation={[Math.PI / 8, 0, 0]} castShadow>
-        <boxGeometry args={[l * 0.85, 0.02, 0.04]} />
-        <meshStandardMaterial color={pouchColor} roughness={0.4} />
-      </mesh>
-
-      {/* Zipper */}
-      <mesh position={[0, h - 0.015, 0]}>
-        <boxGeometry args={[l * 0.85, 0.012, 0.03]} />
-        <meshStandardMaterial color="#444444" roughness={0.3} metalness={0.6} />
-      </mesh>
-    </group>
-  )
-}
-
-// ============================================
-// TUBE
-// ============================================
-export function Tube({
-  dimensions,
-  backgroundColor,
-  material: materialType
-}: BoxModelProps) {
-  
-
-  const r = dimensions.width / 200
-  const h = dimensions.height / 100
-
-  const tubeColor = materialType?.includes("kraft") ? "#8B7355" : "#F5F5F5"
-
-  return (
-    <group>
-      <mesh position={[0, h / 2, 0]} castShadow>
-        <cylinderGeometry args={[r, r, h, 48]} />
-        <meshStandardMaterial color={tubeColor} roughness={0.8} />
-      </mesh>
-
-      {/* Metal cap */}
-      <mesh position={[0, h + 0.008, 0]}>
-        <cylinderGeometry args={[r * 1.05, r * 1.05, 0.02, 48]} />
-        <meshStandardMaterial color="#B8B8B8" roughness={0.2} metalness={0.8} />
-      </mesh>
-
-      {/* Bottom */}
-      <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[r, 48]} />
-        <meshStandardMaterial color={tubeColor} roughness={0.8} />
-      </mesh>
-    </group>
-  )
-}
-
-// ============================================
-// ENVELOPE
-// ============================================
-export function Envelope({
-  dimensions,
-  backgroundColor,
-  material: materialType
-}: BoxModelProps) {
-  
-
-  const l = dimensions.length / 100
-  const h = dimensions.height / 100
-
-  const envColor = materialType?.includes("kraft") ? "#8B7355" : "#F8F8F8"
-
-  return (
-    <group>
-      <mesh castShadow>
-        <boxGeometry args={[l, h * 0.7, 0.006]} />
-        <meshStandardMaterial color={envColor} roughness={0.85} />
-      </mesh>
-
-      {/* Flap */}
-      <mesh position={[0, h * 0.35, -0.004]} rotation={[Math.PI / 7, 0, 0]} castShadow>
-        <boxGeometry args={[l, h * 0.28, 0.004]} />
-        <meshStandardMaterial color={envColor} roughness={0.85} />
-      </mesh>
-    </group>
-  )
-}
-
-// ============================================
-// LABEL — flat rectangular die-cut label
-// ============================================
-export function Label({
-  dimensions,
-  textures,
-  backgroundColor,
-  material: materialType
-}: BoxModelProps) {
-  
-
-  const l = dimensions.length / 100
-  const h = dimensions.height / 100
-  const baseColor = materialType?.includes("kraft") ? "#D4B896" : "#F8F8F8"
-  const baseMat = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.8 }),
-    [baseColor]
-  )
-  const faceMat = resolveFaceMaterial(baseMat, textures, "front")
-
-  return (
-    <group>
-      <mesh castShadow userData={{ faceId: "front" }}>
-        <boxGeometry args={[l, h, 0.003]} />
-        <primitive object={faceMat} attach="material" />
-      </mesh>
-    </group>
-  )
-}
+// Product-shaped previews use shared optics, never shared box geometry.
+export function PaperCup(props:BoxModelProps){const stock=useProductStock(props);return <CupShape {...props} stock={stock}/>}
+export function CarrierBag(props:BoxModelProps){const stock=useProductStock(props);return <PaperBagShape {...props} stock={stock}/>}
+export function Tube(props:BoxModelProps){const stock=useProductStock(props);return <TubeShape {...props} stock={stock}/>}
+export function Envelope(props:BoxModelProps){const stock=useProductStock(props);return <EnvelopeShape {...props} stock={stock}/>}
+export function Label(props:BoxModelProps){const stock=useProductStock(props);return <FlatProductShape {...props} stock={stock}/>}
+export function MailerBag(props:BoxModelProps){const stock=useProductStock(props);return <MailerBagShape {...props} stock={stock}/>}
+// Pouch-specific sealed/gusset construction is not prepared yet.
+export function StandUpPouch(props:BoxModelProps){const stock=useProductStock(props);return <PouchShape {...props} stock={stock}/>}
 
 // ============================================
 // MODEL FACTORY
@@ -1188,10 +995,13 @@ export function getBoxModel(type: string) {
   case "pizza":return PizzaBox
   case "cup":return PaperCup
   case "bag":return CarrierBag
+
   case "pouch":return StandUpPouch
   case "tube":return Tube
   case "envelope":return Envelope
   case "label":return Label
+  case "flat":return Label
+  case "mailer-bag":return MailerBag
   default:return UnsupportedProductPreview
  }
 }

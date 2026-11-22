@@ -13,9 +13,9 @@ export interface ProductShapeProps {
 
 /** Generic flat stock panel. Geometry is a preview, never a production dieline.
  * +Z outside, -Z inside. Cut edges cannot receive ink or face selection. */
-export function StockPanel({width,height,thickness,outside,inside,edge,faceId,position=[0,0,0],rotation=[0,0,0],uvRect=[0,0,1,1]}:{
+export function StockPanel({width,height,thickness,outside,inside,edge,faceId,insideFaceId,position=[0,0,0],rotation=[0,0,0],uvRect=[0,0,1,1]}:{
  width:number;height:number;thickness:number;outside:THREE.Material;inside:THREE.Material;edge:THREE.Material;
- faceId?:string;position?:[number,number,number];rotation?:[number,number,number];uvRect?:[number,number,number,number]
+ faceId?:string;insideFaceId?:string;position?:[number,number,number];rotation?:[number,number,number];uvRect?:[number,number,number,number]
 }){
  const [u0,v0,u1,v1]=uvRect
  const geometry=useMemo(()=>{
@@ -26,5 +26,5 @@ export function StockPanel({width,height,thickness,outside,inside,edge,faceId,po
   return g
  },[width,height,thickness,u0,v0,u1,v1])
  useEffect(()=>()=>geometry.dispose(),[geometry])
- return <mesh geometry={geometry} material={[outside,inside,edge]} position={position} rotation={rotation} castShadow receiveShadow userData={faceId?{faceId,insideFaceId:`inside_${faceId}`}:{}}/>
+ return <mesh geometry={geometry} material={[outside,inside,edge]} position={position} rotation={rotation} castShadow receiveShadow userData={faceId?{faceId,insideFaceId:insideFaceId??`inside_${faceId}`}:{}}/>
 }

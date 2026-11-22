@@ -8,10 +8,12 @@ import { productPreviewCoverage } from "@/lib/editor/product-preview-coverage"
 export function BoardSpecificationPanel({arabic}:{arabic:boolean}) {
  const model=useDesignStore(s=>s.model),apply=useDesignStore(s=>s.applyCoreState)
  const spec=model.boardSpecification
+ const paperPreview=productPreviewCoverage(model.type).twoSidedStock
  const write=(next:BoardSpecification)=>{
   const selectedLayerIds=useDesignStore.getState().selectedLayerIds
   apply(s=>({...s,selectedLayerIds,model:{...s.model,boardSpecification:next}}))
  }
+ if(!paperPreview)return <div role="status" className="border-t pt-3 text-[11px] text-amber-800">{arabic?"خامة هذا المنتج ليست بطانة كرتون. تحفظ المواصفات السابقة إن وجدت، ولا تطبق ألوان الكرتون على معاينة الفيلم أو الرقائق. مواصفات الطباعة والتشطيب تحتاج تأكيدا حسب المنتج.":"This product does not use the paperboard liner preview. Existing specifications are retained, but board colours are not applied to film or foil. Product-specific print and finish specifications need confirmation."}</div>
  if(!spec)return <div className="border-t pt-3 space-y-2"><Button variant="outline" size="sm" className="w-full text-xs" onClick={()=>write(initialBoardSpecification(model.material))}>{arabic?"تخصيص الخامة من الداخل والخارج":"Configure inside and outside stock"}</Button><p className="text-[10px] text-slate-500">{arabic?"مواصفات تصنيع مستقلة، تحتاج عرض سعر قبل الطلب.":"Independent manufacturing specification. A quote is required before ordering."}</p></div>
  return <fieldset className="border-t pt-3 space-y-3" aria-label={arabic?"مواصفات الخامة والطباعة":"Stock and printing specification"}>
   {!productPreviewCoverage(model.type).twoSidedStock&&<p role="status" className="text-[10px] text-amber-800">{arabic?"المعاينة المستقلة للخامة غير مجهزة لهذا المنتج حاليا؛ تحفظ المواصفات بدون معاينة مطابقة.":"Independent stock preview is not prepared for this product yet. The specification is saved without a matching preview."}</p>}
