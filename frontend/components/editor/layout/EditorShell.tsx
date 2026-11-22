@@ -1,6 +1,6 @@
 "use client"
 
-import { ReactNode } from "react"
+import { ReactNode, useState } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { EditorHeader } from "./EditorHeader"
 import { EditorLeftSidebar } from "./EditorLeftSidebar"
@@ -10,18 +10,20 @@ import { useKeyboardShortcuts } from "@/lib/editor/hooks/useKeyboardShortcuts"
 
 interface EditorShellProps {
   headerExtra?: ReactNode
+  onSessionSaved?: (sessionId:string)=>void
   center: ReactNode
 }
 
-export function EditorShell({ headerExtra, center }: EditorShellProps) {
+export function EditorShell({ headerExtra, center, onSessionSaved }: EditorShellProps) {
   const leftSidebarOpen = useDesignStore((s) => s.ui.leftSidebarOpen)
   const rightSidebarOpen = useDesignStore((s) => s.ui.rightSidebarOpen)
 
+  const [cartOpen, setCartOpen] = useState(false)
   useKeyboardShortcuts()
 
   return (
     <div className="h-screen flex flex-col bg-slate-50">
-      <EditorHeader extra={headerExtra} />
+      <EditorHeader extra={headerExtra} onSessionSaved={onSessionSaved} cartOpen={cartOpen} onCartOpenChange={setCartOpen} />
 
       <div className="flex-1 flex overflow-hidden relative">
         {/* Left: persistent icon rail (w-14); panel widens it when open */}
@@ -52,7 +54,7 @@ export function EditorShell({ headerExtra, center }: EditorShellProps) {
           }`}
         >
           <div className="w-full h-full bg-white overflow-y-auto">
-            <EditorRightSidebar />
+            <EditorRightSidebar onContinue={() => setCartOpen(true)} />
           </div>
         </div>
 
