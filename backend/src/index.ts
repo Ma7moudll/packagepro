@@ -5,7 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { connectRedis, isRedisEnabled, getRedisClient } from './lib/redis';
 import { logger } from './utils/logger';
 import { AppError } from './utils/errors';
-import { startWorkers } from './workers';
+import { startWorkers, getBackgroundWorkerStatus } from './workers';
 
 import rawBody from 'fastify-raw-body';
 
@@ -195,7 +195,7 @@ server.get('/health', async () => {
     // Additive: Redis is optional for boot, but background work (email,
     // settlement, reminder, marketing and export queues) only runs with it.
     redis: redisReady ? 'ready' : 'unavailable',
-    backgroundWorkers: redisReady ? 'running_or_starting' : 'disabled',
+    backgroundWorkers: getBackgroundWorkerStatus(),
   };
 });
 
