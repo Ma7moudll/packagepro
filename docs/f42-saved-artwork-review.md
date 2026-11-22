@@ -26,7 +26,7 @@ The review upload is an owner-supplied review artifact, not server attestation t
 ## Verification
 
 - Backend build passes.
-- Backend full suite after private-boundary follow-up: 54 files, 507 tests passed, none skipped/failed.
+- Backend full suite after private-boundary follow-up: 55 files, 508 tests passed, none skipped/failed.
 - Backend lint: 0 errors and the same 26 existing warnings.
 - Frontend TypeScript passes; 219 frontend unit tests pass.
 - Production frontend compile and static generation pass in separate Next build phases with one build worker. Earlier combined attempts hit memory/time limits. Temporary build-worker settings were restored byte-for-byte and are not part of the patch.
@@ -55,3 +55,7 @@ Text is browser-font-rendered using the tested font subset. Font readiness does 
 - Production bleed, inside/both-side registration, other presets/custom dimensions, broad layer effects/fonts, color management/spot separations, finishing and supplier-approved manufacture.
 
 These are not repaired or certified by this slice. Camera/selection fields are excluded from the content fingerprint; saved canvas layout state is conservatively included, so a changed canvas extent can require a new review even without artwork changes.
+
+## Review CI packaging recovery
+
+The first PR38 hosted run passed backend, frontend, dependency audit and security jobs, but its frontend Docker image build failed because the browser review module imports the pure backend contract and that file was absent from the frontend Docker build stage. The contained fix copies only that contract file into the build stage, with a regression checking the import-to-image path and the contract remaining dependency-free. No workflow permissions/checks or deployment behavior were changed. Docker is unavailable in the local environment; the hosted Docker rebuild is the decisive packaging verification.
