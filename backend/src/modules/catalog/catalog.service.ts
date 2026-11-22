@@ -246,6 +246,12 @@ export class CatalogService {
     const toMm = (v: number | undefined | null) =>
       typeof v === 'number' ? (sizeUnit === 'cm' ? Math.round(v * 10 * 10) / 10 : v) : 0;
 
+    // Original non-box variants store flat width/height/depth in L/W/H.
+    // Adapt their editor axes only. Stored variant dimensions and legacy rates
+    // stay untouched, including the quote above on their original dimensions.
+    const legacyFlatAxes=['prod-paper-bag','prod-poly-mailer','prod-sticker-label'].includes(product.id);
+    const editorDims={length:toMm(dims.length),width:toMm(legacyFlatAxes?dims.height:dims.width),height:toMm(legacyFlatAxes?dims.width:dims.height),unit:'mm'};
+
     // M7: The ProductStructure lives as a nested `structure` key inside
     // editorDefaults. Fall back to the whole blob for resilience.
     // M8-B: the canonical packaging blueprint (schemaVersion, unit, dieline,
@@ -287,12 +293,7 @@ export class CatalogService {
         printMode: String(variant.printMode),
         printSides: variant.printSides === 'inside_outside' ? 2 : 1,
         finish: variant.finish ?? 'none',
-        dimensions: {
-          length: toMm(dims.length),
-          width: toMm(dims.width),
-          height: toMm(dims.height),
-          unit: 'mm',
-        },
+        dimensions: editorDims,
       },
       material: {
         code: materialCode,

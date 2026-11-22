@@ -18,13 +18,13 @@ import {
   UIState,
 } from "./types"
 import {productConfiguration} from "../product-configuration"
-import {CATALOGUE_CANDIDATE_MATERIALS,getCatalogueProduct} from "../../../../shared/catalog/products"
+import {CATALOGUE_CANDIDATE_MATERIALS,getCatalogueProduct,canonicalEditorType} from "../../../../shared/catalog/products"
 import type { DielineBlueprint } from "../../../../shared/types/index.ts"
 
 /** Minimal shape of EditorConfig consumed by the store (avoids circular import). */
 export interface EditorConfigLike {
   product: {
-    id: string; slug: string; name: string; type: string; boxType?: string
+    id: string; slug: string; name: string; type: string; boxType?: string; editorType?:string
     structure?: {
       type?: string
       boxType?: string
@@ -426,7 +426,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
       const faces = (config.variant.printSides >= 2 ? [...outsideFaces, ...insideFaces] : outsideFaces)
 
       // Canvas sized for the front face (length × height) via the canonical factor
-      const rawType = (config.product.boxType || config.product.type || "mailer_box").replace(/-/g, "_")
+      const rawType = canonicalEditorType(config.product.editorType || config.product.boxType || config.product.type || "mailer_box")
       const modelType = rawType as ModelState["type"]
       const canvas: CanvasState = {
         width: mmToPx(length),

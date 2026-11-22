@@ -25,7 +25,7 @@ import {
   Undo2,
 } from "lucide-react"
 import { COLOR_VARIANTS, FINISHING_OPTIONS, LAMINATION_OPTIONS, MATERIAL_TYPES, getProductById } from "@/lib/editor/data/products-data"
-import {CATALOGUE_PRODUCTS,CATALOGUE_CATEGORIES,CATALOGUE_CANDIDATE_MATERIALS} from "../../../../shared/catalog/products"
+import {CATALOGUE_PRODUCTS,CATALOGUE_CATEGORIES,CATALOGUE_CANDIDATE_MATERIALS,canonicalEditorType} from "../../../../shared/catalog/products"
 import {catalogApi} from "@/lib/api/catalog"
 import {productConfiguration,productDimensionChange,materialCandidateLabel} from "@/lib/editor/product-configuration"
 import {editorRequiresQuote} from "@/lib/editor/quote-policy"
@@ -121,9 +121,10 @@ export function EditorRightSidebar() {
     }
   }, [customQuote, model.type, model.material, model.dimensions.length, model.dimensions.width, model.dimensions.height, model.quantity])
 
-  const currentProduct = getProductById(model.type)
-  const currentCatalogue=CATALOGUE_PRODUCTS.find(p=>p.id===model.type)
-  const candidates=CATALOGUE_CANDIDATE_MATERIALS[model.type]??[]
+  const canonicalType=canonicalEditorType(model.type)
+  const currentProduct = getProductById(canonicalType as any)
+  const currentCatalogue=CATALOGUE_PRODUCTS.find(p=>p.id===canonicalType)
+  const candidates=CATALOGUE_CANDIDATE_MATERIALS[canonicalType]??[]
   const configuration=productConfiguration(model.type,candidates)
   const filteredProducts=CATALOGUE_PRODUCTS.filter(p=>productCategory==="all"||p.category===productCategory)
   const changeProduct=async(id:string)=>{
@@ -415,16 +416,16 @@ export function EditorRightSidebar() {
                     </div>
 
             <Select
-              value={model.type}
+              value={canonicalType}
               disabled={productLoading}
               onValueChange={changeProduct}
             >
-              <SelectTrigger className="h-9 text-xs">
+              <SelectTrigger aria-label="Product type" className="h-9 text-xs min-w-0 overflow-hidden">
                 <SelectValue>
                   {currentProduct && (
-                    <span className="flex items-center gap-2">
+                    <span className="flex min-w-0 items-center gap-2">
                       <span>{currentProduct.icon}</span>
-                      {language === "ar" ? (currentCatalogue?.name.ar??currentProduct.name.ar) : (currentCatalogue?.name.en??currentProduct.name.en)}
+                      <span className="truncate">{language === "ar" ? (currentCatalogue?.name.ar??currentProduct.name.ar) : (currentCatalogue?.name.en??currentProduct.name.en)}</span>
                     </span>
                   )}
                 </SelectValue>
@@ -732,8 +733,8 @@ export function EditorRightSidebar() {
             )}
           </div>
         </div>
-        <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white h-10">
-          {language === "ar" ? "متابعة الطلب" : "Continue"} →
+        <Button disabled={customQuote} className="w-full bg-slate-900 hover:bg-slate-800 text-white h-10">
+          {customQuote?(language === "ar" ? "يتطلب عرض سعر" : "Quote required"):(language === "ar" ? "متابعة الطلب" : "Continue")}
         </Button>
       </div>
     </aside>

@@ -105,6 +105,15 @@ describe('unified catalogue — 55 products, honest readiness', () => {
     }
   });
 
+  it('adapts legacy non-box axes without modifying the stored variants',async()=>{
+    for(const slug of ['custom-paper-bag','custom-poly-mailer','custom-label-sticker']){
+      const cfg=await catalogService.getEditorConfig(slug,100);
+      const row=await prisma.productVariant.findUnique({where:{id:cfg.variant.id}});
+      const d=row!.dimensions as any;
+      expect(cfg.variant.dimensions).toEqual({length:d.length*10,width:d.height*10,height:d.width*10,unit:'mm'});
+    }
+  });
+
   it('exposes the full classification through the catalog list endpoint', async () => {
     const categories = await catalogService.listCategories();
     expect(categories.map((c) => c.slug)).toEqual(

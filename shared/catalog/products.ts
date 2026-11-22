@@ -832,3 +832,9 @@ export function getCatalogueProductByBoxType(boxType: string): CatalogueProduct 
 
 /** Expected picker count; guards against silently dropped entries. */
 export const CATALOGUE_PRODUCT_COUNT = 55
+
+/** Stable aliases used by the original non-box editor configurations. */
+export function canonicalEditorType(type:string){
+ const id=type.replace(/-/g,'_')
+ return ({poly_mailer:'poly_mailer_bag',label:'rectangle_label',bag:'paper_bag'} as Record<string,string>)[id]??id
+}

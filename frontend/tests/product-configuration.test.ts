@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {CATALOGUE_PRODUCTS,CATALOGUE_CANDIDATE_MATERIALS} from '../../shared/catalog/products.ts'
+import {CATALOGUE_PRODUCTS,CATALOGUE_CANDIDATE_MATERIALS,canonicalEditorType} from '../../shared/catalog/products.ts'
 import {productConfiguration,productDimensionChange} from '../lib/editor/product-configuration.ts'
 import {editorRequiresQuote} from '../lib/editor/quote-policy.ts'
 test('all 55 products have exact product-listed candidate material codes, not supplier approval',()=>{
@@ -25,4 +25,8 @@ test('all 47 new products are quote-only in every editor pricing surface',()=>{
  let q=0;for(const p of CATALOGUE_PRODUCTS){const required=editorRequiresQuote({model:{type:p.id},layers:[]});assert.equal(required,p.readiness.pricing==='quote_required',p.id);if(required)q++}assert.equal(q,47)
  assert.equal(editorRequiresQuote({model:{type:'paper_bag',materialSpecification:{code:'paper-white'}},layers:[]}),true)
  assert.equal(editorRequiresQuote({model:{type:'not-real'},layers:[]}),true)
+})
+
+test('legacy non-box aliases resolve to canonical product identities',()=>{
+ assert.equal(canonicalEditorType('poly-mailer'),'poly_mailer_bag');assert.equal(canonicalEditorType('label'),'rectangle_label');assert.equal(canonicalEditorType('bag'),'paper_bag');assert.equal(canonicalEditorType('shipping-box'),'shipping_box')
 })
