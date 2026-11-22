@@ -1,7 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {CATALOGUE_PRODUCTS,CATALOGUE_CANDIDATE_MATERIALS,canonicalEditorType} from '../../shared/catalog/products.ts'
-import {productConfiguration,productDimensionChange} from '../lib/editor/product-configuration.ts'
+import {productConfiguration,productDimensionChange,requestProductMaterial,materialCandidateLabel,readinessLabel} from '../lib/editor/product-configuration.ts'
 import {editorRequiresQuote} from '../lib/editor/quote-policy.ts'
 test('all 55 products have exact product-listed candidate material codes, not supplier approval',()=>{
  for(const p of CATALOGUE_PRODUCTS){const codes=CATALOGUE_CANDIDATE_MATERIALS[p.id];assert.ok(codes.length,p.id);assert.deepEqual(productConfiguration(p.id,codes).materials,codes);assert.equal(productConfiguration(p.id,codes).supplierConfirmed,false)}
@@ -29,4 +29,13 @@ test('all 47 new products are quote-only in every editor pricing surface',()=>{
 
 test('legacy non-box aliases resolve to canonical product identities',()=>{
  assert.equal(canonicalEditorType('poly-mailer'),'poly_mailer_bag');assert.equal(canonicalEditorType('label'),'rectangle_label');assert.equal(canonicalEditorType('bag'),'paper_bag');assert.equal(canonicalEditorType('shipping-box'),'shipping_box')
+})
+
+test('native stock change keeps model request and config aligned atomically',()=>{
+ const core:any={model:{type:'poly_mailer',material:'poly-white',boardSpecification:{}},productConfig:{selectedMaterial:'poly-white',variantId:'original-variant'}}
+ const next=requestProductMaterial(core,'poly-black',['poly-white','poly-black']);assert.equal(next.model.material,'poly-black');assert.equal(next.productConfig?.selectedMaterial,'poly-black');assert.equal(next.productConfig?.variantId,'original-variant');assert.equal(next.model.materialSpecification?.productType,'poly_mailer_bag');assert.equal(next.model.boardSpecification,undefined);assert.equal(requestProductMaterial(core,'cardboard-kraft',['poly-white']),core)
+})
+test('Arabic candidates and readiness labels do not expose internal status codes',()=>{
+ for(const code of new Set(Object.values(CATALOGUE_CANDIDATE_MATERIALS).flat()))assert.match(materialCandidateLabel(code,'ar'),/[\u0600-\u06ff]/,code)
+ assert.equal(readinessLabel('in_progress','en'),'Under review');assert.equal(readinessLabel('quote_required','ar'),'يتطلب عرض سعر')
 })

@@ -1,3 +1,5 @@
+import type {DesignCoreState} from './state/types.ts'
+import {canonicalEditorType} from '../../../shared/catalog/products.ts'
 import {productPreviewCoverage} from './product-preview-coverage.ts'
 
 /** Product-listed candidates are requests, not supplier-certified materials. */
@@ -20,4 +22,21 @@ export function productDimensionChange(type:string,current:{length:number;width:
  if(c.normalized==='circle-label'&&key==='length')next.height=next.length
  return next
 }
-export function materialCandidateLabel(code:string){return code.replace(/-/g,' ')}
+const MATERIAL_AR:Record<string,string>={
+ 'cardboard-kraft':'كرتون كرافت','cardboard-white':'كرتون أبيض','cardboard-coated':'كرتون مطلي','corrugated-kraft':'كرتون مموج كرافت','corrugated-white':'كرتون مموج أبيض',
+ 'paper-kraft':'ورق كرافت','paper-white':'ورق أبيض','cotton-natural':'قطن طبيعي','cotton-white':'قطن أبيض','mesh-recycled':'نسيج شبكي معاد التدوير','muslin-natural':'قماش موسلين طبيعي',
+ 'poly-white':'بولي أبيض','poly-black':'بولي أسود','bio-poly':'بولي حيوي','plastic-frosted':'بلاستيك نصف شفاف','foil-matte':'فيلم تغليف مطفي','foil-glossy':'فيلم تغليف لامع','kraft-lined':'كرافت مبطن',
+ 'compostable':'خامة مقترحة للتحلل العضوي','recyclable-mono':'خامة أحادية مقترحة لإعادة التدوير','paper-coated-white':'ورق أبيض مطلي','plastic-clear':'بلاستيك شفاف','tissue-white':'ورق تغليف خفيف أبيض',
+ 'kraft-paper':'ورق كرافت','newsprint':'ورق جرائد','paper-tape-kraft':'شريط ورقي كرافت','plastic-tape-clear':'شريط بلاستيك شفاف','kraft-tape':'شريط كرافت','label-paper':'ورق ملصقات','label-vinyl':'فينيل ملصقات',
+ 'card-stock-white':'ورق كروت أبيض','card-stock-kraft':'ورق كروت كرافت','satin-ribbon':'شريط ساتان','grosgrain-ribbon':'شريط جروسجرين','rubber-stamp':'مطاط أختام',
+}
+export function materialCandidateLabel(code:string,language='en'){return language==='ar'?(MATERIAL_AR[code]??code.replace(/-/g,' ')):code.replace(/-/g,' ')}
+export function readinessLabel(status:string,language='en'){
+ const labels:Record<string,[string,string]>={supported:['Available','متاح'],in_progress:['Under review','قيد المراجعة'],unavailable:['Unavailable','غير متاح'],deferred:['Not ready','غير جاهز'],estimated:['Estimate only','تقديري فقط'],quote_required:['Quote required','يتطلب عرض سعر']}
+ const l=labels[status];return l?l[language==='ar'?1:0]:status
+}
+/** One undo step keeps visual stock, requested stock and selected config in sync. */
+export function requestProductMaterial(core:DesignCoreState,code:string,candidates:readonly string[]):DesignCoreState{
+ if(!candidates.includes(code))return core
+ return {...core,model:{...core.model,material:code,boardSpecification:undefined,materialSpecification:{version:1,productType:canonicalEditorType(core.model.type),code,status:'requested',supplierConfirmed:false}},productConfig:core.productConfig?{...core.productConfig,selectedMaterial:code}:undefined}
+}

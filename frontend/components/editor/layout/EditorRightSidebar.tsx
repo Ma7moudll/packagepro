@@ -27,7 +27,7 @@ import {
 import { COLOR_VARIANTS, FINISHING_OPTIONS, LAMINATION_OPTIONS, MATERIAL_TYPES, getProductById } from "@/lib/editor/data/products-data"
 import {CATALOGUE_PRODUCTS,CATALOGUE_CATEGORIES,CATALOGUE_CANDIDATE_MATERIALS,canonicalEditorType} from "../../../../shared/catalog/products"
 import {catalogApi} from "@/lib/api/catalog"
-import {productConfiguration,productDimensionChange,materialCandidateLabel} from "@/lib/editor/product-configuration"
+import {productConfiguration,productDimensionChange,materialCandidateLabel,readinessLabel,requestProductMaterial} from "@/lib/editor/product-configuration"
 import {editorRequiresQuote} from "@/lib/editor/quote-policy"
 import { useLanguage } from "@/providers/language-provider"
 import { ValidationPanel } from "@/components/editor/panels/ValidationPanel"
@@ -443,7 +443,7 @@ export function EditorRightSidebar() {
                       </Select>
             {productLoading&&<p role="status" className="text-xs">{language==='ar'?'تحميل إعدادات المنتج...':'Loading product settings...'}</p>}
             {productError&&<p role="alert" className="text-xs text-red-700">{productError}</p>}
-            {currentCatalogue&&<p className="text-[10px] text-slate-600">{language==='ar'?'المعاينة':'Preview'}: {currentCatalogue.readiness.preview} · {language==='ar'?'مخطط الإنتاج':'Production dieline'}: {currentCatalogue.readiness.dieline} · {language==='ar'?'التسعير':'Pricing'}: {currentCatalogue.readiness.pricing}</p>}
+            {currentCatalogue&&<p className="text-[10px] text-slate-600">{language==='ar'?'المعاينة':'Preview'}: {readinessLabel(currentCatalogue.readiness.preview,language)} · {language==='ar'?'مخطط الإنتاج':'Production dieline'}: {readinessLabel(currentCatalogue.readiness.dieline,language)} · {language==='ar'?'التسعير':'Pricing'}: {readinessLabel(currentCatalogue.readiness.pricing,language)}</p>}
           </AccordionContent>
         </AccordionItem>
 
@@ -462,9 +462,9 @@ export function EditorRightSidebar() {
             <BoardSpecificationPanel arabic={language === "ar"} />
             {!configuration.boardStock&&<div className="space-y-2">
              <Label htmlFor="product-material-candidate" className="text-[11px]">{language==='ar'?'الخامة المقترحة لهذا المنتج':'Candidate material for this product'}</Label>
-             <select id="product-material-candidate" className="w-full border rounded-md p-2 text-xs" value={candidates.includes(model.material)?model.material:''} onChange={e=>{const code=e.target.value;if(!candidates.includes(code))return;applyCoreState(core=>({...core,model:{...core.model,material:code,boardSpecification:undefined,materialSpecification:{version:1,productType:model.type,code,status:'requested',supplierConfirmed:false}}}))}}>
+             <select id="product-material-candidate" className="w-full border rounded-md p-2 text-xs" value={candidates.includes(model.material)?model.material:''} onChange={e=>{const code=e.target.value;if(!candidates.includes(code))return;applyCoreState(core=>requestProductMaterial(core,code,candidates))}}>
               <option value="" disabled>{language==='ar'?'اختر خامة خاصة بالمنتج':'Choose a product-listed material'}</option>
-              {candidates.map(code=><option key={code} value={code}>{materialCandidateLabel(code)}</option>)}
+              {candidates.map(code=><option key={code} value={code}>{materialCandidateLabel(code,language)}</option>)}
              </select>
              <p role="status" className="text-[10px] text-amber-800">{language==='ar'?'اختيارات مقترحة وليست اعتماد مورد. السُمك والعزل وملامسة الطعام والطباعة تحتاج تأكيدا وعرض سعر.':'Catalogue candidates, not supplier approval. Thickness, barrier, food-contact and print suitability need confirmation and a quote.'}</p>
             </div>}
