@@ -1,7 +1,7 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
-import { mkdir, readFile, writeFile } from 'fs/promises';
+import { mkdir, readFile, realpath, stat, writeFile } from 'fs/promises';
 import path from 'path';
 import { ValidationError } from '../../utils/errors';
 
@@ -176,14 +176,21 @@ export class FileUploadService {
    * upload root (path traversal guard).
    */
   async readLocalFile(
-    fileKey: string
+    fileKey: string,
+    options: { maxBytes?: number } = {}
   ): Promise<{ buffer: Buffer; extension: string } | null> {
-    const safeRoot = path.resolve(LOCAL_UPLOAD_DIR);
-    const dest = path.resolve(safeRoot, fileKey);
-    if (!dest.startsWith(safeRoot + path.sep)) {
-      return null;
-    }
     try {
+      // Resolve symlinks on both sides so a link inside the upload dir cannot
+      // point outside it.
+      const safeRoot = await realpath(LOCAL_UPLOAD_DIR);
+      const dest = await realpath(path.resolve(safeRoot, fileKey));
+      if (!dest.startsWith(safeRoot + path.sep)) {
+        return null;
+      }
+      if (options.maxBytes !== undefined) {
+        const info = await stat(dest);
+        if (!info.isFile() || info.size > options.maxBytes) return null;
+      }
       const buffer = await readFile(dest);
       return { buffer, extension: path.extname(dest).replace('.', '') };
     } catch {

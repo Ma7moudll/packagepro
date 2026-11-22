@@ -15,9 +15,9 @@
 
 import {issueApprovalToken, verifyApprovalToken} from './approval-tokens';
 import { prisma } from '../../lib/prisma';
-import { NotFoundError } from '../../utils/errors';
+import { NotFoundError, AppError } from '../../utils/errors';
 import { fileUploadService } from '../file-upload/upload.service';
-import axios from 'axios';
+import { fetchStoredFile, StoredFileFetchError } from '../file-upload/stored-file-fetch';
 import {
   PDFDocument,
   StandardFonts,
@@ -505,10 +505,12 @@ export class ProofGeneratorService {
       throw new NotFoundError('Print file not found');
     }
 
-    const response = await axios.get(printFile.fileUrl, {
-      responseType: 'arraybuffer',
-    });
-    const fileBuffer = Buffer.from(response.data);
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = await fetchStoredFile(printFile.fileUrl);
+    } catch (error) {
+      throw new AppError(422, `Print file cannot be read (${error instanceof StoredFileFetchError ? error.code : 'DOWNLOAD_FAILED'})`);
+    }
 
     const proofBuffer = await composeProofPdf(fileBuffer, {
       orderNumber: order.orderNumber,
