@@ -26,7 +26,7 @@ The review upload is an owner-supplied review artifact, not server attestation t
 ## Verification
 
 - Backend build passes.
-- Backend full suite after private-boundary follow-up: 54 files, 504 tests passed, none skipped/failed.
+- Backend full suite after private-boundary follow-up: 54 files, 506 tests passed, none skipped/failed.
 - Backend lint: 0 errors and the same 26 existing warnings.
 - Frontend TypeScript passes; 219 frontend unit tests pass.
 - Production frontend compile and static generation pass in separate Next build phases with one build worker. Earlier combined attempts hit memory/time limits. Temporary build-worker settings were restored byte-for-byte and are not part of the patch.
@@ -41,9 +41,9 @@ All integration data was synthetic and isolated; PostgreSQL snapshots were resto
 
 ## Private-boundary follow-up
 
-Generic API responses redact every reserved review-file record, including nested design/order/production file lists. A fixed allowlist retains the file ID/type/name/size and non-production marker; private storage identifiers, ownership, revision and byte hashes are omitted, and no generic link is returned. The dedicated owner-authorized endpoint still returns revision/checksum and bytes. Ordinary production-file response fields are unchanged.
+Generic API responses redact reserved persisted review-file rows identified by their file type, IDs, filename and PDF MIME type, including nested design/order/production file lists. User-authored designData, designConfig and ordinary metadata remain unchanged and are not traversed, even if their JSON mimics an entire reserved row. Whole-response traversal overhead outside these opaque JSON fields has not been benchmarked. A fixed allowlist retains the file ID/type/name/size and non-production marker; private storage identifiers, ownership, revision and byte hashes are omitted, and no generic link is returned. The dedicated owner-authorized endpoint still returns revision/checksum and bytes. Ordinary production-file response fields are unchanged.
 
-Creation retains at most 10 review artifacts per design and 100 per owner, each at most 10 MB. An owner-scoped PostgreSQL advisory transaction lock serializes cross-design quota checks; design-row locks retain snapshot binding. Same-snapshot retry returns the existing record even at quota. Quota exhaustion fails visibly rather than deleting earlier artifacts. There is no user deletion or retention UI in this slice. A crash between object write and database commit, or deletion of database records outside this workflow, can still leave orphan local bytes. Operational reconciliation/retention remains required before broader enablement.
+Creation has hard caps of 10 distinct review snapshots per design and 100 per owner, each at most 10 MB. With no deletion/pruning path, reaching either cap permanently exhausts that design or owner within this slice; this is not retention management. An owner-scoped PostgreSQL advisory transaction lock serializes cross-design quota checks; design-row locks retain snapshot binding. Same-snapshot retry returns the existing record even at quota. Quota exhaustion fails visibly rather than deleting earlier artifacts. There is no user deletion or retention UI in this slice. A crash between object write and database commit, or deletion of database records outside this workflow, can still leave orphan local bytes. Operational reconciliation and artifact lifecycle work remain required before broader enablement. Hostile-PDF parser resource usage and deep nesting have not been bounded beyond the upload byte-size limit and the current parsed-structure checks.
 
 Text is browser-font-rendered using the tested font subset. Font readiness does not certify glyph coverage, identical system font fallback across machines or universal typography fidelity. The saved canvas solid background is reproduced; it is not a claim that the physical outside-white liner has been reproduced. The existing kraft/white-liner material-background mismatch remains open.
 

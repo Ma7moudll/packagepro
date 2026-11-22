@@ -6,7 +6,7 @@ export function redactReviewFileMetadata(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redactReviewFileMetadata);
   if (!value || typeof value !== 'object' || Object.getPrototypeOf(value) !== Object.prototype) return value;
   const record=value as Record<string,unknown>;
-  if (record.fileType === 'artwork_review') {
+  if (record.fileType === 'artwork_review' && typeof record.id === 'string' && typeof record.designId === 'string' && typeof record.fileName === 'string' && record.mimeType === 'application/pdf') {
     return {
       id:record.id, designId:record.designId, fileType:record.fileType,
       fileName:record.fileName, fileSize:record.fileSize, mimeType:record.mimeType,
@@ -15,7 +15,10 @@ export function redactReviewFileMetadata(value: unknown): unknown {
       fileUrl:null,
     };
   }
-  return Object.fromEntries(Object.entries(record).map(([key,child])=>[key,redactReviewFileMetadata(child)]));
+  // These are user-authored JSON, not persisted file relations. Do not inspect,
+  // transform or traverse their contents, even when they mimic an entire row.
+  const opaqueJson=new Set(['designData','designConfig','metadata']);
+  return Object.fromEntries(Object.entries(record).map(([key,child])=>[key,opaqueJson.has(key)?child:redactReviewFileMetadata(child)]));
 }
 
 export function registerReviewFileRedaction(server: FastifyInstance): void {

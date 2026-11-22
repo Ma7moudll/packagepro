@@ -105,6 +105,19 @@ describe('saved review artifact on real Postgres and private storage',()=>{
     expect(saved.statusCode).toBe(200);expect(saved.body).not.toContain('storageKey');expect(saved.body).not.toContain(record.sha256);
     expect((await artworkReviewService.get(design.id,record.id,ownerId)).sha256).toBe(record.sha256);
   });
+  it('returns arbitrary saved design JSON unchanged even when it resembles a reserved file record',async()=>{
+    const content=structuredClone(fixture) as any;
+    content.fileType='artwork_review';content.designDataNote='preserve this';
+    content.custom={files:[{id:'user-id',designId:'user-design',fileType:REVIEW_FILE_TYPE,fileName:'user.pdf',mimeType:'application/pdf',metadata:{storageKey:'user-content',ownerId:'not-an-owner-binding',sha256:'user-text'}}]};
+    const {design}=await setup(content);
+    const token=jwtService.generateAccessToken(ownerId,'owner@test.local','CUSTOMER');
+    for(const url of [`/api/designs/${design.id}`,`/api/designs/session/${design.sessionId}`]) {
+      const response=await app.inject({method:'GET',url,headers:{authorization:`Bearer ${token}`}});
+      expect(response.statusCode).toBe(200);expect(response.json().data.designData).toEqual(content);
+    }
+    const saved=await app.inject({method:'POST',url:'/api/designs/save',headers:{authorization:`Bearer ${token}`},payload:{sessionId:design.sessionId,designData:content}});
+    expect(saved.statusCode).toBe(200);expect(saved.json().data.designData).toEqual(content);
+  });
   it('fails closed for S3 review storage regardless of ACL or bucket claims',async()=>{
     vi.stubEnv('S3_ACCESS_KEY_ID','configured-test-key');vi.stubEnv('S3_SECRET_ACCESS_KEY','configured-test-secret');
     try {
