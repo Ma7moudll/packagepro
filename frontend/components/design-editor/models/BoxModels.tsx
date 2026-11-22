@@ -877,12 +877,13 @@ function useProductStock({boardSpecification:requestedBoard, material:requestedM
   // material selector is prepared. A saved kraft box material is not film.
   const material=requestedMaterial
   const filmColour=material?.includes("black")?"#242424":"#eeeeec"
+  const polyFilm=material?.startsWith("poly-")||material==="bio-poly"
   const legacy = useMemo(() => boardLook(material), [material])
   const exterior = LINERS.find(l => l.id === boardSpecification?.outside)
   const interior = LINERS.find(l => l.id === boardSpecification?.inside)
   const outsideMap = useMemo(() => paper?createProductPaper(exterior?.colour ?? (material?.includes("kraft")?"#a8855a":"#e9ecef")):createNeutralFilm(filmColour), [legacy.textureTone, exterior, material,paper,filmColour])
   const insideMap = useMemo(() => paper?createProductPaper(interior?.colour ?? (material?.includes("kraft")?"#d9c7a8":"#e9ecef")):createNeutralFilm(filmColour), [legacy.textureTone, interior, material,paper,filmColour])
-  const outside = useMemo(() => new THREE.MeshPhysicalMaterial({map:outsideMap,color:!paper||exterior?"#ffffff":legacy.outsideColor,roughness:!paper?(material?.includes("matte")?.8:.45):exterior?.id==="white-imported-gloss"?.12:exterior?.roughness??(material?.includes("gloss")?.12:material?.includes("matte")?.85:legacy.roughness),clearcoat:!paper?.12:exterior?.id==="white-imported-gloss"||(!exterior&&material?.includes("gloss"))?1:0,clearcoatRoughness:.08,metalness:0}), [outsideMap,exterior,legacy,paper])
+  const outside = useMemo(() => new THREE.MeshPhysicalMaterial({map:outsideMap,color:!paper||exterior?"#ffffff":legacy.outsideColor,roughness:!paper?(material?.includes("matte")?.8:polyFilm?.58:.45):exterior?.id==="white-imported-gloss"?.12:exterior?.roughness??(material?.includes("gloss")?.12:material?.includes("matte")?.85:legacy.roughness),clearcoat:!paper?(polyFilm?.035:.12):exterior?.id==="white-imported-gloss"||(!exterior&&material?.includes("gloss"))?1:0,clearcoatRoughness:.08,metalness:0}), [outsideMap,exterior,legacy,paper,polyFilm])
   const inside = useMemo(() => new THREE.MeshPhysicalMaterial({map:insideMap,color:!paper||interior?"#ffffff":legacy.insideColor,roughness:interior?.id==="white-imported-gloss"?.12:interior?.roughness??.92,clearcoat:interior?.id==="white-imported-gloss"?1:0,clearcoatRoughness:.08,metalness:0}), [insideMap,interior,legacy,paper])
   const edge = useMemo(() => new THREE.MeshStandardMaterial({color:!paper?"#d8d8d8":exterior?.id.includes("white")?"#cbbfa9":"#aa8c63",roughness:1}), [exterior,paper])
   return {outside,inside,edge,face:(id:string)=>resolveFaceMaterial(outside,textures,id,null,reliefMasks?.[id],true),inner:(id:string)=>resolveFaceMaterial(inside,textures,`inside_${id}`,null,reliefMasks?.[`inside_${id}`],true)}

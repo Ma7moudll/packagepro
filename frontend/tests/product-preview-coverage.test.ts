@@ -51,5 +51,5 @@ test('session restore owns initialization even without catalogue product identit
 })
 
 test('mailer seal edges follow selected stock instead of a white default',()=>{
- const source=readFileSync('components/design-editor/models/SoftProducts.tsx','utf8');assert.match(source,/const seal=stock.outside/);assert.doesNotMatch(source,/#dedede/)
+ const source=readFileSync('components/design-editor/models/SoftProducts.tsx','utf8');assert.match(source,/stock.outside.clone\(\)/);assert.doesNotMatch(source,/#dedede/)
 })

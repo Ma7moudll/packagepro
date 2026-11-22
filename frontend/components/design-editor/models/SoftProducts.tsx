@@ -1,4 +1,7 @@
 "use client"
+import {useMemo,useEffect} from "react"
+import * as THREE from "three"
+import {createMailerFilmSurface,createMailerFlap,createMailerReleaseLiner} from "@/lib/editor/geometry/mailer-film"
 import {StockPanel,type ProductShapeProps} from "./StockPanel"
 
 /** Open rectangular paper carrier with real depth and separate inner lining.
@@ -33,17 +36,29 @@ export function EnvelopeShape({dimensions,stock,openState=0}:ProductShapeProps){
 
 /** Front/back soft-film mailer. Material choice is illustrative; no paperboard
  * liner is silently used as proof of film/barrier suitability. */
-export function MailerBagShape({dimensions,stock,openState=0}:ProductShapeProps){
- const l=dimensions.length/100,h=dimensions.height/100,w=Math.max(.008,dimensions.width/100),b=.001,p={thickness:b,edge:stock.edge}
- // The seal inherits the requested stock, never a hardcoded white sidewall.
- const seal=stock.outside
+export function MailerBagShape({dimensions,stock,type,openState=0}:ProductShapeProps){
+ const l=dimensions.length/100,h=dimensions.height/100,w=Math.max(.008,dimensions.width/100),paper=type.replace(/_/g,'-')==='paper-mailer-bag'
+ const t=Math.max(0,Math.min(1,openState))
+ const front=useMemo(()=>createMailerFilmSurface(l,h,w,false,t,paper),[l,h,w,t,paper])
+ const back=useMemo(()=>createMailerFilmSurface(l,h,w,true,t,paper),[l,h,w,t,paper])
+ const flap=useMemo(()=>createMailerFlap(l,h,w,t),[l,h,w,t])
+ const liner=useMemo(()=>createMailerReleaseLiner(l,h,w,t),[l,h,w,t])
+ const linerMaterial=useMemo(()=>new THREE.MeshStandardMaterial({color:'#c7c5bd',roughness:.8}),[])
+ const reverseOutside=useMemo(()=>{const m=stock.outside.clone();m.side=THREE.BackSide;return m},[stock.outside])
+ const inside=useMemo(()=>{const m=stock.inside.clone();m.side=THREE.BackSide;return m},[stock.inside])
+ useEffect(()=>()=>{front.dispose();back.dispose();flap.dispose();liner.dispose()},[front,back,flap,liner])
+ useEffect(()=>()=>inside.dispose(),[inside])
+ useEffect(()=>()=>reverseOutside.dispose(),[reverseOutside])
+ useEffect(()=>()=>linerMaterial.dispose(),[linerMaterial])
  return <group name="mailer-bag-construction">
-  <StockPanel {...p} width={l} height={h*.91} outside={stock.face("front")} inside={stock.inner("front")} faceId="front" position={[0,h*.455,w/2]}/>
-  <StockPanel {...p} width={l} height={h*.91} outside={stock.face("back")} inside={stock.inner("back")} faceId="back" position={[0,h*.455,-w/2]} rotation={[0,Math.PI,0]}/>
-  {[-1,1].map(side=><mesh key={side} position={[side*(l/2-.006),h*.455,0]} material={seal}><boxGeometry args={[.012,h*.91,w]}/></mesh>)}
-  <mesh position={[0,.006,0]} material={seal}><boxGeometry args={[l,.012,w]}/></mesh>
-  <group position={[0,h*.91,w/2+b]} rotation={[-(1-Math.max(0,Math.min(1,openState)))*Math.PI,0,0]}>
-   <StockPanel {...p} width={l} height={h*.09} outside={stock.outside} inside={stock.inside} position={[0,h*.045,0]} rotation={[0,Math.PI,0]}/>
-  </group>
+  {/* Two flexible sheets converge at sealed side/bottom edges. There are no
+      rigid box sidewalls, a stand-up gusset or an invented cardboard rim. */}
+  <mesh geometry={front} material={stock.face('front')} castShadow userData={{faceId:'front'}}/>
+  <mesh geometry={back} material={stock.face('back')} castShadow userData={{faceId:'back'}}/>
+  <mesh geometry={front} material={inside} userData={{faceId:'inside_front'}}/>
+  <mesh geometry={back} material={inside} userData={{faceId:'inside_back'}}/>
+  <mesh geometry={flap} material={stock.inside} castShadow/>
+  <mesh geometry={flap} material={reverseOutside}/>
+  <mesh geometry={liner} material={linerMaterial}/>
  </group>
 }
