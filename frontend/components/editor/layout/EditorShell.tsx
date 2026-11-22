@@ -1,6 +1,6 @@
 "use client"
 
-import { ReactNode, useEffect, useState } from "react"
+import { ReactNode, useState } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { EditorHeader } from "./EditorHeader"
 import { EditorLeftSidebar } from "./EditorLeftSidebar"
@@ -21,17 +21,15 @@ export function EditorShell({ headerExtra, center, onSessionSaved }: EditorShell
   const [cartOpen, setCartOpen] = useState(false)
   useKeyboardShortcuts()
 
-  // On phones and small tablets the side panels are overlays (max-lg). Start with the
-  // right panel closed so the first screen shows the preview; it opens from the header toggle.
-  useEffect(() => {
-    if (window.matchMedia("(max-width: 1023px)").matches) {
-      useDesignStore.getState().setRightSidebarOpen(false)
-    }
-  }, [])
+  const [rightPanelTouched, setRightPanelTouched] = useState(false)
 
   return (
     <div className="h-screen flex flex-col bg-slate-50">
-      <EditorHeader extra={headerExtra} onSessionSaved={onSessionSaved} cartOpen={cartOpen} onCartOpenChange={setCartOpen} />
+      <EditorHeader onPropertiesToggle={() => {
+        const mobile = window.matchMedia("(max-width: 1023px)").matches
+        useDesignStore.getState().setRightSidebarOpen(mobile && !rightPanelTouched ? true : !rightSidebarOpen)
+        setRightPanelTouched(true)
+      }} extra={headerExtra} onSessionSaved={onSessionSaved} cartOpen={cartOpen} onCartOpenChange={setCartOpen} />
 
       <div className="flex-1 flex overflow-hidden relative">
         {/* Left: persistent icon rail (w-14); panel widens it when open */}
@@ -52,13 +50,14 @@ export function EditorShell({ headerExtra, center, onSessionSaved }: EditorShell
           />
         )}
 
-        <main className="flex-1 relative bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-50 to-slate-200 overflow-hidden">
+        <main className="max-lg:ml-14 min-w-0 flex-1 relative bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-50 to-slate-200 overflow-hidden">
           {center}
         </main>
 
         <div
+          data-editor-properties
           className={`overflow-hidden transition-all duration-300 ease-in-out border-l border-slate-200 max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-40 max-lg:shadow-xl ${
-            rightSidebarOpen ? "w-72 xl:w-72 lg:w-64" : "w-0"
+            rightSidebarOpen ? `${rightPanelTouched ? "" : "max-lg:!w-0"} w-72 xl:w-72 lg:w-64` : "w-0"
           }`}
         >
           <div className="w-full h-full bg-white overflow-y-auto">
@@ -68,7 +67,7 @@ export function EditorShell({ headerExtra, center, onSessionSaved }: EditorShell
 
         {rightSidebarOpen && (
           <div
-            className="hidden max-lg:block fixed inset-0 bg-black/30 z-30"
+            className={`${rightPanelTouched ? "max-lg:block" : ""} hidden fixed inset-0 bg-black/30 z-30`}
             onClick={() => useDesignStore.getState().setRightSidebarOpen(false)}
           />
         )}

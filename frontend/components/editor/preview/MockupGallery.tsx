@@ -191,7 +191,7 @@ export function MockupGallery({
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className="max-w-4xl h-[80vh]">
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto flex flex-col p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ImageIcon className="h-5 w-5" />
@@ -199,17 +199,17 @@ export function MockupGallery({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex gap-4 h-full overflow-hidden">
+        <div className="flex flex-col md:flex-row gap-4 min-h-0">
           {/* Main Preview */}
-          <div className="flex-1 flex flex-col gap-4">
+          <div className="min-w-0 flex-1 flex flex-col gap-4">
             {/* Preview Container */}
             <div
-              className="flex-1 rounded-xl overflow-hidden flex items-center justify-center transition-all duration-500"
+              className="min-h-48 md:min-h-80 flex-1 rounded-xl overflow-hidden flex items-center justify-center transition-all duration-500"
               style={{ background: selectedScene.background }}
             >
               {/* Product Preview Placeholder */}
               <div
-                className="w-64 h-48 rounded-lg bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center transition-all duration-300"
+                className="w-full max-w-64 h-40 rounded-lg bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center transition-all duration-300"
                 style={{ boxShadow: selectedScene.shadow }}
               >
                 <div className="text-center">
@@ -224,7 +224,7 @@ export function MockupGallery({
             </div>
 
             {/* Export Options */}
-            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 justify-between p-3 bg-slate-50 rounded-lg">
               <div className="flex items-center gap-4">
                 <div>
                   <Label className="text-xs mb-1 block">
@@ -267,7 +267,7 @@ export function MockupGallery({
           </div>
 
           {/* Scene Selection Sidebar */}
-          <div className="w-64 flex flex-col gap-3">
+          <div className="w-full md:w-64 shrink-0 flex flex-col gap-3">
             {/* Category Filter */}
             <div className="flex flex-wrap gap-1">
               {SCENE_CATEGORIES.map((category) => (
@@ -284,7 +284,7 @@ export function MockupGallery({
             </div>
 
             {/* Scene Grid */}
-            <ScrollArea className="flex-1">
+            <ScrollArea className="h-48 md:h-72">
               <div className="grid grid-cols-2 gap-2 pr-2">
                 {filteredScenes.map((scene) => (
                   <button

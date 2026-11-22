@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/tooltip"
 
 interface EditorHeaderProps {
+  onPropertiesToggle?: () => void
   extra?: React.ReactNode
   onSessionSaved?: (sessionId:string)=>void
   cartOpen?: boolean
@@ -57,7 +58,7 @@ function mapProductType(type: string): "box" | "bag" | "label" {
   return "box"
 }
 
-export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved }: EditorHeaderProps) {
+export function EditorHeader({ onPropertiesToggle, extra, cartOpen, onCartOpenChange, onSessionSaved }: EditorHeaderProps) {
   const { language } = useLanguage()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -99,6 +100,8 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
     scheduleAutoSave(designId, name, coreState, false, () => {
       setSaveStatus("saved")
       setTimeout(() => setSaveStatus("idle"), 2000)
+    }, () => {
+      setSaveStatus("error")
     })
 
     return () => {
@@ -137,7 +140,7 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
     } catch (error) {
       console.error("Save failed:", error)
       setSaveStatus("error")
-      setTimeout(() => setSaveStatus("idle"), 3000)
+      // Keep failure visible until the next save attempt.
     } finally {
       setManualSaving(false)
     }
@@ -163,7 +166,7 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
     <TooltipProvider>
       <header className="h-14 bg-white border-b border-slate-200 px-3 flex items-center justify-between gap-2">
         {/* Left: Logo, Sidebar Toggles & Title */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0 shrink-0">
           <Link href="/" className="hidden sm:flex items-center gap-2 shrink-0">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white font-bold text-sm">
               P
@@ -196,7 +199,8 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 rounded-md text-slate-400 hover:text-slate-700"
-                  onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
+                  data-toggle-properties
+                  onClick={onPropertiesToggle ?? (() => setRightSidebarOpen(!rightSidebarOpen))}
                 >
                   {rightSidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
                 </Button>
@@ -211,7 +215,7 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
 
           <div className="hidden lg:block h-5 w-px bg-slate-200" />
 
-          <div className="min-w-0">
+          <div className="hidden lg:block min-w-0">
             <h1 className="text-sm font-semibold text-slate-800 truncate capitalize">{title}</h1>
             <div className="flex items-center gap-1 text-[10px] text-slate-400">
               {saveStatus === "saving" && (
@@ -225,6 +229,9 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
                   <CheckCircle2 className="h-3 w-3 text-emerald-500" />
                   <span className="text-emerald-600">{language === "ar" ? "تم الحفظ" : "Saved"}</span>
                 </>
+              )}
+              {saveStatus === "error" && (
+                <span role="status" className="text-red-600">{language === "ar" ? "تعذر الحفظ" : "Save failed"}</span>
               )}
               {saveStatus === "idle" && (
                 <span>
@@ -289,8 +296,8 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
 
           {/* Mockup & Share */}
           <div className="hidden lg:flex items-center gap-2">
-            <MockupGallery />
-            <ShareDialog />
+            <Button variant="outline" size="sm" className="h-8" onClick={() => setMockupOpen(true)}><Camera className="h-4 w-4 mr-2" />{language === "ar" ? "معاينة Mockup" : "Mockup Preview"}</Button>
+            <Button variant="outline" size="sm" className="h-8" onClick={() => setShareOpen(true)}><Share2 className="h-4 w-4 mr-2" />{language === "ar" ? "مشاركة" : "Share"}</Button>
           </div>
 
           {/* Below lg: Mockup, Share and Tutorial move into one menu */}
@@ -364,6 +371,7 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
             size="sm"
             className="bg-slate-900 hover:bg-slate-800 text-white font-medium h-8 px-3 sm:px-4 rounded-lg"
             aria-label={language === "ar" ? "حفظ" : "Save"}
+            data-save-status={saveStatus}
             onClick={handleSave}
             disabled={manualSaving}
           >
