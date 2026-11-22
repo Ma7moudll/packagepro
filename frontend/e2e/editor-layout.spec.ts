@@ -44,11 +44,7 @@ for (const language of ['en', 'ar']) {
         await page.getByRole('menuitem', { name: language === 'ar' ? 'معاينة Mockup' : 'Mockup Preview' }).click();
         const dialog = page.getByRole('dialog');
         await expect(dialog).toBeVisible();
-        const exportButton = dialog.getByRole('button', { name: language === 'ar' ? 'تصدير Mockup' : 'Export Mockup' });
-        await expect(exportButton).toBeVisible();
-        const button = await exportButton.boundingBox();
-        const quality = await dialog.getByText(language === 'ar' ? 'جودة عالية' : 'High Quality').boundingBox();
-        if (width < 640) expect(button!.y).toBeGreaterThanOrEqual(quality!.y + quality!.height);
+        await expect(dialog.getByRole('status')).toContainText(language === 'ar' ? 'تصدير Mockup غير متاح' : 'Mockup export is not available');
         const close = dialog.locator('[data-slot=dialog-close]');
         const closeBox = await close.boundingBox();
         expect(closeBox!.x).toBeGreaterThanOrEqual(0);
