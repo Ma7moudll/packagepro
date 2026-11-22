@@ -47,8 +47,9 @@ export class DesignService {
     const redis = getRedisClient();
 
     // An authenticated user may only attach a design to an order they own.
-    // Order.customerId never changes, so check-then-write is safe for the
-    // order itself. Unknown and foreign orders give the same 403 (no oracle).
+    // This first check is a read; order ownership is not enforced as immutable
+    // by the database, so the claim below repeats it inside its guarded WHERE.
+    // Unknown and foreign orders give the same 403 (no oracle).
     if (data.orderId && ownerId) {
       const order = await prisma.order.findUnique({
         where: { id: data.orderId },
@@ -72,15 +73,28 @@ export class DesignService {
           data: { orderId: data.orderId, ownerId, sessionId, name: data.name, description: data.description },
         });
       } catch (error: any) {
+        if (error?.code === 'P2003') {
+          // The order was deleted between the check and the insert.
+          throw new AppError(403, 'You do not have access to this order');
+        }
         if (error?.code !== 'P2002') throw error;
         const claimed = await prisma.design.updateMany({
-          where: { orderId: data.orderId, OR: [{ ownerId: null }, { ownerId }] },
+          where: {
+            orderId: data.orderId,
+            OR: [{ ownerId: null }, { ownerId }],
+            // Order membership is part of the same guarded write.
+            order: { is: { customer: { is: { userId: ownerId } } } },
+          },
           data: { sessionId, ownerId, updatedAt: new Date() },
         });
         if (claimed.count !== 1) {
           throw new AppError(403, 'You do not have access to this order');
         }
         design = await prisma.design.findUnique({ where: { orderId: data.orderId } });
+        if (!design) {
+          // Deleted right after the claim: never report success with no design.
+          throw new AppError(409, 'Design was removed while the session was being created; retry');
+        }
       }
     } else {
       design = await prisma.design.create({
@@ -246,6 +260,10 @@ export class DesignService {
         throw new AppError(403, 'You do not have access to this design');
       }
       design = await prisma.design.findUnique({ where: { id: design.id }, include: { files: true } });
+      if (!design) {
+        // Deleted right after the guarded write: never report success with no design.
+        throw new AppError(409, 'Design was removed while saving; retry');
+      }
     } else {
       try {
       design = await prisma.design.create({
@@ -268,6 +286,8 @@ export class DesignService {
         // Two first-saves of the same session raced: the loser must retry
         // (it then goes through the guarded update), never overwrite.
         if (error?.code === 'P2002') throw new AppError(409, 'Design session is being saved by another request; retry');
+        // The referenced order disappeared before the insert.
+        if (error?.code === 'P2003') throw new AppError(409, 'Design could not be saved because its order no longer exists');
         throw error;
       }
     }

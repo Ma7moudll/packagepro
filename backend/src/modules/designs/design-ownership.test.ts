@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const db = vi.hoisted(() => {
-  const state: any = { orders: {}, designs: {}, creates: [], writes: 0 };
+  const state: any = { orders: {}, designs: {}, creates: [], writes: 0, afterWrite: null, createError: null, claimWhere: null };
   // Minimal evaluator for the WHERE shapes the service emits, applied atomically
   // (like a row lock + re-check in Postgres).
   const match = (d: any, w: any): boolean =>
@@ -31,6 +31,7 @@ vi.mock('../../lib/prisma', () => ({
         return { ...d, files: [], order: d.orderId ? db.orders[d.orderId] ?? null : null };
       },
       create: async ({ data }: any) => {
+        if (db.createError) throw Object.assign(new Error('fk'), { code: db.createError });
         if (data.orderId && Object.values(db.designs).some((x: any) => x.orderId === data.orderId)) {
           throw Object.assign(new Error('unique'), { code: 'P2002' });
         }
@@ -41,9 +42,11 @@ vi.mock('../../lib/prisma', () => ({
         db.designs[row.id] = row; db.creates.push(row); return { ...row, files: [] };
       },
       updateMany: async ({ where, data }: any) => {
+        db.claimWhere = where;
         const hits: any[] = Object.values(db.designs).filter((d) => db.match(d, where));
         for (const d of hits) Object.assign(d, data);
         db.writes += hits.length;
+        if (db.afterWrite) db.afterWrite();
         return { count: hits.length };
       },
     },
@@ -58,7 +61,7 @@ const reset = () => {
     'order-A': { customer: { userId: 'userA' } },
     'order-B': { customer: { userId: 'userB' } },
   };
-  db.designs = {}; db.creates = []; db.writes = 0;
+  db.designs = {}; db.creates = []; db.writes = 0; db.afterWrite = null; db.createError = null; db.claimWhere = null;
 };
 const addDesign = (id: string, d: any = {}) => {
   db.designs[id] = { id, ownerId: null, orderId: null, sessionId: `s-${id}`, lifecycleStatus: 'DRAFT', ...d };
@@ -174,5 +177,40 @@ describe('saveDesign: ownership is decided by the guarded write', () => {
     db.designs.d1.lifecycleStatus = 'SUBMITTED'; // flips while findUnique is in flight
     await expect(p).rejects.toMatchObject({ statusCode: 400 });
     expect(db.designs.d1.designData).toBeUndefined();
+  });
+});
+
+describe('lifecycle and DB-level edge cases (operator/DB-writer boundary, not an ordinary-user path)', () => {
+  beforeEach(reset);
+  it('claim re-checks order membership in the SAME guarded write', async () => {
+    addDesign('dm', { orderId: 'order-A', ownerId: null, sessionId: 'old' });
+    await designService.createSession({ orderId: 'order-A' }, 'userA');
+    expect(db.claimWhere.order).toEqual({ is: { customer: { is: { userId: 'userA' } } } });
+  });
+  it('order reassigned to another customer after the initial read: claim matches 0 rows, nobody is silently handed the design', async () => {
+    addDesign('dm', { orderId: 'order-A', ownerId: null, sessionId: 'old' });
+    const p = designService.createSession({ orderId: 'order-A' }, 'userA');
+    db.orders['order-A'] = { customer: { userId: 'userB' } }; // forced DB-level reassignment mid-flight
+    await expect(p).rejects.toMatchObject({ statusCode: 403 });
+    expect(db.designs.dm.sessionId).toBe('old');
+    expect(db.designs.dm.ownerId).toBeNull();
+  });
+  it('order deleted before the insert: 403, not a raw database error', async () => {
+    db.createError = 'P2003';
+    await expect(designService.createSession({ orderId: 'order-A' }, 'userA')).rejects.toMatchObject({ statusCode: 403 });
+  });
+  it('design deleted right after the claim: 409, never success with a null design', async () => {
+    addDesign('dm', { orderId: 'order-A', sessionId: 'old' });
+    db.afterWrite = () => { delete db.designs.dm; };
+    await expect(designService.createSession({ orderId: 'order-A' }, 'userA')).rejects.toMatchObject({ statusCode: 409 });
+  });
+  it('saveDesign: design deleted right after the guarded write: 409, never success with null', async () => {
+    addDesign('d1', { ownerId: 'userA' });
+    db.afterWrite = () => { delete db.designs.d1; };
+    await expect(save('s-d1', 'userA')).rejects.toMatchObject({ statusCode: 409 });
+  });
+  it('saveDesign first-save with a vanished order: 409, not a raw error', async () => {
+    db.createError = 'P2003';
+    await expect(save('s-new', 'userA')).rejects.toMatchObject({ statusCode: 409 });
   });
 });
