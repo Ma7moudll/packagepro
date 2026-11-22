@@ -1,10 +1,9 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { useLanguage } from "@/providers/language-provider"
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Dialog,
@@ -14,20 +13,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   Image as ImageIcon,
-  Download,
-  Loader2,
   Camera,
-  Sun,
-  Moon,
-  Maximize2,
   Check,
 } from "lucide-react"
 
@@ -100,14 +87,20 @@ const SCENE_CATEGORIES = [
   { id: "luxury", name: { en: "Luxury", ar: "فاخر" } },
 ]
 
-export function MockupGallery() {
+export function MockupGallery({
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
+}: { open?: boolean; onOpenChange?: (open: boolean) => void; hideTrigger?: boolean } = {}) {
   const { language } = useLanguage()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = controlledOpen ?? internalOpen
+  const setOpen = (value: boolean) => {
+    setInternalOpen(value)
+    onOpenChange?.(value)
+  }
   const [selectedScene, setSelectedScene] = useState(MOCKUP_SCENES[0])
   const [selectedCategory, setSelectedCategory] = useState("all")
-  const [exporting, setExporting] = useState(false)
-  const [exportFormat, setExportFormat] = useState<"png" | "jpg">("png")
-
   const model = useDesignStore((s) => s.model)
 
   // Filter scenes by category
@@ -115,90 +108,35 @@ export function MockupGallery() {
     ? MOCKUP_SCENES
     : MOCKUP_SCENES.filter((s) => s.category === selectedCategory)
 
-  // Export mockup as image
-  const handleExport = useCallback(async () => {
-    setExporting(true)
-
-    try {
-      // In a real implementation, you would capture the 3D scene
-      // For now, we'll create a placeholder download
-      const canvas = document.createElement("canvas")
-      canvas.width = 1920
-      canvas.height = 1080
-      const ctx = canvas.getContext("2d")
-
-      if (ctx) {
-        // Draw background gradient
-        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height)
-        gradient.addColorStop(0, "#f5f5f5")
-        gradient.addColorStop(1, "#e0e0e0")
-        ctx.fillStyle = gradient
-        ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-        // Draw placeholder box
-        ctx.fillStyle = "#d2b48c"
-        ctx.shadowColor = "rgba(0,0,0,0.2)"
-        ctx.shadowBlur = 30
-        ctx.shadowOffsetY = 15
-        ctx.fillRect(canvas.width / 2 - 200, canvas.height / 2 - 150, 400, 300)
-
-        // Add text
-        ctx.shadowBlur = 0
-        ctx.fillStyle = "#333"
-        ctx.font = "bold 24px Inter"
-        ctx.textAlign = "center"
-        ctx.fillText(`${model.type.replace(/_/g, " ")} Mockup`, canvas.width / 2, canvas.height / 2)
-        ctx.font = "16px Inter"
-        ctx.fillStyle = "#666"
-        ctx.fillText(
-          `${model.dimensions.length}x${model.dimensions.width}x${model.dimensions.height}mm`,
-          canvas.width / 2,
-          canvas.height / 2 + 30
-        )
-      }
-
-      // Download
-      const dataUrl = canvas.toDataURL(`image/${exportFormat}`, 0.95)
-      const link = document.createElement("a")
-      link.download = `mockup-${Date.now()}.${exportFormat}`
-      link.href = dataUrl
-      link.click()
-
-      await new Promise((resolve) => setTimeout(resolve, 500))
-    } catch (error) {
-      console.error("Export error:", error)
-    } finally {
-      setExporting(false)
-    }
-  }, [exportFormat, model])
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8">
-          <Camera className="h-4 w-4 mr-2" />
-          {language === "ar" ? "معاينة Mockup" : "Mockup Preview"}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-4xl h-[80vh]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm" className="h-8">
+            <Camera className="h-4 w-4 mr-2" />
+            {language === "ar" ? "معاينة Mockup" : "Mockup Preview"}
+          </Button>
+        </DialogTrigger>
+      )}
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-4xl max-h-[85vh] flex flex-col p-4 sm:p-6 [&>button[data-slot=dialog-close]]:left-3 [&>button[data-slot=dialog-close]]:right-auto [&>button[data-slot=dialog-close]]:top-3 [&>button[data-slot=dialog-close]]:h-8 [&>button[data-slot=dialog-close]]:w-8 [&>button[data-slot=dialog-close]]:flex [&>button[data-slot=dialog-close]]:items-center [&>button[data-slot=dialog-close]]:justify-center">
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="flex items-center gap-2 ps-10">
             <ImageIcon className="h-5 w-5" />
             {language === "ar" ? "معرض Mockup" : "Mockup Gallery"}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex gap-4 h-full overflow-hidden">
+        <div className="flex flex-col md:flex-row gap-4 min-h-0 overflow-y-auto">
           {/* Main Preview */}
-          <div className="flex-1 flex flex-col gap-4">
+          <div className="min-w-0 flex-1 flex flex-col gap-4">
             {/* Preview Container */}
             <div
-              className="flex-1 rounded-xl overflow-hidden flex items-center justify-center transition-all duration-500"
+              className="min-h-48 md:min-h-80 flex-1 rounded-xl overflow-hidden flex items-center justify-center transition-all duration-500"
               style={{ background: selectedScene.background }}
             >
               {/* Product Preview Placeholder */}
               <div
-                className="w-64 h-48 rounded-lg bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center transition-all duration-300"
+                className="w-full max-w-64 h-40 rounded-lg bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center transition-all duration-300"
                 style={{ boxShadow: selectedScene.shadow }}
               >
                 <div className="text-center">
@@ -212,51 +150,20 @@ export function MockupGallery() {
               </div>
             </div>
 
-            {/* Export Options */}
-            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-              <div className="flex items-center gap-4">
-                <div>
-                  <Label className="text-xs mb-1 block">
-                    {language === "ar" ? "الصيغة" : "Format"}
-                  </Label>
-                  <Select
-                    value={exportFormat}
-                    onValueChange={(v: "png" | "jpg") => setExportFormat(v)}
-                  >
-                    <SelectTrigger className="w-24 h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="png">PNG</SelectItem>
-                      <SelectItem value="jpg">JPEG</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="text-xs text-slate-500">
-                  <p>1920 × 1080px</p>
-                  <p>{language === "ar" ? "جودة عالية" : "High Quality"}</p>
-                </div>
-              </div>
-
-              <Button onClick={handleExport} disabled={exporting}>
-                {exporting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    {language === "ar" ? "جارٍ التصدير..." : "Exporting..."}
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-4 w-4 mr-2" />
-                    {language === "ar" ? "تصدير Mockup" : "Export Mockup"}
-                  </>
-                )}
-              </Button>
+            <div role="status" className="space-y-2 p-3 bg-slate-50 rounded-lg text-sm text-slate-600">
+              <p className="font-medium text-slate-900">
+                {language === "ar" ? "عرض تجريبي للخلفيات فقط، وليس معاينة لتصميمك." : "Background demo only, not a preview of your artwork."}
+              </p>
+              <p>
+                {language === "ar"
+                  ? "تصدير Mockup غير متاح حاليًا. لحفظ مرجع RGB محلي لتصميمك، استخدم تبويب التصدير. ليس ملفًا جاهزًا للإنتاج."
+                  : "Mockup export is not available yet. Use the Export tab to save a local RGB reference of your design, not a production-ready file."}
+              </p>
             </div>
           </div>
 
           {/* Scene Selection Sidebar */}
-          <div className="w-64 flex flex-col gap-3">
+          <div className="w-full md:w-64 shrink-0 flex flex-col gap-3">
             {/* Category Filter */}
             <div className="flex flex-wrap gap-1">
               {SCENE_CATEGORIES.map((category) => (
@@ -273,7 +180,7 @@ export function MockupGallery() {
             </div>
 
             {/* Scene Grid */}
-            <ScrollArea className="flex-1">
+            <ScrollArea className="h-48 md:h-72">
               <div className="grid grid-cols-2 gap-2 pr-2">
                 {filteredScenes.map((scene) => (
                   <button

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { buildHomeStatCounts, UNAVAILABLE_STAT, type HomeStatCounts } from "@/lib/home-stats"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Search,
@@ -22,7 +23,6 @@ import {
   ShoppingBag,
   Recycle,
   CheckCircle,
-  TrendingUp,
   Globe,
   Zap,
   Heart,
@@ -49,45 +49,32 @@ export default function HomePage() {
   const [selectedMaterial, setSelectedMaterial] = useState("all")
   const [selectedRegion, setSelectedRegion] = useState("all")
   const [selectedFeature, setSelectedFeature] = useState<string | null>(null)
-  const [stats, setStats] = useState([
+  const [statCounts, setStatCounts] = useState<HomeStatCounts>(UNAVAILABLE_STAT)
+  const [statsLoading, setStatsLoading] = useState(true)
+  // Transaction volume is not shown: its currency is not established (see lib/home-stats.ts).
+  const stats = [
     {
       label: "صفقة مكتملة",
       labelEn: "Completed Deals",
-      value: "0+",
+      value: statCounts.completedDeals,
       icon: CheckCircle,
       color: "text-emerald-600",
     },
     {
-      label: "مصنع مسجل",
-      labelEn: "Registered Factories",
-      value: "0+",
+      label: "موردون مسجلون",
+      labelEn: "Registered Vendors",
+      value: statCounts.registeredFactories,
       icon: Factory,
       color: "text-blue-600",
     },
     {
-      label: "مليون جنيه حجم معاملات",
-      labelEn: "Million EGP Transactions",
-      value: "0+",
-      icon: TrendingUp,
-      color: "text-purple-600",
-    },
-    {
-      label: "تاجر نشط",
-      labelEn: "Active Traders",
-      value: "0+",
+      label: "عملاء مسجلون",
+      labelEn: "Registered Customers",
+      value: statCounts.activeTraders,
       icon: Users,
       color: "text-orange-600",
     },
-  ])
-  const [statsLoading, setStatsLoading] = useState(true)
-
-  // Format category count
-  const formatCategoryCount = (count: number) => {
-    if (count >= 1000) {
-      return `${(count / 1000).toFixed(0)}K+`
-    }
-    return `${count.toLocaleString()}+`
-  }
+  ]
 
   // Fetch statistics on component mount
   useEffect(() => {
@@ -97,39 +84,7 @@ export default function HomePage() {
         const response = await fetch("/api/stats")
         const data = await response.json()
 
-        if (data.success && data.stats) {
-          // Update stats (all values now sourced from the real backend)
-          setStats([
-            {
-              label: "صفقة مكتملة",
-              labelEn: "Completed Deals",
-              value: formatCategoryCount(data.stats.completedDeals?.raw ?? 0),
-              icon: CheckCircle,
-              color: "text-emerald-600",
-            },
-            {
-              label: "مصنع مسجل",
-              labelEn: "Registered Factories",
-              value: formatCategoryCount(data.stats.registeredFactories?.raw ?? 0),
-              icon: Factory,
-              color: "text-blue-600",
-            },
-            {
-              label: "مليون دولار حجم معاملات",
-              labelEn: "Million USD Transactions",
-              value: `${((data.stats.transactionVolume?.raw ?? 0) / 1000000).toFixed(1)}+`,
-              icon: TrendingUp,
-              color: "text-purple-600",
-            },
-            {
-              label: "تاجر نشط",
-              labelEn: "Active Traders",
-              value: formatCategoryCount(data.stats.activeTraders?.raw ?? 0),
-              icon: Users,
-              color: "text-orange-600",
-            },
-          ])
-        }
+        setStatCounts(buildHomeStatCounts(data))
       } catch (error) {
         console.error("Error fetching stats:", error)
       } finally {
@@ -472,7 +427,7 @@ export default function HomePage() {
           </div>
 
           <div className="text-center mb-8">
-            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white mb-4 px-3 py-1.5 text-sm">
+            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white mb-4 px-3 py-1.5 text-sm max-w-full whitespace-normal text-center">
               <Award className="w-3 h-3 mr-1.5" />
               {language === "ar" ? "منصة التعبئة والتغليف الرائدة في مصر" : "Leading Packaging Platform in Egypt"}
             </Badge>
@@ -601,7 +556,7 @@ export default function HomePage() {
       {/* Stats Section */}
       <section className="py-16 bg-white">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
             {stats.map((stat, index) => (
               <div key={index} className="text-center group">
                 <div className="flex justify-center mb-4">
@@ -613,7 +568,7 @@ export default function HomePage() {
                   {statsLoading ? (
                     <span className="inline-block h-10 w-20 bg-slate-200 rounded animate-pulse"></span>
                   ) : (
-                    stat.value
+                    stat.value ?? "-"
                   )}
                 </div>
                 <div className="text-gray-600 font-medium">{language === "ar" ? stat.label : stat.labelEn}</div>
@@ -787,7 +742,7 @@ export default function HomePage() {
                 className="rounded-2xl shadow-2xl"
               />
 
-              <div className="absolute -bottom-6 -right-6 bg-white p-6 rounded-xl shadow-lg">
+              <div className="absolute -bottom-6 right-0 bg-white p-6 rounded-xl shadow-lg">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
                     <Star className="w-6 h-6 text-emerald-600" />
@@ -799,7 +754,7 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div className="absolute -top-6 -left-6 bg-white p-4 rounded-xl shadow-lg">
+              <div className="absolute -top-6 left-0 bg-white p-4 rounded-xl shadow-lg">
                 <div className="flex items-center gap-2">
                   <Shield className="w-8 h-8 text-emerald-600" />
                   <div>
@@ -927,7 +882,7 @@ export default function HomePage() {
                 className="rounded-2xl shadow-2xl"
               />
 
-              <div className="absolute -top-6 -left-6 bg-white p-4 rounded-xl shadow-lg">
+              <div className="absolute -top-6 left-0 bg-white p-4 rounded-xl shadow-lg">
                 <div className="flex items-center gap-2">
                   <Recycle className="w-8 h-8 text-green-600" />
                   <div>
@@ -981,7 +936,7 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <Button asChild size="lg" className="bg-green-600 hover:bg-green-700">
+              <Button asChild size="lg" className="bg-green-600 hover:bg-green-700 max-w-full whitespace-normal h-auto min-h-10 text-center">
                 <Link href="/sustainable">
                   {language === "ar" ? "اكتشف منتجاتنا المستدامة" : "Discover Our Sustainable Products"}
                   <ArrowRight className="w-5 h-5 mr-2" />
