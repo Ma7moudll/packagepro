@@ -20,13 +20,11 @@ test('Fabric SVG boundary rejects unsafe link schemes while retaining normal geo
   assert.ok(clean.includes('fill: red'))
   assert.ok(clean.includes('width="20"'))
 })
-test('all three application Fabric SVG export calls pass through the sanitizer', () => {
+test('preview dialog cannot fabricate AI/EPS from unsanitized Fabric SVG', () => {
   const { readFileSync } = require('node:fs')
-  for (const path of ['components/editor/export/ExportDialog.tsx']) {
-    const source = readFileSync(path, 'utf8')
-    const calls = source.match(/\.toSVG\(\)/g) || []
-    const sanitized = source.match(/sanitizeEditorSvg\([^\n]*\.toSVG\(\)\)/g) || []
-    assert.equal(calls.length, sanitized.length)
-    assert.ok(calls.length > 0)
-  }
+  const source=readFileSync('components/editor/export/ExportDialog.tsx','utf8')
+  assert.doesNotMatch(source,/\.toSVG\(\)|generateAI|generateEPS/)
+  assert.match(source,/<SelectItem value="ai" disabled/)
+  assert.match(source,/<SelectItem value="eps" disabled/)
+  assert.match(source,/await exportDesign\(/)
 })
