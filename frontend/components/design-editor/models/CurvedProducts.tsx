@@ -1,6 +1,7 @@
 "use client"
 import {useMemo} from "react"
 import * as THREE from "three"
+import {useProductOpening} from "./useProductOpening"
 import type {ProductShapeProps} from "./StockPanel"
 
 /** Cylindrical artwork uses separate front/back half-wraps. This is a preview,
@@ -23,7 +24,8 @@ export function CupShape({dimensions,type,stock}:ProductShapeProps){
 }
 
 export function TubeShape({dimensions,type,stock,openState=0}:ProductShapeProps){
- const r=dimensions.width/200,h=dimensions.height/100,b=.005,t=Math.max(0,Math.min(1,openState)),metal=type.replace(/_/g,"-")==="tube-metal-lid"
+ const motion=useProductOpening(openState)
+ const r=dimensions.width/200,h=dimensions.height/100,b=.005,t=Math.max(0,Math.min(1,motion)),metal=type.replace(/_/g,"-")==="tube-metal-lid"
  const metalMat=useMemo(()=>new THREE.MeshStandardMaterial({color:"#b8b8b8",roughness:.23,metalness:.8}),[])
  const inner=useMemo(()=>{const m=stock.inside.clone();m.side=THREE.BackSide;return m},[stock.inside])
  return <group name="tube-construction">

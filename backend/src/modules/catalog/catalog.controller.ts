@@ -53,7 +53,7 @@ export class CatalogController {
 
   async editorConfig(request: FastifyRequest, reply: FastifyReply) {
     const { slug } = request.params as { slug: string };
-    const query = z.object({ quantity: z.coerce.number().int().min(1) }).parse(request.query ?? {});
+    const query = z.object({ quantity: z.coerce.number().int().min(1).optional() }).parse(request.query ?? {});
     const data = await catalogService.getEditorConfig(slug, query.quantity);
     return reply.send({ success: true, data });
   }

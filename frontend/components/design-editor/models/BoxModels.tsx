@@ -5,6 +5,7 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 import { LINERS, type BoardSpecification } from "@/lib/editor/material-specification"
 import { MailerConstruction } from "./MailerConstruction"
+import {useProductOpening} from "./useProductOpening"
 import { StockPanel } from "./StockPanel"
 import { PouchShape } from "./PouchProduct"
 import { CupShape, TubeShape } from "./CurvedProducts"
@@ -894,9 +895,10 @@ function useProductStock({boardSpecification:requestedBoard, material:requestedM
 // SHIPPING BOX (RSC) - فارغ من الداخل + إغلاق سلس
 // ============================================
 export function ShippingBox(props: BoxModelProps) {
- const {dimensions,openState=0}=props
+ const motion=useProductOpening(props.openState??0)
+ const {dimensions}=props
  const {length:L,width:W,height:H}=dimensions,l=L/100,w=W/100,h=H/100,b=.006
- const stock=useProductStock(props),t=easeInOutCubic(openState)
+ const stock=useProductStock(props),t=easeInOutCubic(motion)
  const minor=easeInOutCubic(Math.min(1,t*1.6))*Math.PI*.64
  const major=easeInOutCubic(Math.max(0,t-.15)/.85)*Math.PI*.64
  const p={thickness:b,edge:stock.edge}
@@ -921,8 +923,9 @@ export function ShippingBox(props: BoxModelProps) {
 
 // Two-piece rigid construction, with an open hollow lid rather than a solid block.
 export function RigidBox(props:BoxModelProps){
- const {dimensions,openState=0}=props,{length:L,width:W,height:H}=dimensions
- const l=L/100,w=W/100,h=H/100,b=.008,bh=h*.7,lh=h*.3,over=b*3,t=easeInOutCubic(openState),stock=useProductStock(props)
+ const motion=useProductOpening(props.openState??0)
+ const {dimensions}=props,{length:L,width:W,height:H}=dimensions
+ const l=L/100,w=W/100,h=H/100,b=.008,bh=h*.7,lh=h*.3,over=b*3,t=easeInOutCubic(motion),stock=useProductStock(props)
  const p={thickness:b,edge:stock.edge}
  const walls=(length:number,width:number,height:number,lid=false)=><>
   <StockPanel {...p} width={length} height={height} outside={stock.face("front")} inside={stock.inner("front")} faceId="front" uvRect={lid?[0,.7,1,1]:[0,0,1,.7]} position={[0,height/2,width/2]}/>
@@ -942,8 +945,9 @@ export function RigidBox(props:BoxModelProps){
 export function GiftBox(props:BoxModelProps){return <RigidBox {...props}/>}
 
 export function FoldingCarton(props:BoxModelProps){
- const {dimensions,openState=0}=props,{length:L,width:W,height:H}=dimensions,l=L/100,w=W/100,h=H/100,b=.004
- const t=easeInOutCubic(openState),stock=useProductStock(props),lid=w-b*2,tuck=Math.min(h*.3,w*.45),dust=Math.min(w*.4,h*.28)
+ const motion=useProductOpening(props.openState??0)
+ const {dimensions}=props,{length:L,width:W,height:H}=dimensions,l=L/100,w=W/100,h=H/100,b=.004
+ const t=easeInOutCubic(motion),stock=useProductStock(props),lid=w-b*2,tuck=Math.min(h*.3,w*.45),dust=Math.min(w*.4,h*.28)
  const p={thickness:b,edge:stock.edge}
  return <group name="folding-carton-construction">
   <StockPanel {...p} width={l} height={h} outside={stock.face("front")} inside={stock.inner("front")} faceId="front" position={[0,h/2,w/2]}/>
@@ -964,8 +968,9 @@ export function FoldingCarton(props:BoxModelProps){
 }
 
 export function PizzaBox(props:BoxModelProps){
- const {dimensions,openState=0}=props,{length:L,width:W,height:H}=dimensions,l=L/100,w=W/100,h=H/100,b=.008,bh=h*.72,lh=h*.28,over=b*2.5
- const t=easeInOutCubic(openState),stock=useProductStock(props),p={thickness:b,edge:stock.edge}
+ const motion=useProductOpening(props.openState??0)
+ const {dimensions}=props,{length:L,width:W,height:H}=dimensions,l=L/100,w=W/100,h=H/100,b=.008,bh=h*.72,lh=h*.28,over=b*2.5
+ const t=easeInOutCubic(motion),stock=useProductStock(props),p={thickness:b,edge:stock.edge}
  return <group name="pizza-construction">
   <StockPanel {...p} width={l} height={bh} outside={stock.face("front")} inside={stock.inner("front")} faceId="front" position={[0,bh/2,w/2]}/>
   <StockPanel {...p} width={l} height={bh} outside={stock.face("back")} inside={stock.inner("back")} faceId="back" position={[0,bh/2,-w/2]} rotation={[0,Math.PI,0]}/>

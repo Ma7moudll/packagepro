@@ -196,7 +196,7 @@ export class CatalogService {
    * Returns the real product, default variant, resolved material, real
    * pricing, and the full ProductStructure stored in editorDefaults.
    */
-  async getEditorConfig(slug: string, quantity: number) {
+  async getEditorConfig(slug: string, requestedQuantity?: number) {
     const product = await prisma.product.findUnique({
       where: { slug },
       include: {
@@ -213,6 +213,7 @@ export class CatalogService {
       throw new NotFoundError(`Product with slug "${slug}"`);
     }
 
+    const quantity=requestedQuantity??product.moq;
     const variant = product.variants[0];
     if (!variant) {
       throw new NotFoundError(`No active variant for product "${slug}"`);

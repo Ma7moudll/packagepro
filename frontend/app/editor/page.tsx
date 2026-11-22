@@ -52,6 +52,9 @@ export default function EditorPage() {
   const initFromEditorConfig = useDesignStore((s) => s.initFromEditorConfig)
   const [edConfig, setEdConfig] = useState<{ type: string; material: string } | null>(null)
 
+  const [catalogueLoadError,setCatalogueLoadError]=useState(false)
+  const [catalogueLoading,setCatalogueLoading]=useState(!!productParam||!!templateId)
+
   // E2E harness: expose view-mode switch before canvas mounts
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -92,6 +95,8 @@ export default function EditorPage() {
   // template's own, then apply the template's defaults on top.
   useEffect(() => {
     if (!templateId) return
+    setCatalogueLoadError(false)
+    setCatalogueLoading(true)
     let cancelled = false
     ;(async () => {
       try {
@@ -100,21 +105,12 @@ export default function EditorPage() {
         const slug = templateProductSlug(template)
         if (slug) {
           const { catalogApi } = await import("@/lib/api/catalog")
-          // MOQ differs per product (bags start at 50); try the requested
-          // quantity, then step up until the product accepts it.
-          let config: any = null
-          for (const qty of [Number(qtyParam) || 30, 100, 500]) {
-            try {
-              const res = await catalogApi.getEditorConfig(slug, qty)
-              if (res.success && res.data) {
-                config = res.data
-                break
-              }
-            } catch {
-              // try the next quantity
-            }
-          }
-          if (cancelled || !config) return
+          // An omitted quantity resolves to the live product MOQ, never a
+          // mailer-specific default or a guessed ladder of larger quantities.
+          const response=await catalogApi.getEditorConfig(slug,qtyParam?Number(qtyParam):undefined)
+          const config=response.data
+          if (cancelled) return
+          if (!config) throw new Error("Product configuration was not returned")
           initFromEditorConfig(config as any)
           const type = config.product.boxType ?? config.product.type?.replace(/_/g, "-") ?? "mailer-box"
           setEdConfig({ type, material: config.material.code })
@@ -131,8 +127,8 @@ export default function EditorPage() {
         }
         applyCoreState(loadTemplateIntoEditor(template))
       } catch (error) {
-        console.error("Error loading template:", error)
-      }
+        console.error("Error loading template:", error);if(!cancelled)setCatalogueLoadError(true)
+      } finally {if(!cancelled)setCatalogueLoading(false)}
     })()
     return () => {
       cancelled = true
@@ -174,7 +170,8 @@ export default function EditorPage() {
   useEffect(() => {
     if (!productParam) return
     let cancelled = false
-    const qty = Number(qtyParam) || 30
+    setCatalogueLoadError(false);setCatalogueLoading(true)
+    const qty = qtyParam?Number(qtyParam):undefined
     import("@/lib/api/catalog")
       .then(({ catalogApi }) => catalogApi.getEditorConfig(productParam, qty).then((res) => res.data))
       .then(async (config) => {
@@ -205,8 +202,8 @@ export default function EditorPage() {
         }))
       })
       .catch((error) => {
-        console.error("Error loading editor config:", error)
-      })
+        console.error("Error loading editor config:", error);if(!cancelled&&!sessionIdParam)setCatalogueLoadError(true)
+      }).finally(()=>{if(!cancelled)setCatalogueLoading(false)})
     return () => {
       cancelled = true
     }
@@ -226,19 +223,23 @@ export default function EditorPage() {
     }
   }, [skuParam, skuData, productParam])
 
-  const displayType = edConfig?.type ?? (skuData?.type ?? "mailer-box")
   const independentStock = useDesignStore(s => !!s.model.boardSpecification)
+  const actualQuantity=useDesignStore(s=>s.model.quantity)
+  const actualType=useDesignStore(s=>s.model.type)
+  const actualMaterial=useDesignStore(s=>s.model.material)
   const displayMaterial = independentStock ? (language === "ar" ? "خامة داخل وخارج مخصصة" : "Custom inside/outside stock") : edConfig?.material ?? (skuData?.material ?? "cardboard-natural")
 
+  if(catalogueLoadError)return <div role="alert" className="min-h-screen flex flex-col items-center justify-center gap-4 p-8 text-center"><p>{language==='ar'?'تعذر تحميل المنتج أو التصميم المطلوب. لم نفتح منتجا بديلا.':'The selected product or design could not be loaded. No substitute product was opened.'}</p><button className="border rounded p-3" onClick={()=>window.location.reload()}>{language==='ar'?'إعادة المحاولة':'Retry'}</button></div>
+  if(catalogueLoading)return <div role="status" className="min-h-screen flex items-center justify-center">{language==='ar'?'تحميل إعدادات المنتج...':'Loading product settings...'}</div>
   return (
     <EditorShell
       headerExtra={
         (skuData || productParam) && (
-          <p className="hidden md:inline text-xs text-slate-500">
+          <p className="hidden 2xl:inline max-w-48 truncate text-[10px] text-slate-500">
             {language === "ar"
-              ? `نوع المنتج: ${displayType} • المادة: ${displayMaterial} • الكمية: ${quantityParam || qtyParam || "30"
+              ? `نوع المنتج: ${actualType} • المادة: ${independentStock?displayMaterial:actualMaterial} • الكمية: ${actualQuantity
               }`
-              : `Type: ${displayType} • Material: ${displayMaterial} • Qty: ${quantityParam || qtyParam || "30"
+              : `Type: ${actualType} • Material: ${independentStock?displayMaterial:actualMaterial} • Qty: ${actualQuantity
               }`}
           </p>
         )
@@ -247,7 +248,7 @@ export default function EditorPage() {
         <PackhelpEditor
           preserveRestoredDesign={!!sessionIdParam}
           productType={productType}
-          boxType={displayType as any}
+          boxType={actualType as any}
           material={displayMaterial}
           initialDesign={{
             colors: { primary: "#d2b48c", secondary: "#1f2937" },

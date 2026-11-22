@@ -107,6 +107,10 @@ describe('unified catalogue — 55 products, honest readiness', () => {
     }
   });
 
+  it('defaults omitted editor quantity to the product MOQ, not mailer30',async()=>{
+    const cfg=await catalogService.getEditorConfig('custom-paper-bag');expect(cfg.quantity).toBe(50);
+  });
+
   it('exposes only the seeded carrier handle candidates and real no-handle default',async()=>{
     const cfg=await catalogService.getEditorConfig('custom-paper-bag',50);expect(cfg.product.defaultHandle).toBe('none');expect(cfg.product.candidateHandles).toEqual(['none','twisted_paper','cotton_ropes','ribbon']);
   });

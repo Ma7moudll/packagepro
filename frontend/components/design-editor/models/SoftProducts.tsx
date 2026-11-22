@@ -2,6 +2,7 @@
 import {useMemo,useEffect} from "react"
 import * as THREE from "three"
 import {createMailerFilmSurface,createMailerFlap,createMailerReleaseLiner} from "@/lib/editor/geometry/mailer-film"
+import {useProductOpening} from "./useProductOpening"
 import {CarrierHandle} from "./CarrierHandle"
 import {StockPanel,type ProductShapeProps} from "./StockPanel"
 
@@ -25,7 +26,8 @@ export function PaperBagShape({dimensions,stock,carrierHandle="twisted_paper"}:P
 }
 
 export function EnvelopeShape({dimensions,stock,openState=0}:ProductShapeProps){
- const l=dimensions.length/100,h=dimensions.height/100,w=Math.max(.012,dimensions.width/100),b=.002,t=Math.max(0,Math.min(1,openState)),p={thickness:b,edge:stock.edge}
+ const motion=useProductOpening(openState)
+ const l=dimensions.length/100,h=dimensions.height/100,w=Math.max(.012,dimensions.width/100),b=.002,t=Math.max(0,Math.min(1,motion)),p={thickness:b,edge:stock.edge}
  return <group name="envelope-construction">
   <StockPanel {...p} width={l} height={h*.78} outside={stock.face("front")} inside={stock.inner("front")} faceId="front" position={[0,h*.39,w/2]}/>
   <StockPanel {...p} width={l} height={h*.78} outside={stock.face("back")} inside={stock.inner("back")} faceId="back" position={[0,h*.39,-w/2]} rotation={[0,Math.PI,0]}/>
@@ -40,8 +42,9 @@ export function EnvelopeShape({dimensions,stock,openState=0}:ProductShapeProps){
 /** Front/back soft-film mailer. Material choice is illustrative; no paperboard
  * liner is silently used as proof of film/barrier suitability. */
 export function MailerBagShape({dimensions,stock,type,openState=0}:ProductShapeProps){
+ const motion=useProductOpening(openState)
  const l=dimensions.length/100,h=dimensions.height/100,w=Math.max(.008,dimensions.width/100),paper=type.replace(/_/g,'-')==='paper-mailer-bag'
- const t=Math.max(0,Math.min(1,openState))
+ const t=Math.max(0,Math.min(1,motion))
  const front=useMemo(()=>createMailerFilmSurface(l,h,w,false,t,paper),[l,h,w,t,paper])
  const back=useMemo(()=>createMailerFilmSurface(l,h,w,true,t,paper),[l,h,w,t,paper])
  const flap=useMemo(()=>createMailerFlap(l,h,w,t),[l,h,w,t])
