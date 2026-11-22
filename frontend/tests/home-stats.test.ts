@@ -54,3 +54,14 @@ test("homepage has no currency-labelled volume tile or fabricated placeholder co
   assert.equal(src.includes("formatCategoryCount(data.stats"), false)
   assert.equal(src.includes('value: "0+"'), false)
 })
+
+test("tile labels match what the backend counts (vendors / customers, no active or factory claims)", () => {
+  const src = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8")
+  for (const ok of ["Registered Vendors", "Registered Customers", "موردون مسجلون", "عملاء مسجلون", "Completed Deals"]) {
+    assert.equal(src.includes(ok), true, ok)
+  }
+  for (const bad of ["Active Traders", "Registered Factories", "تاجر نشط", "مصنع مسجل"]) {
+    const statsBlock = src.slice(src.indexOf("const stats = ["), src.indexOf("// Fetch statistics"))
+    assert.equal(statsBlock.includes(bad), false, bad)
+  }
+})
