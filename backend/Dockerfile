@@ -19,6 +19,8 @@ WORKDIR /app/backend
 
 COPY --from=deps /app/backend/node_modules ./node_modules
 COPY backend/ ./
+# Catalogue seed imports the same source used by the editor.
+COPY shared/ /app/shared/
 
 # Generate Prisma Client again for build
 RUN npx prisma generate
@@ -40,6 +42,7 @@ COPY --from=builder --chown=nodejs:nodejs /app/backend/dist ./dist
 COPY --from=builder --chown=nodejs:nodejs /app/backend/node_modules ./node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/backend/package*.json ./
 COPY --from=builder --chown=nodejs:nodejs /app/backend/prisma ./prisma
+COPY --from=builder --chown=nodejs:nodejs /app/shared /app/shared
 
 # Generate Prisma Client for production
 RUN npx prisma generate
