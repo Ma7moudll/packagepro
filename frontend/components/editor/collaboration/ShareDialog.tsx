@@ -63,9 +63,18 @@ const SAMPLE_SHARED_USERS: SharedUser[] = [
   },
 ]
 
-export function ShareDialog() {
+export function ShareDialog({
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
+}: { open?: boolean; onOpenChange?: (open: boolean) => void; hideTrigger?: boolean } = {}) {
   const { language } = useLanguage()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = controlledOpen ?? internalOpen
+  const setOpen = (value: boolean) => {
+    setInternalOpen(value)
+    onOpenChange?.(value)
+  }
   const [shareLink, setShareLink] = useState("")
   const [linkCopied, setLinkCopied] = useState(false)
   const [sharedUsers, setSharedUsers] = useState<SharedUser[]>(SAMPLE_SHARED_USERS)
@@ -132,21 +141,23 @@ export function ShareDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8">
-          <Share2 className="h-4 w-4 mr-2" />
-          {language === "ar" ? "مشاركة" : "Share"}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm" className="h-8">
+            <Share2 className="h-4 w-4 mr-2" />
+            {language === "ar" ? "مشاركة" : "Share"}
+          </Button>
+        </DialogTrigger>
+      )}
+      <DialogContent className="max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 [&>button[data-slot=dialog-close]]:left-3 [&>button[data-slot=dialog-close]]:right-auto [&>button[data-slot=dialog-close]]:top-3 [&>button[data-slot=dialog-close]]:h-8 [&>button[data-slot=dialog-close]]:w-8 [&>button[data-slot=dialog-close]]:flex [&>button[data-slot=dialog-close]]:items-center [&>button[data-slot=dialog-close]]:justify-center">
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="flex items-center gap-2 ps-10">
             <Share2 className="h-5 w-5" />
             {language === "ar" ? "مشاركة التصميم" : "Share Design"}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-6 py-4 min-h-0 overflow-y-auto">
           {/* Add People */}
           <div className="space-y-3">
             <Label className="text-xs font-bold flex items-center gap-2">
