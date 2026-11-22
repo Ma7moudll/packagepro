@@ -225,6 +225,8 @@ export interface ModelState {
   dimensions: ModelDimensions
   material: string
   boardSpecification?: import("../material-specification").BoardSpecification
+  carrierHandle?: "none"|"twisted_paper"|"cotton_ropes"|"ribbon"
+  carrierHandleCandidates?: string[]
   materialSpecification?: {version:1;productType:string;code:string;status:"requested";supplierConfirmed:false}
   faces: Face[]
   printCoverage: "outside" | "inside" | "both"

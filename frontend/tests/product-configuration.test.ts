@@ -39,3 +39,5 @@ test('Arabic candidates and readiness labels do not expose internal status codes
  for(const code of new Set(Object.values(CATALOGUE_CANDIDATE_MATERIALS).flat()))assert.match(materialCandidateLabel(code,'ar'),/[\u0600-\u06ff]/,code)
  assert.equal(readinessLabel('in_progress','en'),'Under review');assert.equal(readinessLabel('quote_required','ar'),'يتطلب عرض سعر')
 })
+
+test('a handle construction request cannot reuse the old estimate',()=>{assert.equal(editorRequiresQuote({model:{type:'paper_bag',carrierHandle:'twisted_paper'},layers:[]}),true)})

@@ -23,6 +23,7 @@ export interface BoxDimensions {
 }
 
 export interface BoxModelProps {
+  carrierHandle?: "none"|"twisted_paper"|"cotton_ropes"|"ribbon"
   boardSpecification?: BoardSpecification
   reliefMasks?: Record<string, string>
   dimensions: BoxDimensions

@@ -460,6 +460,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
                 type={type}
                 material={model.material}
                 boardSpecification={model.boardSpecification}
+                carrierHandle={model.carrierHandle}
                 printCoverage={model.printCoverage}
                 textures={faceTextures}
                 reliefMasks={reliefMasks}

@@ -107,6 +107,10 @@ describe('unified catalogue — 55 products, honest readiness', () => {
     }
   });
 
+  it('exposes only the seeded carrier handle candidates and real no-handle default',async()=>{
+    const cfg=await catalogService.getEditorConfig('custom-paper-bag',50);expect(cfg.product.defaultHandle).toBe('none');expect(cfg.product.candidateHandles).toEqual(['none','twisted_paper','cotton_ropes','ribbon']);
+  });
+
   it('adapts legacy non-box axes without modifying the stored variants',async()=>{
     for(const slug of ['custom-paper-bag','custom-poly-mailer','custom-label-sticker']){
       const cfg=await catalogService.getEditorConfig(slug,100);

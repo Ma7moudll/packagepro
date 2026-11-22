@@ -468,6 +468,11 @@ export function EditorRightSidebar() {
              </select>
              <p role="status" className="text-[10px] text-amber-800">{language==='ar'?'اختيارات مقترحة وليست اعتماد مورد. السُمك والعزل وملامسة الطعام والطباعة تحتاج تأكيدا وعرض سعر.':'Catalogue candidates, not supplier approval. Thickness, barrier, food-contact and print suitability need confirmation and a quote.'}</p>
             </div>}
+            {canonicalType==='paper_bag'&&<label className="block space-y-1 text-[11px]">{language==='ar'?'تركيب اليد (طلب عرض سعر)':'Handle construction (quote request)'}
+             <select aria-label="Carrier handle construction" className="w-full border rounded-md p-2" value={model.carrierHandle??'twisted_paper'} onChange={e=>{const code=e.target.value;if(!['none','twisted_paper','cotton_ropes','ribbon'].includes(code))return;applyCoreState(core=>({...core,model:{...core.model,carrierHandle:code as NonNullable<typeof model.carrierHandle>}}))}}>
+              {(model.carrierHandleCandidates??['none','twisted_paper','cotton_ropes','ribbon']).filter(code=>['none','twisted_paper','cotton_ropes','ribbon'].includes(code)).map(code=><option key={code} value={code}>{({none:language==='ar'?'بدون يد':'No handle',twisted_paper:language==='ar'?'ورق ملفوف':'Twisted paper',cotton_ropes:language==='ar'?'حبل قطن':'Cotton rope',ribbon:language==='ar'?'شريط قماش':'Ribbon'} as Record<string,string>)[code]}</option>)}
+             </select><span className="block text-[10px] text-amber-800">{language==='ar'?'شكل تقريبي. مقاس اليد وطريقة تثبيتها تحتاج تأكيد المورد.':'Illustrative proportions. Handle size and attachment need supplier confirmation.'}</span>
+            </label>}
             {/* Print Coverage */}
             {currentProduct?.supportsPrintCoverage && currentProduct.supportsPrintCoverage.length > 1 && (
               <div className="space-y-1 pt-2 border-t">

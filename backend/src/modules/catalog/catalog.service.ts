@@ -205,6 +205,7 @@ export class CatalogService {
           orderBy: [{ isDefault: 'desc' }, { sizeCode: 'asc' }],
           take: 1,
         },
+        options:{where:{key:'handle'},include:{values:{orderBy:{sortOrder:'asc'}}}},
       },
     });
 
@@ -283,6 +284,8 @@ export class CatalogService {
         editorType: editorDefaults?.editorType ?? undefined,
         readiness: editorDefaults?.readiness ?? undefined,
         candidateMaterials: editorDefaults?.candidateMaterials ?? [],
+        candidateHandles: product.options.flatMap(o=>o.values.map(v=>v.value)),
+        defaultHandle: editorDefaults?.handle ?? undefined,
       },
       variant: {
         id: variant.id,

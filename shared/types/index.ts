@@ -790,6 +790,8 @@ export interface EditorConfig {
     type: string
     boxType?: string
     candidateMaterials?: string[]
+    candidateHandles?: string[]
+    defaultHandle?: string
     editorType?: string
     readiness?: {preview:string;dieline:string;pricing:string}
     structure?: ProductStructure

@@ -40,6 +40,8 @@ export interface EditorConfigLike {
     support?: 'supported' | 'deferred'
     supportReason?: string
     candidateMaterials?: string[]
+    candidateHandles?: string[]
+    defaultHandle?: string
   }
   variant: { id: string; sku: string; sizeCode: string | null; materialCode: string | null; color?: string; printMode: string; printSides: number; finish: string; dimensions: { length: number; width: number; height: number; unit?: string } }
   material: { code: string; name: string; hex: string }
@@ -445,6 +447,8 @@ export const useDesignStore = create<DesignStore>((set, get) => {
         material: policy.boardStock?(config.material.code || "cardboard-kraft"):(candidate??config.material.code),
         boardSpecification:policy.boardStock?current.model.boardSpecification:undefined,
         printCoverage:config.variant.printSides>=2?"both":"outside",
+        carrierHandle:modelType==='paper_bag'?(['none','twisted_paper','cotton_ropes','ribbon'].includes(config.product.defaultHandle??'')?config.product.defaultHandle:'none') as ModelState['carrierHandle']:undefined,
+        carrierHandleCandidates:modelType==='paper_bag'?config.product.candidateHandles:undefined,
         materialSpecification:!policy.boardStock&&candidate?{version:1,productType:modelType,code:candidate,status:"requested",supplierConfirmed:false}:undefined,
         faces,
         quantity: config.quantity,

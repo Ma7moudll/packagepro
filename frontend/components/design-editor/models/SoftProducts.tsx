@@ -2,11 +2,12 @@
 import {useMemo,useEffect} from "react"
 import * as THREE from "three"
 import {createMailerFilmSurface,createMailerFlap,createMailerReleaseLiner} from "@/lib/editor/geometry/mailer-film"
+import {CarrierHandle} from "./CarrierHandle"
 import {StockPanel,type ProductShapeProps} from "./StockPanel"
 
 /** Open rectangular paper carrier with real depth and separate inner lining.
  * Textile constructions and their handles require separate models. */
-export function PaperBagShape({dimensions,stock}:ProductShapeProps){
+export function PaperBagShape({dimensions,stock,carrierHandle="twisted_paper"}:ProductShapeProps){
  const l=dimensions.length/100,w=dimensions.width/100,h=dimensions.height/100,b=.002,p={thickness:b,edge:stock.edge},fold=Math.min(l*.06,w*.18),half=Math.hypot(w/2,fold),angle=Math.atan2(fold,w/2)
  return <group name="paper-bag-construction">
   <StockPanel {...p} width={l} height={h} outside={stock.face("front")} inside={stock.inner("front")} faceId="front" position={[0,h/2,w/2]}/>
@@ -14,9 +15,11 @@ export function PaperBagShape({dimensions,stock}:ProductShapeProps){
   {/* Each side has two inward-folded gusset leaves, not a rigid box wall. */}
   {[-1,1].flatMap(side=>[-1,1].map(front=><StockPanel key={`${side}-${front}`} {...p} width={half} height={h} outside={stock.face(side===1?"right":"left")} inside={stock.inner(side===1?"right":"left")} faceId={side===1?"right":"left"} uvRect={front===1?[.5,0,1,1]:[0,0,.5,1]} position={[side*(l/2-fold/2),h/2,front*w/4]} rotation={[0,side*Math.PI/2+side*front*angle,0]}/>))}
   <StockPanel {...p} width={l} height={w} outside={stock.face("bottom")} inside={stock.inner("bottom")} faceId="bottom" position={[0,b,0]} rotation={[Math.PI/2,0,0]}/>
-  {[-1,1].map(side=><group key={side} position={[0,h,side*w/2]}>
-   <mesh position={[0,l*.08,0]} material={stock.outside}><torusGeometry args={[l*.19,.007,10,36,Math.PI]}/></mesh>
-   {[-1,1].map(x=><mesh key={x} position={[x*l*.19,l*.04,0]} material={stock.outside}><cylinderGeometry args={[.007,.007,l*.08,10]}/></mesh>)}
+  {/* Folded-over paper rim, not a wire/metal lip. */}
+  {[-1,1].map(side=><StockPanel key={`rim-${side}`} {...p} width={l-b*2} height={h*.1} outside={stock.inside} inside={stock.inside} position={[0,h*.95,side*(w/2-b*2)]} rotation={[0,side===1?Math.PI:0,0]}/>)}
+  {carrierHandle!=='none'&&[-1,1].map(side=><group key={side} position={[0,0,side*(w/2-b*3)]}>
+   <CarrierHandle width={l} height={h} style={carrierHandle} stock={stock}/>
+   {[-1,1].map(x=><StockPanel key={x} {...p} width={l*.12} height={h*.13} outside={stock.inside} inside={stock.inside} position={[x*l*.19,h*.925,side===1?-b:b]} rotation={[0,side===1?Math.PI:0,0]}/>)}
   </group>)}
  </group>
 }

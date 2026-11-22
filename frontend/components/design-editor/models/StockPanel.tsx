@@ -8,6 +8,7 @@ export interface ProductStock {
  face:(id:string)=>THREE.MeshStandardMaterial;inner:(id:string)=>THREE.MeshStandardMaterial;
 }
 export interface ProductShapeProps {
+ carrierHandle?:"none"|"twisted_paper"|"cotton_ropes"|"ribbon";
  dimensions:{length:number;width:number;height:number};openState?:number;type:string;stock:ProductStock;material?:string
 }
 
