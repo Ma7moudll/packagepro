@@ -1,6 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import EGP_RATES from '../src/services/pricing-bootstrap/egp-rates.json';
+import {
+  CATALOGUE_CATEGORIES,
+  CATALOGUE_SUBCATEGORIES,
+  CATALOGUE_PRODUCTS,
+} from '../../shared/catalog/products';
 
 const prisma = new PrismaClient();
 
@@ -232,8 +237,8 @@ async function main() {
     sizes: CatalogSize[];
     minDims: CatalogDims;
     maxDims: CatalogDims;
-    priceFrom: number;
-    thumbnail: string;
+    priceFrom: number | null; // null => quote on request (no rate card yet)
+    thumbnail: string | null;
     gallery: string[];
     ecoFlags: unknown;
     filters: unknown;
@@ -246,26 +251,15 @@ async function main() {
       finish: string;
     };
     options: CatalogOption[];
-    conversion: number; // base conversion/setup cost per unit (EGP)
-    margin: number; // margin factor (e.g. 0.35 = +35%)
+    conversion?: number; // base conversion/setup cost per unit (EGP)
+    margin?: number; // margin factor (e.g. 0.35 = +35%)
   }
 
-  const CATEGORIES = [
-    { id: 'cat-boxes', slug: 'boxes', name: 'Boxes', description: 'Custom printed mailing, product and shipping boxes made to your exact dimensions.', sortOrder: 1 },
-    { id: 'cat-bags', slug: 'bags', name: 'Bags', description: 'Sustainable paper carrier bags and lightweight mailing bags with custom branding.', sortOrder: 2 },
-    { id: 'cat-labels', slug: 'labels-stickers', name: 'Labels & Stickers', description: 'Die-cut labels and stickers for products, retail and mailers.', sortOrder: 3 },
-  ];
-
-  const SUBCATEGORIES = [
-    { id: 'sub-mailer-boxes', categoryId: 'cat-boxes', slug: 'mailer-boxes', name: 'Mailer Boxes', sortOrder: 1 },
-    { id: 'sub-product-boxes', categoryId: 'cat-boxes', slug: 'product-boxes', name: 'Product Boxes', sortOrder: 2 },
-    { id: 'sub-shipping-boxes', categoryId: 'cat-boxes', slug: 'shipping-boxes', name: 'Shipping Boxes', sortOrder: 3 },
-    { id: 'sub-rigid-boxes', categoryId: 'cat-boxes', slug: 'rigid-boxes', name: 'Rigid & Gift Boxes', sortOrder: 4 },
-    { id: 'sub-pizza-boxes', categoryId: 'cat-boxes', slug: 'pizza-boxes', name: 'Pizza & Food Boxes', sortOrder: 5 },
-    { id: 'sub-carrier-bags', categoryId: 'cat-bags', slug: 'carrier-bags', name: 'Carrier Bags', sortOrder: 1 },
-    { id: 'sub-mailing-bags', categoryId: 'cat-bags', slug: 'mailing-bags', name: 'Mailing Bags', sortOrder: 2 },
-    { id: 'sub-label-stickers', categoryId: 'cat-labels', slug: 'label-stickers', name: 'Labels & Stickers', sortOrder: 1 },
-  ];
+  // Unified classification lives in the canonical registry
+  // (shared/catalog/products.ts). The 3 original categories and 8 original
+  // subcategories keep their exact ids/slugs/names/sort orders there.
+  const CATEGORIES = CATALOGUE_CATEGORIES;
+  const SUBCATEGORIES = CATALOGUE_SUBCATEGORIES;
 
   // Shared pricing tier ladder (factor applies per unit at/above minQuantity).
   // Anchored on each product's MOQ via the first tier below.
@@ -1552,6 +1546,70 @@ async function main() {
     },
   ];
 
+  // Unified catalogue expansion: picker-listed products without a seeded
+  // storefront entry join the catalogue from the canonical registry. They are
+  // classified and quotable-by-request, but carry NO product-specific rates
+  // (priceFrom null, no scoped pricing rules — nothing invented) and keep an
+  // explicit deferred production status instead of fake geometry.
+  for (const entry of CATALOGUE_PRODUCTS) {
+    if (CATALOG_PRODUCTS.some((p) => p.id === entry.productId)) continue;
+    const defaultMaterial =
+      entry.pricingFamily === 'box' ? 'cardboard-kraft'
+      : entry.pricingFamily === 'bag' ? 'kraft'
+      : 'paper';
+    CATALOG_PRODUCTS.push({
+      id: entry.productId,
+      subcategoryId: `sub-${entry.subcategory}`,
+      slug: entry.slug,
+      name: entry.name.en,
+      shortDescription: entry.description.en,
+      description: entry.description.en,
+      productType: entry.pricingFamily,
+      boxType: entry.boxType,
+      moq: entry.moq,
+      sizeUnit: 'mm',
+      sizes: [{ code: 'default', name: entry.name.en, ...entry.defaultDimensions }],
+      minDims: null as unknown as CatalogDims,
+      maxDims: null as unknown as CatalogDims,
+      priceFrom: null,
+      thumbnail: null,
+      gallery: [],
+      ecoFlags: null,
+      filters: null,
+      editorDefaults: {
+        boxType: entry.boxType,
+        support: 'deferred',
+        supportReason: entry.supportReason,
+      },
+      defaultVariant: {
+        materialCode: defaultMaterial,
+        color: 'natural',
+        printMode: 'none',
+        printSides: 'outside_only',
+        finish: 'none',
+      },
+      options: [],
+    });
+  }
+
+  // Join every seeded product to its canonical registry entry: attach the
+  // editor picker id, the three-axis readiness verdict and the preview
+  // family routing. The registry is the single source for these fields;
+  // hand-written structure/dieline/prepress literals stay untouched.
+  for (const def of CATALOG_PRODUCTS) {
+    const entry = CATALOGUE_PRODUCTS.find((e) => e.productId === def.id);
+    if (!entry) {
+      throw new Error(`Catalogue product "${def.id}" is missing from shared/catalog/products.ts`);
+    }
+    def.editorDefaults = {
+      ...(def.editorDefaults as Record<string, unknown>),
+      editorType: entry.id,
+      readiness: entry.readiness,
+      ...(entry.previewFamily ? { previewFamily: entry.previewFamily } : {}),
+      ...(entry.plannedFamily ? { plannedFamily: entry.plannedFamily } : {}),
+    };
+  }
+
   for (const cat of CATEGORIES) {
     await prisma.productCategory.upsert({
       where: { id: cat.id },
@@ -1693,25 +1751,29 @@ async function main() {
       catalogVariants += 1;
     }
 
-    // Scoped pricing rules for this product.
-    await prisma.pricingRule.upsert({
-      where: { id: `rule-${p.id}-conversion` },
-      update: { productType: p.productType, ruleType: 'conversion', value: p.conversion, scope: 'product', scopeId: p.id, isActive: true },
-      create: { id: `rule-${p.id}-conversion`, productType: p.productType, ruleType: 'conversion', value: p.conversion, scope: 'product', scopeId: p.id, isActive: true },
-    });
-    await prisma.pricingRule.upsert({
-      where: { id: `rule-${p.id}-margin` },
-      update: { productType: p.productType, ruleType: 'margin', value: p.margin, scope: 'product', scopeId: p.id, isActive: true },
-      create: { id: `rule-${p.id}-margin`, productType: p.productType, ruleType: 'margin', value: p.margin, scope: 'product', scopeId: p.id, isActive: true },
-    });
-    for (const tier of TIER_LADDER) {
-      if (tier.min <= p.moq) continue;
-      const ruleId = `rule-${p.id}-tier-${tier.min}`;
+    // Scoped pricing rules for this product — only when the registry entry
+    // carries real rate data. quote_required products intentionally get none:
+    // no invented conversion/margin/tier rates reach the pricing engine.
+    if (p.conversion != null && p.margin != null) {
       await prisma.pricingRule.upsert({
-        where: { id: ruleId },
-        update: { productType: p.productType, ruleType: 'discount_tier', value: tier.factor, minQuantity: tier.min, scope: 'product', scopeId: p.id, isActive: true },
-        create: { id: ruleId, productType: p.productType, ruleType: 'discount_tier', value: tier.factor, minQuantity: tier.min, scope: 'product', scopeId: p.id, isActive: true },
+        where: { id: `rule-${p.id}-conversion` },
+        update: { productType: p.productType, ruleType: 'conversion', value: p.conversion, scope: 'product', scopeId: p.id, isActive: true },
+        create: { id: `rule-${p.id}-conversion`, productType: p.productType, ruleType: 'conversion', value: p.conversion, scope: 'product', scopeId: p.id, isActive: true },
       });
+      await prisma.pricingRule.upsert({
+        where: { id: `rule-${p.id}-margin` },
+        update: { productType: p.productType, ruleType: 'margin', value: p.margin, scope: 'product', scopeId: p.id, isActive: true },
+        create: { id: `rule-${p.id}-margin`, productType: p.productType, ruleType: 'margin', value: p.margin, scope: 'product', scopeId: p.id, isActive: true },
+      });
+      for (const tier of TIER_LADDER) {
+        if (tier.min <= p.moq) continue;
+        const ruleId = `rule-${p.id}-tier-${tier.min}`;
+        await prisma.pricingRule.upsert({
+          where: { id: ruleId },
+          update: { productType: p.productType, ruleType: 'discount_tier', value: tier.factor, minQuantity: tier.min, scope: 'product', scopeId: p.id, isActive: true },
+          create: { id: ruleId, productType: p.productType, ruleType: 'discount_tier', value: tier.factor, minQuantity: tier.min, scope: 'product', scopeId: p.id, isActive: true },
+        });
+      }
     }
     catalogProducts += 1;
   }
