@@ -229,7 +229,7 @@ async function main() {
     slug: string;
     name: string;
     shortDescription: string;
-    description: string;
+    description: string | null;
     productType: string; // "box" | "bag" | "label"
     boxType: string;
     moq: number;
@@ -1204,11 +1204,10 @@ async function main() {
       minDims: { length: 2, width: 2, height: 1 },
       maxDims: { length: 60, width: 50, height: 40 },
       priceFrom: 14,
-      thumbnail: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
-      gallery: [
-        'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1605902711622-cfb43c4437b5?w=800&h=600&fit=crop',
-      ],
+      // No honest product photo on file — neutral placeholder, never a
+      // mismatched stock image (previous stock photo showed food).
+      thumbnail: null,
+      gallery: [],
       ecoFlags: { ecoChoice: true, fsc: true, recycled: true, biodegradable: true, reusable: true, recycledContent: '70%' },
       filters: { industries: ['ecommerce', 'retail', 'cosmetics', 'subscription', 'apparel'], sizes: ['f42', 'f52', 'f62', 'f72'] },
       editorDefaults: { boxType: 'mailer-box', defaultMaterial: 'cardboard-kraft', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'E', structure: MAILER_BOX_STRUCTURE, prepress: { caliperMm: 0.5, fluteType: 'E', glueFlapToleranceMm: 1.5 }, schemaVersion: 1, unit: 'mm', dieline: MAILER_DIELINE_TEMPLATE, support: 'supported' },
@@ -1236,11 +1235,8 @@ async function main() {
       minDims: { length: 3, width: 2, height: 1 },
       maxDims: { length: 40, width: 30, height: 20 },
       priceFrom: 12,
-      thumbnail: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&h=600&fit=crop',
-      gallery: [
-        'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
-      ],
+      thumbnail: null,
+      gallery: [],
       ecoFlags: { ecoChoice: true, fsc: true, recycled: true, recycledContent: '50%' },
       filters: { industries: ['retail', 'cosmetics', 'food', 'electronics'], sizes: ['s', 'm', 'l'] },
       editorDefaults: { boxType: 'folding-carton', defaultMaterial: 'cardboard-white', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'E', structure: FOLDING_CARTON_STRUCTURE, prepress: { caliperMm: 0.45, fluteType: 'E', glueFlapToleranceMm: 1.5 }, schemaVersion: 1, unit: 'mm', dieline: FOLDING_CARTON_DIELINE_TEMPLATE, support: 'supported' },
@@ -1274,11 +1270,8 @@ async function main() {
       minDims: { length: 10, width: 10, height: 5 },
       maxDims: { length: 120, width: 80, height: 80 },
       priceFrom: 9,
-      thumbnail: 'https://images.unsplash.com/photo-1605902711622-cfb43c4437b5?w=800&h=600&fit=crop',
-      gallery: [
-        'https://images.unsplash.com/photo-1605902711622-cfb43c4437b5?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
-      ],
+      thumbnail: null,
+      gallery: [],
       ecoFlags: { ecoChoice: true, recycled: true, reusable: true, recycledContent: '90%' },
       filters: { industries: ['wholesale', 'fulfilment', 'ecommerce', 'manufacturing'], sizes: ['s', 'm', 'l', 'xl'] },
       editorDefaults: { boxType: 'shipping-box', defaultMaterial: 'corrugated-kraft', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'B', structure: SHIPPING_BOX_STRUCTURE, prepress: { caliperMm: 0.75, fluteType: 'B', glueFlapToleranceMm: 1.5 }, schemaVersion: 1, unit: 'mm', dieline: SHIPPING_BOX_DIELINE_TEMPLATE, support: 'supported' },
@@ -1324,10 +1317,11 @@ async function main() {
       minDims: { length: 10, width: 8, height: 3 },
       maxDims: { length: 60, width: 50, height: 20 },
       priceFrom: 35,
+      // Gift-box photo verified to match a rigid gift box; gallery trimmed
+      // to that verified image only.
       thumbnail: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&h=600&fit=crop',
       gallery: [
         'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
       ],
       ecoFlags: { ecoChoice: false, recycled: true, reused: true, recyclable: true },
       filters: { industries: ['gifting', 'retail', 'luxury', 'cosmetics'], sizes: ['s', 'm', 'l'] },
@@ -1369,10 +1363,10 @@ async function main() {
       minDims: { length: 20, width: 20, height: 2 },
       maxDims: { length: 60, width: 60, height: 10 },
       priceFrom: 10,
+      // Pizza photo verified to match the pizza box; gallery trimmed to it.
       thumbnail: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=600&fit=crop',
       gallery: [
         'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1605902711622-cfb43c4437b5?w=800&h=600&fit=crop',
       ],
       ecoFlags: { ecoChoice: true, recyclable: true, biodegradable: true, reusable: true },
       filters: { industries: ['food', 'restaurants', 'catering', 'beverage'], sizes: ['s', 'm', 'l'] },
@@ -1414,11 +1408,8 @@ async function main() {
       minDims: { length: 10, width: 8, height: 3 },
       maxDims: { length: 50, width: 40, height: 20 },
       priceFrom: 8,
-      thumbnail: 'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?w=800&h=600&fit=crop',
-      gallery: [
-        'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=800&h=600&fit=crop',
-      ],
+      thumbnail: null,
+      gallery: [],
       ecoFlags: { ecoChoice: true, fsc: true, recycled: true, biodegradable: true, recycledContent: '40%' },
       filters: { industries: ['retail', 'food', 'fashion', 'boutique'], sizes: ['s', 'm', 'l'] },
       editorDefaults: { boxType: 'paper-bag', defaultMaterial: 'kraft', defaultColor: 'one_colour', defaultPrint: 'outside', handle: 'none', support: 'deferred', supportReason: 'Bag = 2+2 side panels with a gusseted base — non-rectangular gusset authoring is unsafe in M8 (spec §14); deferred to post-M8, never shipped with fake geometry.' },
@@ -1474,11 +1465,8 @@ async function main() {
       minDims: { length: 10, width: 10, height: 1 },
       maxDims: { length: 60, width: 60, height: 5 },
       priceFrom: 5,
-      thumbnail: 'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=800&h=600&fit=crop',
-      gallery: [
-        'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?w=800&h=600&fit=crop',
-      ],
+      thumbnail: null,
+      gallery: [],
       ecoFlags: { ecoChoice: true, recycled: true },
       filters: { industries: ['ecommerce', 'apparel', 'subscription'], sizes: ['s', 'm', 'l'] },
       editorDefaults: { boxType: 'poly-mailer', defaultMaterial: 'poly', defaultColor: 'one_colour', defaultPrint: 'outside', handle: 'none', support: 'deferred', supportReason: 'Single-face + back LDPE self-seal pouch — physically not a box; no generic box blueprint/deferral per spec §14.' },
@@ -1520,11 +1508,8 @@ async function main() {
       minDims: { length: 2, width: 2, height: 0.1 },
       maxDims: { length: 30, width: 20, height: 0.1 },
       priceFrom: 1.5,
-      thumbnail: 'https://images.unsplash.com/photo-1590846406792-0adc7f938f1d?w=800&h=600&fit=crop',
-      gallery: [
-        'https://images.unsplash.com/photo-1590846406792-0adc7f938f1d?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=800&h=600&fit=crop',
-      ],
+      thumbnail: null,
+      gallery: [],
       ecoFlags: { ecoChoice: true, recycled: true },
       filters: { industries: ['retail', 'food', 'cosmetics', 'mailing'], sizes: ['sq50', 'r75x50', 'r100x75', 'r150x100'] },
       editorDefaults: { boxType: 'label', defaultMaterial: 'paper', defaultColor: 'full_color', defaultPrint: 'outside', dieCut: 'rectangle', support: 'deferred', supportReason: 'Flat 1-panel die-cut with zones on a single face — deferred until non-rectangular die-cut path authoring (spec §14).' },
@@ -1563,7 +1548,9 @@ async function main() {
       slug: entry.slug,
       name: entry.name.en,
       shortDescription: entry.description.en,
-      description: entry.description.en,
+      // No invented marketing copy; the one honest line stays in
+      // shortDescription until real product copy exists.
+      description: null,
       productType: entry.pricingFamily,
       boxType: entry.boxType,
       moq: entry.moq,
