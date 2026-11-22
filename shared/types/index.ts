@@ -38,6 +38,7 @@ export interface DesignFile {
     | 'dieline'
     | 'proof'
     | 'export'
+    | 'artwork_review'
   fileName: string
   fileUrl: string
   fileSize?: number | null

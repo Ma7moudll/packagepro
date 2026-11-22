@@ -195,6 +195,7 @@ export class DesignService {
    * Save design data (durable database persistence)
    */
   async saveDesign(data: SaveDesignData, ownerId?: string): Promise<any> {
+    if (data.files?.some((file) => file.fileType === 'artwork_review')) throw new AppError(400, 'Review artifacts must use the owner-bound review endpoint');
     let session: any = {};
     const redis = getRedisClient();
 
