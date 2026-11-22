@@ -49,6 +49,8 @@ interface DielineViewProps {
   /** Canonical resolution produced at the single resolution point. */
   resolution?: DielineResolution
   backgroundColor: string
+  /** Display-only artwork (PNG data URL per outside face). Not exported. */
+  faceArtwork?: Record<string, string>
   selectedFace: FaceId | null
   onSelectFace: (faceId: FaceId) => void
 }
@@ -56,6 +58,7 @@ interface DielineViewProps {
 export function DielineView({
   resolution,
   backgroundColor,
+  faceArtwork,
   selectedFace,
   onSelectFace,
 }: DielineViewProps) {
@@ -232,6 +235,16 @@ export function DielineView({
                   borderColor: selectedFace === id ? "#3b82f6" : "#cbd5e1",
                 }}
               >
+                {!isFlap && faceArtwork?.[faceId] && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={faceArtwork[faceId]}
+                    alt=""
+                    data-dieline-artwork={faceId}
+                    draggable={false}
+                    className="absolute inset-0 w-full h-full pointer-events-none select-none"
+                  />
+                )}
                 <div className="absolute inset-0 flex items-center justify-center">
                   <span
                     className={`
