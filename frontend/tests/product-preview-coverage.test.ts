@@ -10,7 +10,7 @@ test('known box families use independent stock and text relief without changing 
  }
 })
 test('unknown and distinct unprepared subtypes never masquerade as mailer boxes',()=>{
- for(const type of ['pillow_box','rigid_magnetic_box','cotton_bag','smoothie_cup','not-real']){
+ for(const type of ['pillow_box','rigid_magnetic_box','cotton_bag','not-real']){
   const c=productPreviewCoverage(type)
   assert.equal(c.geometry,'unavailable',type);assert.equal(c.family,undefined,type);assert.equal(c.twoSidedStock,false,type)
  }
@@ -53,3 +53,5 @@ test('session restore owns initialization even without catalogue product identit
 test('mailer seal edges follow selected stock instead of a white default',()=>{
  const source=readFileSync('components/design-editor/models/SoftProducts.tsx','utf8');assert.match(source,/stock.outside.clone\(\)/);assert.doesNotMatch(source,/#dedede/)
 })
+
+test('clear cup is a distinct in-progress nonpaper preview without implied relief',()=>{const c=productPreviewCoverage('smoothie_cup');assert.equal(c.family,'cup');assert.equal(c.paperSurface,false);assert.equal(c.twoSidedStock,false);assert.equal(c.selectiveTextRelief,false);assert.equal(c.productionApproved,false)})

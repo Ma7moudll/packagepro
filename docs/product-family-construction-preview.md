@@ -1,6 +1,6 @@
 # Construction preview checkpoint
 
-These are in-progress visual models, not approved manufacturing drawings or stock specifications. Catalogue readiness does not change in this checkpoint.
+These are in-progress visual models, not approved manufacturing drawings or stock specifications. Only the clear-cup preview is newly marked in progress in the cup checkpoint; its production dieline stays deferred and its pricing stays quote required. No product is newly marked supported.
 
 ## Shipping box
 
@@ -30,6 +30,20 @@ The two sides of gussets have distinct winding and U direction so inside artwork
 
 Reference for common attachment constructions only, not strength or grade claims:
 https://pakoro.com/blog/how-to-add-handles-to-paper-bags/
+
+## Cups
+
+Paper cups have a formed rim, separate inner wall, a narrow rear sidewall overlap and a recessed bottom with a lower skirt. The clear cup has transparent moulded-looking walls and small forming rings rather than a paper seam. No lid, straw, liquid volume or capacity rating is inferred.
+
+Clear-cup print uses the original transparent artwork texture as a separate ink surface. It does not use the board compositor, which would make the unprinted area opaque. Through-wall ink is reversed when viewed from behind. The simple transparent material is not a physically validated refraction model. Selective text relief is disabled for clear cups until it has its own treatment.
+
+Wall gauge, rim section, recess depth, forming details and optical response remain illustrative. Front/back half-wrap UVs are preview mapping, not a production conical unroll. No food-contact, heat, leakage, grade or recycling certification is claimed. The clear-cup catalogue preview is in progress; its dieline remains deferred and its price remains quote required.
+
+Construction references, not approval of this model or its stock:
+
+- Paper cup maker, formed wall joined to a flat bottom and rolled rim: https://pvp-peters.de/wp-content/uploads/2016/01/Catalog-English.pdf
+- Cup-forming machine reporting, vertical side seams and recessed bottoms: https://www.packworld.com/leaders-new/machinery/converting-equipment/article/13375593/controller-makes-cupforming-machine-stand-out
+- Manufacturer examples of transparent cold-drink cups in different plastics. These do not identify the user's cup grade: https://www.huhtamaki.com/en/foodservice/products/plastic-cold-drinks-cups-and-lids/
 
 ## Verification boundaries
 

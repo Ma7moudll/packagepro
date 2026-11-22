@@ -6,7 +6,7 @@ const ROUTES: Record<string, PreviewFamily> = {
  "shipping-box":"shipping", "custom-shipping-box":"shipping",
  "rigid-box":"rigid", "custom-rigid-box":"rigid", "gift-box":"rigid",
  "folding-carton":"carton", "pizza-box":"pizza", "custom-pizza-box":"pizza",
- "cup":"cup", "paper-cup":"cup", "bag":"bag", "paper-bag":"bag", "carrier-bag":"bag",
+ "cup":"cup", "paper-cup":"cup", "smoothie-cup":"cup", "bag":"bag", "paper-bag":"bag", "carrier-bag":"bag",
  "doypack-pouch":"pouch", "compostable-doypack":"pouch", "recyclable-doypack":"pouch", "doypack-valve":"pouch",
  "pouch":"pouch", "stand-up-pouch":"pouch", "doypack":"pouch",
  "tube":"tube", "cardboard-tube":"tube", "envelope":"envelope", "mailer-envelope":"envelope",
@@ -19,6 +19,7 @@ export function productPreviewCoverage(type:string){
  const normalized=type.toLowerCase().replace(/_/g,"-")
  const family=ROUTES[normalized]
  const paperSurface=family!==undefined&&["mailer","shipping","rigid","carton","pizza","cup","bag","tube","envelope","flat","label"].includes(family)||normalized==="paper-mailer-bag"
+ const actualPaperSurface=paperSurface&&normalized!=="smoothie-cup"
  const twoSidedStock=!!family&&["mailer","shipping","rigid","carton","pizza"].includes(family)
- return {normalized,family,geometry:family?"preview":"unavailable",twoSidedStock,paperSurface,selectiveTextRelief:!!family,productionApproved:false} as const
+ return {normalized,family,geometry:family?"preview":"unavailable",twoSidedStock,paperSurface:actualPaperSurface,selectiveTextRelief:!!family&&normalized!=="smoothie-cup",productionApproved:false} as const
 }
