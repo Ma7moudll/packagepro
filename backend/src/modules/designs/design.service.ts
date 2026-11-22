@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { getRedisClient } from '../../lib/redis';
 import { fileUploadService } from '../../services/file-upload/upload.service';
 import { DesignLifecycleService, DesignLifecycleState } from '../../services/design-lifecycle/design-lifecycle.service';
-import { isDesignOwner } from '../../middleware/auth.middleware';
+import { isDesignOwner, designOwnerMatches } from '../../middleware/auth.middleware';
 import { certifiedDielineReceipt } from './dieline-delivery';
 import { prePressCheckService } from '../../services/pre-press-checker/prepress.service';
 
@@ -46,13 +46,31 @@ export class DesignService {
     const sessionId = randomUUID();
     const redis = getRedisClient();
 
+    // An authenticated user may only attach a design to an order they own,
+    // and may only reuse a design that is theirs. Anything ambiguous fails
+    // closed (and never reveals whether the order exists).
+    if (data.orderId && ownerId) {
+      const order = await prisma.order.findUnique({
+        where: { id: data.orderId },
+        select: { customer: { select: { userId: true } }, design: { select: { ownerId: true } } },
+      });
+      const orderUserId = order?.customer?.userId ?? null;
+      if (!order || orderUserId !== ownerId) {
+        throw new AppError(403, 'You do not have access to this order');
+      }
+      const existingOwner = order.design?.ownerId;
+      if (existingOwner && existingOwner !== ownerId) {
+        throw new AppError(403, 'You do not have access to this order');
+      }
+    }
+
     // Durable database record (owner-scoped). Without an order the design sits
     // in `draft` until it is saved or eventually linked to an order.
     const design =
       data.orderId && ownerId
         ? await prisma.design.upsert({
             where: { orderId: data.orderId },
-            update: { sessionId, updatedAt: new Date() },
+            update: { sessionId, ownerId, updatedAt: new Date() },
             create: {
               orderId: data.orderId,
               ownerId,
@@ -177,6 +195,24 @@ export class DesignService {
     });
 
     if (design) {
+      // Never let a save take over or write into someone else's design, and
+      // never reassign an existing owner.
+      if (ownerId) {
+        const linked = design.orderId
+          ? await prisma.order.findUnique({
+              where: { id: design.orderId },
+              select: { customer: { select: { userId: true } } },
+            })
+          : null;
+        if (
+          (design.ownerId || linked) &&
+          !designOwnerMatches(design.ownerId, linked?.customer?.userId ?? null, ownerId)
+        ) {
+          throw new AppError(403, 'You do not have access to this design');
+        }
+      } else if (design.ownerId) {
+        throw new AppError(403, 'You do not have access to this design');
+      }
       // M8-H: lifecycle save gate — only DRAFT designs are editable. The editor
       // mirrors this via isReadOnly(), but the backend is authoritative: a
       // SUBMITTED/IN_REVIEW/APPROVED session must reject saves (AC4). The client
