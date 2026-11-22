@@ -195,6 +195,7 @@ export default function ProductsPage() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {products.map((p) => {
               const Icon = typeIcon[p.productType] ?? Package
+              const quoteRequired = p.readiness?.pricing === "quote_required"
               return (
                 <div
                   key={p.id}
@@ -241,19 +242,26 @@ export default function ProductsPage() {
 
                     <div className="mt-4 flex items-end justify-between">
                       <div>
-                        {formatMoney(p.priceFrom) && (
-                          <p className="text-xl font-bold">
-                            {formatMoney(p.priceFrom)}
-                            <span className="text-sm font-normal text-muted-foreground"> from</span>
-                          </p>
+                        {quoteRequired ? (
+                          <Badge variant="outline" className="gap-1 border-amber-500 text-amber-600">
+                            Under preparation
+                          </Badge>
+                        ) : (
+                          formatMoney(p.priceFrom) && (
+                            <p className="text-xl font-bold">
+                              {formatMoney(p.priceFrom)}
+                              <span className="text-sm font-normal text-muted-foreground"> from</span>
+                            </p>
+                          )
                         )}
-                        <p className="text-xs text-muted-foreground">MOQ {p.moq} units</p>
+                        <p className="mt-1 text-xs text-muted-foreground">MOQ {p.moq} units</p>
                       </div>
                       <Button
                         size="sm"
+                        variant={quoteRequired ? "outline" : "default"}
                         onClick={() => router.push(`/products/${p.slug}`)}
                       >
-                        Configure
+                        {quoteRequired ? "Request quote" : "Configure"}
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     </div>

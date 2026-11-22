@@ -75,6 +75,9 @@ export default function ProductDetailPage() {
   })
 
   const product = data as CatalogProductDetail | undefined
+  // Unified catalogue: products without product-specific rates are visible
+  // and classifiable but not sold at an invented price.
+  const quoteRequired = product?.readiness?.pricing === "quote_required"
 
   const unit: Unit = (product?.sizeUnit as Unit) ?? "cm"
   const minD = (product?.minDimensions ?? { length: 0, width: 0, height: 0 }) as Dimensions
@@ -151,7 +154,7 @@ export default function ProductDetailPage() {
     queryKey: ["catalog-quote", slug, debounced ? JSON.stringify(debounced) : "pending"],
     queryFn: () =>
       catalogApi.quote(slug, debounced as CatalogQuoteRequest).then((res) => res.data),
-    enabled: Boolean(debounced && product),
+    enabled: Boolean(debounced && product && !quoteRequired),
     retry: false,
   })
   const quote = quoteQuery.data as CatalogQuote | undefined
@@ -273,7 +276,9 @@ export default function ProductDetailPage() {
                 <p className="text-xs text-muted-foreground">MOQ</p>
               </div>
               <div className="rounded-xl border p-3">
-                <p className="text-lg font-bold">{fmtMoney(product.priceFrom)}</p>
+                <p className="text-lg font-bold">
+                  {quoteRequired ? "On request" : fmtMoney(product.priceFrom)}
+                </p>
                 <p className="text-xs text-muted-foreground">From / unit</p>
               </div>
               <div className="rounded-xl border p-3">
@@ -420,7 +425,29 @@ export default function ProductDetailPage() {
             <Separator />
 
             {/* Quote */}
-            {(quoteQuery.isLoading || !debounced) && (
+            {quoteRequired && (
+              <div className="space-y-3 rounded-xl border border-amber-500/50 bg-amber-500/10 p-4">
+                <p className="text-sm font-medium text-amber-700">
+                  This product is newly listed and still under preparation.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  We don&apos;t have a verified price for it yet, so it can&apos;t be
+                  ordered online at an invented figure. Send us your size and
+                  quantity and we&apos;ll come back with a real quote.
+                </p>
+                <Button
+                  className="w-full"
+                  size="lg"
+                  variant="outline"
+                  onClick={() => router.push(`/contact?product=${product.slug}&qty=${effectiveQty}`)}
+                >
+                  Request a quote
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            {!quoteRequired && (quoteQuery.isLoading || !debounced) && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Calculating live price…
@@ -469,15 +496,17 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            <Button
-              className="w-full"
-              size="lg"
-              disabled={!debounced || !quote || !!quoteError}
-              onClick={handleAddToCart}
-            >
-              <Icons.package className="mr-2 h-4 w-4" />
-              Add to cart · {quote ? fmtMoney(quote.totalPrice) : "…"}
-            </Button>
+            {!quoteRequired && (
+              <Button
+                className="w-full"
+                size="lg"
+                disabled={!debounced || !quote || !!quoteError}
+                onClick={handleAddToCart}
+              >
+                <Icons.package className="mr-2 h-4 w-4" />
+                Add to cart · {quote ? fmtMoney(quote.totalPrice) : "…"}
+              </Button>
+            )}
             <Button
               variant="outline"
               className="w-full"
