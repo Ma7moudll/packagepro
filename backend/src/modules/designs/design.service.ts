@@ -5,7 +5,6 @@ import { getRedisClient } from '../../lib/redis';
 import { fileUploadService } from '../../services/file-upload/upload.service';
 import { DesignLifecycleService, DesignLifecycleState } from '../../services/design-lifecycle/design-lifecycle.service';
 import { isDesignOwner } from '../../middleware/auth.middleware';
-import { enqueueExport, ExportJobData } from '../../workers/export-queue/export.worker';
 import { certifiedDielineReceipt } from './dieline-delivery';
 import { prePressCheckService } from '../../services/pre-press-checker/prepress.service';
 
@@ -404,7 +403,7 @@ export class DesignService {
 
   /**
    * Export design in specified format
-   * Enqueues an async export job
+   * svg returns the certified dieline receipt; other formats are not implemented server-side
    */
   async exportDesign(
     designId: string,
@@ -455,25 +454,14 @@ export class DesignService {
       });
     }
 
-    // Enqueue export job
-    const exportData: ExportJobData = {
-      designId,
-      format: options.format,
-      options: options.options,
-    };
-
-    try {
-      const job = await enqueueExport(exportData);
-      
-      return {
-        jobId: job.id,
-        status: 'queued',
-        format: options.format,
-        message: `Export job queued. Check status with jobId: ${job.id}`,
-      };
-    } catch (error) {
-      throw new AppError(500, 'Failed to queue export job');
-    }
+    // png/pdf/ai/eps: the server has no real renderer yet (the queue worker is
+    // never started and only produces placeholder bytes), so do not queue a job
+    // that can only end as a fake success. Browser previews and the certified
+    // dieline (svg) are unaffected.
+    throw new AppError(
+      501,
+      `Server-side ${options.format} export is not available yet. Use the editor's browser export, or the certified dieline (svg).`
+    );
   }
 
   /**
