@@ -92,6 +92,10 @@ jobs:
           STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder
           DHL_API_KEY: test
           DHL_API_SECRET: test
+          # Contain this active candidate-review workflow as well as legacy CI.
+          # SMTP_HOST/PORT are not read by the backend email service.
+          EMAIL_PROVIDER: test
+          DHL_BASE_URL: http://127.0.0.1:9
           SMTP_HOST: 127.0.0.1
           SMTP_PORT: 9
         run: npm test -- --run
