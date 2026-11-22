@@ -1,7 +1,8 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
-import { mkdir, readFile, writeFile } from 'fs/promises';
+import { constants as fsConstants } from 'fs';
+import { mkdir, open, readFile, realpath, writeFile } from 'fs/promises';
 import path from 'path';
 import { ValidationError } from '../../utils/errors';
 
@@ -176,16 +177,45 @@ export class FileUploadService {
    * upload root (path traversal guard).
    */
   async readLocalFile(
-    fileKey: string
+    fileKey: string,
+    options: { maxBytes?: number } = {}
   ): Promise<{ buffer: Buffer; extension: string } | null> {
-    const safeRoot = path.resolve(LOCAL_UPLOAD_DIR);
-    const dest = path.resolve(safeRoot, fileKey);
-    if (!dest.startsWith(safeRoot + path.sep)) {
-      return null;
-    }
     try {
-      const buffer = await readFile(dest);
-      return { buffer, extension: path.extname(dest).replace('.', '') };
+      // Containment: resolve symlinks on both sides before opening.
+      // Threat boundary: this stops client-supplied keys (traversal, links
+      // that already exist). It does not defend against a second local writer
+      // swapping path components between this check and the open; the upload
+      // directory is only written by this service, so that is out of scope.
+      const safeRoot = await realpath(LOCAL_UPLOAD_DIR);
+      const dest = await realpath(path.resolve(safeRoot, fileKey));
+      if (!dest.startsWith(safeRoot + path.sep)) {
+        return null;
+      }
+      const extension = path.extname(dest).replace('.', '');
+      if (options.maxBytes === undefined) {
+        return { buffer: await readFile(dest), extension };
+      }
+      // Bounded read from one descriptor: the cap is enforced on the bytes
+      // actually read, so a file that grows after the check still cannot
+      // exceed it. O_NOFOLLOW refuses a final-component symlink at open.
+      const fh = await open(dest, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+      try {
+        const info = await fh.stat();
+        if (!info.isFile() || info.size > options.maxBytes) return null;
+        const chunks: Buffer[] = [];
+        let total = 0;
+        for (;;) {
+          const chunk = Buffer.allocUnsafe(Math.min(1024 * 1024, options.maxBytes + 1 - total));
+          const { bytesRead } = await fh.read(chunk, 0, chunk.length, null);
+          if (bytesRead === 0) break;
+          total += bytesRead;
+          if (total > options.maxBytes) return null;
+          chunks.push(chunk.subarray(0, bytesRead));
+        }
+        return { buffer: Buffer.concat(chunks, total), extension };
+      } finally {
+        await fh.close();
+      }
     } catch {
       return null;
     }

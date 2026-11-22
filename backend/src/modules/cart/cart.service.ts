@@ -1,5 +1,6 @@
+import { assertSpecificationPriced } from "../../utils/production-specification";
 import { prisma } from '../../lib/prisma';
-import { NotFoundError, ValidationError } from '../../utils/errors';
+import { NotFoundError, ValidationError, AuthorizationError } from '../../utils/errors';
 import { pricingService } from '../../services/pricing-engine/pricing.service';
 import { groupShippingByProductType } from '../../services/pricing-engine/calculations';
 
@@ -48,7 +49,7 @@ export class CartService {
 
     if (!cart) {
       cart = await prisma.cart.create({
-        data: { customerId, currency: 'USD' },
+        data: { customerId, currency: 'EGP' },
         include: { items: true },
       });
     }
@@ -62,6 +63,13 @@ export class CartService {
    * matching OrderService.createOrder aggregation.
    */
   private async enrichItem(item: any, template?: any) {
+    if (item.designId) {
+      const design = await prisma.design.findUnique({where: {id: item.designId}, select: {designData: true}});
+      assertSpecificationPriced(design?.designData);
+
+
+
+    }
     const product = item.variantId
       ? await prisma.product.findFirst({
           where: { variants: { some: { id: item.variantId } } },
@@ -102,7 +110,7 @@ export class CartService {
       finish: item.finish,
       templateId: item.templateId,
       sessionId: item.sessionId,
-      name: product?.name || template?.name || item.productType,
+      name: (item.config as Record<string, string> | null)?.designName || product?.name || template?.name || item.productType,
       thumbnail: product?.thumbnail || template?.thumbnail || undefined,
       unitPrice: round2(itemSubtotal / item.quantity),
       totalPrice: itemSubtotal,
@@ -144,23 +152,14 @@ export class CartService {
       throw new ValidationError('Quantity must be at least 1');
     }
 
-    // Validate product type and pricing by running the engine up-front so we
-    // never persist an unpriceable line.
-    await pricingService.calculatePrice({
-      productType: input.productType,
-      quantity: input.quantity,
-      dimensions: input.dimensions,
-      materialCode: input.materialCode,
-    });
-
-    const cart = await this.getOrCreateCart(customerId);
-
     // M7-E traceability: resolve the editor Design by its unique sessionId and
     // carry its identity into the cart line. Client identity is never trusted
     // for pricing/authorization — this is persistence only.
     let design: {
       id: string;
+      ownerId: string | null;
       designConfig?: unknown;
+      designData?: unknown;
       productId?: string | null;
       variantId?: string | null;
       sku?: string | null;
@@ -168,13 +167,26 @@ export class CartService {
     if (input.sessionId) {
       design = await prisma.design.findUnique({
         where: { sessionId: input.sessionId },
-        select: { id: true, productId: true, variantId: true, sku: true, designConfig: true },
+        select: { id: true, ownerId: true, productId: true, variantId: true, sku: true, designConfig: true, designData: true },
       });
     }
+    if (input.sessionId) {
+      const customer = await prisma.customer.findUnique({where: {id: customerId}, select: {userId: true}});
+      if (!design || !customer || design.ownerId !== customer.userId) {
+        throw new AuthorizationError('Design session is not owned by this customer');
+      }
+    }
+    assertSpecificationPriced(design?.designData);
     const designId = design?.id;
-    const productId = input.productId ?? design?.productId ?? undefined;
-    const variantId = input.variantId ?? design?.variantId ?? undefined;
+    if(design?.productId&&input.productId&&design.productId!==input.productId)throw new ValidationError('Design product does not match cart product');
+    if(design?.variantId&&input.variantId&&design.variantId!==input.variantId)throw new ValidationError('Design variant does not match cart variant');
+    const productId = design?.productId ?? input.productId ?? undefined;
+    const variantId = design?.variantId ?? input.variantId ?? undefined;
     const sku = input.sku ?? design?.sku ?? undefined;
+    // Validate the actual catalogue identity before creating any cart rows.
+    if(productId)await pricingService.quoteCatalog({productId,variantId,quantity:input.quantity,dimensions:input.dimensions,config:input.config});
+    else await pricingService.calculatePrice({productType:input.productType,quantity:input.quantity,dimensions:input.dimensions,materialCode:input.materialCode});
+    const cart = await this.getOrCreateCart(customerId);
     const config = input.config ?? (design?.designConfig as Record<string, string> | undefined) ?? undefined;
 
     const existing = cart.items.find(

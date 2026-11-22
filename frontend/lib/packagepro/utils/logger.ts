@@ -18,8 +18,10 @@ class Logger {
   private level: LogLevel
 
   constructor() {
-    const config = require("../config").getConfig()
-    this.level = config.monitoring.logLevel as LogLevel
+    // Logging must not initialize the retired integration stack or require its
+    // database, payment, SMTP and storage secrets just to import an API route.
+    const requested = process.env.LOG_LEVEL as LogLevel
+    this.level = Object.values(LogLevel).includes(requested) ? requested : LogLevel.INFO
   }
 
   private shouldLog(level: LogLevel): boolean {

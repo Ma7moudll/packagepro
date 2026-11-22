@@ -2,6 +2,9 @@
 
 **Date:** December 24, 2025
 
+> **Historical document (Dec 24, 2025).** Counts and gaps below are a snapshot and are stale: the repo now has backend and frontend unit tests and Playwright E2E specs under `frontend/e2e`, and the backend has more than 17 modules. Do not use this file as current status.
+
+
 ---
 
 ## ✅ What Has Been Done

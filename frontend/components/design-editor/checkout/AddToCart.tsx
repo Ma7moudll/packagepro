@@ -13,6 +13,7 @@ import { pricingApi } from "@/lib/api/pricing"
 import { useRouter } from "next/navigation"
 
 interface AddToCartProps {
+  quoteRequired?: boolean
   productType: "box" | "bag" | "label"
   materialCode: string
   dimensions: { length: number; width: number; height: number }
@@ -22,6 +23,7 @@ interface AddToCartProps {
 }
 
 export function AddToCart({
+  quoteRequired = false,
   productType,
   materialCode,
   dimensions,
@@ -49,7 +51,7 @@ export function AddToCart({
 
   useEffect(() => {
     let cancelled = false
-    if (!open) return
+    if (!open || quoteRequired) { setPrice(null); return }
     setPriceLoading(true)
     setPriceError(null)
     pricingApi
@@ -76,9 +78,10 @@ export function AddToCart({
     return () => {
       cancelled = true
     }
-  }, [open, quantity, productType, dimensions, materialCode])
+  }, [quoteRequired, open, quantity, productType, dimensions, materialCode])
 
   const handleAddToCart = async () => {
+    if (quoteRequired) return
     if (!user) {
       const redirect = encodeURIComponent(
         typeof window !== "undefined" ? `${window.location.pathname}${window.location.search}` : "/editor"
@@ -96,6 +99,9 @@ export function AddToCart({
         dimensions: { ...dimensions, unit: "mm" },
         materialCode,
         sessionId: sid,
+        // The backend passes config through to the cart line; keep the
+        // entered design name with the item (no dedicated column yet).
+        ...(designName.trim() ? { config: { designName: designName.trim() } } : {}),
       })
       setOpen(false)
       router.push("/cart")
@@ -109,7 +115,7 @@ export function AddToCart({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-emerald-600 hover:bg-emerald-700" size="sm" onClick={() => setDesignName("")}>
+        <Button disabled={quoteRequired} title={quoteRequired ? (language === "ar" ? "المواصفات تحتاج عرض سعر" : "Specifications require a quote") : undefined} className="bg-emerald-600 hover:bg-emerald-700" size="sm" onClick={() => setDesignName("")}>
           <ShoppingCart className="h-4 w-4 mr-2" />
           {language === "ar" ? "إضافة إلى السلة" : "Add to Cart"}
         </Button>
@@ -172,15 +178,15 @@ export function AddToCart({
               <>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">
-                    {language === "ar" ? "السعر لكل وحدة" : "Price per unit"}
+                    {language === "ar" ? "السعر لكل وحدة (شامل الشحن)" : "Price per unit (incl. shipping)"}
                   </span>
-                  <span>${price.unit.toFixed(2)}</span>
+                  <span>{language === "ar" ? `${price.unit.toFixed(2)} ج.م` : `EGP ${price.unit.toFixed(2)}`}</span>
                 </div>
                 <div className="flex justify-between font-semibold pt-2 border-t">
                   <span>
                     {language === "ar" ? "الإجمالي" : "Total"}
                   </span>
-                  <span>${price.total.toFixed(2)}</span>
+                  <span>{language === "ar" ? `${price.total.toFixed(2)} ج.م` : `EGP ${price.total.toFixed(2)}`}</span>
                 </div>
               </>
             ) : null}
@@ -189,7 +195,7 @@ export function AddToCart({
           {/* Add to Cart Button */}
           <Button
             onClick={handleAddToCart}
-            disabled={adding || priceLoading}
+            disabled={quoteRequired || adding || priceLoading}
             className="w-full"
           >
             {adding ? (

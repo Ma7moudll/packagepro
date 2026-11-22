@@ -1,5 +1,12 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import EGP_RATES from '../src/services/pricing-bootstrap/egp-rates.json';
+import {
+  CATALOGUE_CATEGORIES,
+  CATALOGUE_SUBCATEGORIES,
+  CATALOGUE_PRODUCTS,
+  CATALOGUE_CANDIDATE_MATERIALS,
+} from '../../shared/catalog/products';
 
 const prisma = new PrismaClient();
 
@@ -7,50 +14,22 @@ async function main() {
   console.log('Seeding database...');
 
   // Create sample materials.
-  // unitPrice is USD per square centimeter (the pricing engine computes
+  // unitPrice is EGP per square centimeter, calibrated to Egyptian
+  // board prices (testliner ~25-30 EGP/kg; imported white liner higher).
   // surface area in cm2). These codes match every material id/code the
   // frontend sends (editor MATERIAL_TYPES, product pages, pricing config).
-  const MATERIALS = [
-    // Product page codes (products/[id]/page.tsx materialColor mapping)
-    { code: 'kraft', name: 'Kraft Board', price: 0.00025 },
-    { code: 'white-kraft', name: 'White Kraft Board', price: 0.0003 },
-    { code: 'premium-white', name: 'Premium White Board', price: 0.0004 },
-    // Editor material types (products-data.ts MATERIAL_TYPES)
-    { code: 'cardboard-kraft', name: 'Kraft Cardboard', price: 0.00025 },
-    { code: 'corrugated-kraft', name: 'Corrugated Kraft', price: 0.00025 },
-    { code: 'cardboard-white', name: 'White Glossy (Imported)', price: 0.0003 },
-    { code: 'cardboard-coated', name: 'White Coated (Premium)', price: 0.00035 },
-    { code: 'cardboard-white-matte', name: 'White Matte (Imported)', price: 0.00032 },
-    { code: 'cardboard-local', name: 'White Local (Economic)', price: 0.00022 },
-    { code: 'corrugated-white', name: 'Corrugated White', price: 0.0003 },
-    { code: 'paper-silk', name: 'Silk Finish Paper', price: 0.0006 },
-    { code: 'paper-soft-touch', name: 'Soft Touch Paper', price: 0.0007 },
-    // Frontend pricing config codes (pricing-rules.ts MATERIAL_COSTS)
-    { code: 'corrugated_kraft', name: 'Corrugated Kraft (Config)', price: 0.00025 },
-    { code: 'white_corrugated', name: 'White Corrugated (Config)', price: 0.0003 },
-    { code: 'chipboard', name: 'Chipboard', price: 0.0005 },
-    { code: 'kraft_liner', name: 'Kraft Liner', price: 0.00045 },
-    { code: 'vinyl', name: 'Vinyl', price: 0.0008 },
-    { code: 'paper', name: 'Paper', price: 0.00015 },
-    { code: 'polyester', name: 'Polyester', price: 0.001 },
-    // Poly mailer body (lightweight LDPE)
-    { code: 'poly', name: 'LDPE Poly Mailer', price: 0.0004 },
-    // Legacy codes
-    { code: 'COATED_250', name: 'Coated Paper 250gsm', price: 0.00028 },
-    { code: 'UNCOATED_200', name: 'Uncoated Paper 200gsm', price: 0.00018 },
-    { code: 'CORRUGATED_E', name: 'Corrugated Board E-Flute', price: 0.00026 },
-  ];
+  const MATERIALS = EGP_RATES.map((rate) => ({ ...rate, price: rate.unitPrice }));
 
   const materials = await Promise.all(
     MATERIALS.map((m) =>
       prisma.material.upsert({
         where: { code: m.code },
-        update: { unitPrice: m.price, isActive: true },
+        update: { unitPrice: m.price, currency: 'EGP', isActive: true },
         create: {
           code: m.code,
           name: m.name,
           unitPrice: m.price,
-          currency: 'USD',
+          currency: 'EGP',
           isActive: true,
           metadata: { source: 'seed' },
         },
@@ -97,12 +76,13 @@ async function main() {
     {
       id: 'tpl-custom-mailer-box',
       name: 'Custom Mailer Box',
-      description: 'Customizable mailer box with full-color printing. Perfect for e-commerce.',
+      description: 'Customizable mailer box with full-color printing.',
       category: 'business',
       productType: 'box',
       boxType: 'mailer-box',
-      thumbnail:
-        'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
+      // No honest product photo on file — empty thumbnail renders the
+      // storefront's neutral Preview placeholder, never a mismatched stock image.
+      thumbnail: '',
       tags: ['mailer', 'box', 'ecommerce'],
       defaultMaterial: 'kraft',
       defaultDimensions: { length: 152, width: 102, height: 51, unit: 'mm' },
@@ -123,26 +103,25 @@ async function main() {
     {
       id: 'tpl-corrugated-shipping-box',
       name: 'Corrugated Shipping Box',
-      description: 'Heavy-duty corrugated shipping box for safe transit.',
+      description: 'Corrugated shipping box for larger loads.',
       category: 'industry-specific',
       productType: 'box',
       boxType: 'shipping-box',
-      thumbnail:
-        'https://images.unsplash.com/photo-1605902711622-cfb43c4437b5?w=800&h=600&fit=crop',
+      thumbnail: '',
       tags: ['shipping', 'box', 'corrugated'],
       defaultMaterial: 'cardboard-kraft',
       defaultDimensions: { length: 250, width: 200, height: 150, unit: 'mm' },
     },
     {
       id: 'tpl-eco-kraft-bag',
-      name: 'Eco Kraft Bag',
-      description: 'Sustainable kraft paper bag with custom branding.',
+      // No unverified eco certification in the name or copy.
+      name: 'Kraft Bag',
+      description: 'Kraft paper bag with custom branding.',
       category: 'business',
       productType: 'bag',
       boxType: undefined,
-      thumbnail:
-        'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?w=800&h=600&fit=crop',
-      tags: ['bag', 'eco', 'kraft'],
+      thumbnail: '',
+      tags: ['bag', 'kraft'],
       defaultMaterial: 'kraft',
       defaultDimensions: { length: 300, width: 200, height: 150, unit: 'mm' },
     },
@@ -153,8 +132,7 @@ async function main() {
       category: 'food-packaging',
       productType: 'bag',
       boxType: undefined,
-      thumbnail:
-        'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=800&h=600&fit=crop',
+      thumbnail: '',
       tags: ['pouch', 'bag', 'food'],
       defaultMaterial: 'cardboard-white',
       defaultDimensions: { length: 180, width: 120, height: 40, unit: 'mm' },
@@ -166,8 +144,7 @@ async function main() {
       category: 'business',
       productType: 'label',
       boxType: undefined,
-      thumbnail:
-        'https://images.unsplash.com/photo-1590846406792-0adc7f938f1d?w=800&h=600&fit=crop',
+      thumbnail: '',
       tags: ['label', 'sticker'],
       defaultMaterial: 'paper',
       defaultDimensions: { length: 100, width: 100, unit: 'mm' },
@@ -251,7 +228,7 @@ async function main() {
     slug: string;
     name: string;
     shortDescription: string;
-    description: string;
+    description: string | null;
     productType: string; // "box" | "bag" | "label"
     boxType: string;
     moq: number;
@@ -259,8 +236,8 @@ async function main() {
     sizes: CatalogSize[];
     minDims: CatalogDims;
     maxDims: CatalogDims;
-    priceFrom: number;
-    thumbnail: string;
+    priceFrom: number | null; // null => quote on request (no rate card yet)
+    thumbnail: string | null;
     gallery: string[];
     ecoFlags: unknown;
     filters: unknown;
@@ -273,26 +250,15 @@ async function main() {
       finish: string;
     };
     options: CatalogOption[];
-    conversion: number; // base conversion/setup cost per unit (USD)
-    margin: number; // margin factor (e.g. 0.35 = +35%)
+    conversion?: number; // base conversion/setup cost per unit (EGP)
+    margin?: number; // margin factor (e.g. 0.35 = +35%)
   }
 
-  const CATEGORIES = [
-    { id: 'cat-boxes', slug: 'boxes', name: 'Boxes', description: 'Custom printed mailing, product and shipping boxes made to your exact dimensions.', sortOrder: 1 },
-    { id: 'cat-bags', slug: 'bags', name: 'Bags', description: 'Sustainable paper carrier bags and lightweight mailing bags with custom branding.', sortOrder: 2 },
-    { id: 'cat-labels', slug: 'labels-stickers', name: 'Labels & Stickers', description: 'Die-cut labels and stickers for products, retail and mailers.', sortOrder: 3 },
-  ];
-
-  const SUBCATEGORIES = [
-    { id: 'sub-mailer-boxes', categoryId: 'cat-boxes', slug: 'mailer-boxes', name: 'Mailer Boxes', sortOrder: 1 },
-    { id: 'sub-product-boxes', categoryId: 'cat-boxes', slug: 'product-boxes', name: 'Product Boxes', sortOrder: 2 },
-    { id: 'sub-shipping-boxes', categoryId: 'cat-boxes', slug: 'shipping-boxes', name: 'Shipping Boxes', sortOrder: 3 },
-    { id: 'sub-rigid-boxes', categoryId: 'cat-boxes', slug: 'rigid-boxes', name: 'Rigid & Gift Boxes', sortOrder: 4 },
-    { id: 'sub-pizza-boxes', categoryId: 'cat-boxes', slug: 'pizza-boxes', name: 'Pizza & Food Boxes', sortOrder: 5 },
-    { id: 'sub-carrier-bags', categoryId: 'cat-bags', slug: 'carrier-bags', name: 'Carrier Bags', sortOrder: 1 },
-    { id: 'sub-mailing-bags', categoryId: 'cat-bags', slug: 'mailing-bags', name: 'Mailing Bags', sortOrder: 2 },
-    { id: 'sub-label-stickers', categoryId: 'cat-labels', slug: 'label-stickers', name: 'Labels & Stickers', sortOrder: 1 },
-  ];
+  // Unified classification lives in the canonical registry
+  // (shared/catalog/products.ts). The 3 original categories and 8 original
+  // subcategories keep their exact ids/slugs/names/sort orders there.
+  const CATEGORIES = CATALOGUE_CATEGORIES;
+  const SUBCATEGORIES = CATALOGUE_SUBCATEGORIES;
 
   // Shared pricing tier ladder (factor applies per unit at/above minQuantity).
   // Anchored on each product's MOQ via the first tier below.
@@ -307,37 +273,38 @@ async function main() {
   const OPTION_MATERIAL_BOX = {
     key: 'material', label: 'Material', control: 'select', required: true,
     values: [
-      { label: 'Kraft Board', value: 'kraft' },
-      { label: 'White Kraft Board', value: 'white-kraft' },
-      { label: 'Kraft Cardboard', value: 'cardboard-kraft' },
+      { label: 'Kraft (Brown)', value: 'kraft' },
+      { label: 'White (Egyptian)', value: 'cardboard-local' },
+      { label: 'White (Imported)', value: 'cardboard-white' },
       { label: 'Corrugated Kraft', value: 'corrugated-kraft' },
-      { label: 'White Glossy (Imported)', value: 'cardboard-white' },
+      { label: 'Corrugated White (Imported)', value: 'corrugated-white' },
+      { label: 'White Kraft Board', value: 'white-kraft' },
     ],
   };
   const OPTION_PRINT_COLORS = {
     key: 'printColors', label: 'Print colours', control: 'select', required: true,
     values: [
       { label: 'No print', value: 'none', priceDelta: 0 },
-      { label: '1 colour', value: 'mono', priceDelta: 0.005 },
-      { label: 'Full colour', value: 'full_color', priceDelta: 0.03, isDefault: true },
+      { label: '1 colour', value: 'mono', priceDelta: 1.2 },
+      { label: 'Full colour', value: 'full_color', priceDelta: 2.5, isDefault: true },
     ],
   };
   const OPTION_PRINT_SIDES = {
     key: 'printSides', label: 'Print sides', control: 'select', required: true,
     values: [
       { label: 'Outside only', value: 'outside_only', priceDelta: 0 },
-      { label: 'Inside & outside', value: 'inside_outside', priceDelta: 0.015 },
+      { label: 'Inside & outside', value: 'inside_outside', priceDelta: 1.5 },
     ],
   };
   const OPTION_FINISH = {
     key: 'finish', label: 'Finish', control: 'select', required: false,
     values: [
       { label: 'None', value: 'none', priceDelta: 0, isDefault: true },
-      { label: 'Gloss lamination', value: 'gloss_lamin', priceDelta: 0.04 },
-      { label: 'Matte lamination', value: 'matte_lamin', priceDelta: 0.05 },
-      { label: 'Spot UV', value: 'spot_uv', priceDelta: 0.06 },
-      { label: 'Gold foil', value: 'foil_gold', priceDelta: 0.25 },
-      { label: 'Silver foil', value: 'foil_silver', priceDelta: 0.2 },
+      { label: 'Gloss lamination', value: 'gloss_lamin', priceDelta: 2 },
+      { label: 'Matte lamination', value: 'matte_lamin', priceDelta: 2.4 },
+      { label: 'Spot UV', value: 'spot_uv', priceDelta: 3 },
+      { label: 'Gold foil', value: 'foil_gold', priceDelta: 8 },
+      { label: 'Silver foil', value: 'foil_silver', priceDelta: 6.5 },
     ],
   };
 
@@ -1222,7 +1189,7 @@ async function main() {
       slug: 'custom-mailer-box',
       name: 'Custom Mailer Box',
       shortDescription: 'Self-locking mailer box with full-colour printing for e-commerce and subscription brands.',
-      description: 'A tamper-proof, self-locking mailer that ships flat and assembles in seconds. Printed outside with full-colour brand artwork, inside greyboard-free kraft for a premium unboxing.',
+      description: 'A self-locking mailer that ships flat and assembles in seconds, printed outside with full-colour brand artwork.',
       productType: 'box',
       boxType: 'mailer-box',
       moq: 30,
@@ -1235,18 +1202,18 @@ async function main() {
       ],
       minDims: { length: 2, width: 2, height: 1 },
       maxDims: { length: 60, width: 50, height: 40 },
-      priceFrom: 0.55,
-      thumbnail: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
-      gallery: [
-        'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1605902711622-cfb43c4437b5?w=800&h=600&fit=crop',
-      ],
-      ecoFlags: { ecoChoice: true, fsc: true, recycled: true, biodegradable: true, reusable: true, recycledContent: '70%' },
+      priceFrom: 14,
+      // No honest product photo on file — neutral placeholder, never a
+      // mismatched stock image (previous stock photo showed food).
+      thumbnail: null,
+      gallery: [],
+      // Unverified eco certifications removed; null until supplier evidence exists.
+      ecoFlags: null,
       filters: { industries: ['ecommerce', 'retail', 'cosmetics', 'subscription', 'apparel'], sizes: ['f42', 'f52', 'f62', 'f72'] },
       editorDefaults: { boxType: 'mailer-box', defaultMaterial: 'cardboard-kraft', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'E', structure: MAILER_BOX_STRUCTURE, prepress: { caliperMm: 0.5, fluteType: 'E', glueFlapToleranceMm: 1.5 }, schemaVersion: 1, unit: 'mm', dieline: MAILER_DIELINE_TEMPLATE, support: 'supported' },
       defaultVariant: { materialCode: 'kraft', color: 'kraft', printMode: 'none', printSides: 'outside_only', finish: 'none' },
       options: [OPTION_MATERIAL_BOX, OPTION_PRINT_COLORS, OPTION_PRINT_SIDES, OPTION_FINISH],
-      conversion: 0.02,
+      conversion: 8,
       margin: 0.35,
     },
     {
@@ -1255,7 +1222,7 @@ async function main() {
       slug: 'custom-product-box',
       name: 'Custom Product Box',
       shortDescription: 'Folding carton product boxes with custom inserts, print and finishes for retail.',
-      description: 'A retail-ready folding carton built around your product. Choose from kraft to premium white boards, add gloss or matte lamination and print inside and out.',
+      description: 'A folding carton built around your product. Choose from kraft to white boards, add gloss or matte lamination and print inside and out.',
       productType: 'box',
       boxType: 'folding-carton',
       moq: 30,
@@ -1267,13 +1234,10 @@ async function main() {
       ],
       minDims: { length: 3, width: 2, height: 1 },
       maxDims: { length: 40, width: 30, height: 20 },
-      priceFrom: 0.42,
-      thumbnail: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&h=600&fit=crop',
-      gallery: [
-        'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
-      ],
-      ecoFlags: { ecoChoice: true, fsc: true, recycled: true, recycledContent: '50%' },
+      priceFrom: 12,
+      thumbnail: null,
+      gallery: [],
+      ecoFlags: null,
       filters: { industries: ['retail', 'cosmetics', 'food', 'electronics'], sizes: ['s', 'm', 'l'] },
       editorDefaults: { boxType: 'folding-carton', defaultMaterial: 'cardboard-white', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'E', structure: FOLDING_CARTON_STRUCTURE, prepress: { caliperMm: 0.45, fluteType: 'E', glueFlapToleranceMm: 1.5 }, schemaVersion: 1, unit: 'mm', dieline: FOLDING_CARTON_DIELINE_TEMPLATE, support: 'supported' },
       defaultVariant: { materialCode: 'kraft', color: 'kraft', printMode: 'none', printSides: 'outside_only', finish: 'none' },
@@ -1283,7 +1247,7 @@ async function main() {
         OPTION_PRINT_SIDES,
         OPTION_FINISH,
       ],
-      conversion: 0.018,
+      conversion: 7,
       margin: 0.4,
     },
     {
@@ -1291,7 +1255,7 @@ async function main() {
       subcategoryId: 'sub-shipping-boxes',
       slug: 'custom-shipping-box',
       name: 'Custom Shipping Box',
-      shortDescription: 'Heavy-duty corrugated shipping boxes for safe transit of larger loads.',
+      shortDescription: 'Corrugated shipping boxes for larger loads.',
       description: 'RSC-style corrugated shipping box in kraft or white. Ideal for wholesale, fulfilment and protective outer packaging.',
       productType: 'box',
       boxType: 'shipping-box',
@@ -1305,13 +1269,10 @@ async function main() {
       ],
       minDims: { length: 10, width: 10, height: 5 },
       maxDims: { length: 120, width: 80, height: 80 },
-      priceFrom: 0.85,
-      thumbnail: 'https://images.unsplash.com/photo-1605902711622-cfb43c4437b5?w=800&h=600&fit=crop',
-      gallery: [
-        'https://images.unsplash.com/photo-1605902711622-cfb43c4437b5?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
-      ],
-      ecoFlags: { ecoChoice: true, recycled: true, reusable: true, recycledContent: '90%' },
+      priceFrom: 9,
+      thumbnail: null,
+      gallery: [],
+      ecoFlags: null,
       filters: { industries: ['wholesale', 'fulfilment', 'ecommerce', 'manufacturing'], sizes: ['s', 'm', 'l', 'xl'] },
       editorDefaults: { boxType: 'shipping-box', defaultMaterial: 'corrugated-kraft', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'B', structure: SHIPPING_BOX_STRUCTURE, prepress: { caliperMm: 0.75, fluteType: 'B', glueFlapToleranceMm: 1.5 }, schemaVersion: 1, unit: 'mm', dieline: SHIPPING_BOX_DIELINE_TEMPLATE, support: 'supported' },
       defaultVariant: { materialCode: 'corrugated-kraft', color: 'kraft', printMode: 'none', printSides: 'outside_only', finish: 'none' },
@@ -1330,11 +1291,11 @@ async function main() {
           key: 'finish', label: 'Finish', control: 'select', required: false,
           values: [
             { label: 'None', value: 'none', priceDelta: 0, isDefault: true },
-            { label: 'Gloss lamination', value: 'gloss_lamin', priceDelta: 0.04 },
+            { label: 'Gloss lamination', value: 'gloss_lamin', priceDelta: 2 },
           ],
         },
       ],
-      conversion: 0.028,
+      conversion: 5,
       margin: 0.32,
     },
     {
@@ -1342,8 +1303,8 @@ async function main() {
       subcategoryId: 'sub-rigid-boxes',
       slug: 'custom-rigid-box',
       name: 'Custom Rigid Box',
-      shortDescription: 'Luxury two-piece rigid boxes with a wrapped lid and base for premium gifting.',
-      description: 'A crafted two-piece rigid box: glued chipboard base tray and separate lid tray, wrapped in premium papers, foiling and soft-touch lamination. The M8-J dieline treats the lid and base as a two-piece blank.',
+      shortDescription: 'Two-piece rigid boxes with a wrapped lid and base for gifting.',
+      description: 'A two-piece rigid box: glued chipboard base tray and separate lid tray, wrapped in paper with foiling and soft-touch lamination options. The M8-J dieline treats the lid and base as a two-piece blank.',
       productType: 'box',
       boxType: 'rigid-box',
       moq: 30,
@@ -1355,13 +1316,14 @@ async function main() {
       ],
       minDims: { length: 10, width: 8, height: 3 },
       maxDims: { length: 60, width: 50, height: 20 },
-      priceFrom: 1.85,
+      priceFrom: 35,
+      // Gift-box photo verified to match a rigid gift box; gallery trimmed
+      // to that verified image only.
       thumbnail: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&h=600&fit=crop',
       gallery: [
         'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
       ],
-      ecoFlags: { ecoChoice: false, recycled: true, reused: true, recyclable: true },
+      ecoFlags: null,
       filters: { industries: ['gifting', 'retail', 'luxury', 'cosmetics'], sizes: ['s', 'm', 'l'] },
       editorDefaults: { boxType: 'rigid-box', defaultMaterial: 'chipboard', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'glue', finishing: 'none', lamination: 'matte_lamin', fluteType: 'none', structure: RIGID_BOX_STRUCTURE, prepress: { caliperMm: 1.5, fluteType: 'none', glueFlapToleranceMm: 1.0 }, schemaVersion: 1, unit: 'mm', dieline: RIGID_BOX_DIELINE_TEMPLATE, support: 'supported' },
       defaultVariant: { materialCode: 'chipboard', color: 'kraft', printMode: 'none', printSides: 'outside_only', finish: 'none' },
@@ -1379,7 +1341,7 @@ async function main() {
         OPTION_PRINT_SIDES,
         OPTION_FINISH,
       ],
-      conversion: 0.05,
+      conversion: 15,
       margin: 0.45,
     },
     {
@@ -1387,7 +1349,7 @@ async function main() {
       subcategoryId: 'sub-pizza-boxes',
       slug: 'custom-pizza-box',
       name: 'Custom Pizza Box',
-      shortDescription: 'Corrugated single-piece pizza boxes with strong-side ventilation and full-colour branding.',
+      shortDescription: 'Corrugated single-piece pizza boxes with ventilation and full-colour branding.',
       description: 'A single-piece corrugated pizza box that ships flat and locks in seconds. The M8-J dieline uses a cruciform blank: hinged lid plus deck with folding front, back and side walls.',
       productType: 'box',
       boxType: 'pizza-box',
@@ -1400,13 +1362,13 @@ async function main() {
       ],
       minDims: { length: 20, width: 20, height: 2 },
       maxDims: { length: 60, width: 60, height: 10 },
-      priceFrom: 0.95,
+      priceFrom: 10,
+      // Pizza photo verified to match the pizza box; gallery trimmed to it.
       thumbnail: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=600&fit=crop',
       gallery: [
         'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1605902711622-cfb43c4437b5?w=800&h=600&fit=crop',
       ],
-      ecoFlags: { ecoChoice: true, recyclable: true, biodegradable: true, reusable: true },
+      ecoFlags: null,
       filters: { industries: ['food', 'restaurants', 'catering', 'beverage'], sizes: ['s', 'm', 'l'] },
       editorDefaults: { boxType: 'pizza-box', defaultMaterial: 'corrugated-kraft', defaultColor: 'one_colour', defaultPrint: 'outside', adhesiveStrip: 'none', finishing: 'none', lamination: 'none', fluteType: 'E', structure: PIZZA_BOX_STRUCTURE, prepress: { caliperMm: 0.6, fluteType: 'E', glueFlapToleranceMm: 1.0 }, schemaVersion: 1, unit: 'mm', dieline: PIZZA_BOX_DIELINE_TEMPLATE, support: 'supported' },
       defaultVariant: { materialCode: 'corrugated-kraft', color: 'kraft', printMode: 'none', printSides: 'outside_only', finish: 'none' },
@@ -1424,7 +1386,7 @@ async function main() {
         OPTION_PRINT_SIDES,
         OPTION_FINISH,
       ],
-      conversion: 0.035,
+      conversion: 4,
       margin: 0.35,
     },
     {
@@ -1432,8 +1394,8 @@ async function main() {
       subcategoryId: 'sub-carrier-bags',
       slug: 'custom-paper-bag',
       name: 'Custom Paper Bag',
-      shortDescription: 'Sustainable kraft and white paper carrier bags with custom print and handle options.',
-      description: 'Fully recyclable and biodegradable carrier bags in kraft or premium paper. Pick a twisted-paper, ribbon or cotton-ropes handle and brand both sides.',
+      shortDescription: 'Kraft and white paper carrier bags with custom print and handle options.',
+      description: 'Carrier bags in kraft or white paper. Pick a twisted-paper, ribbon or cotton-rope handle and brand both sides.',
       productType: 'bag',
       boxType: 'paper-bag',
       moq: 50,
@@ -1445,13 +1407,10 @@ async function main() {
       ],
       minDims: { length: 10, width: 8, height: 3 },
       maxDims: { length: 50, width: 40, height: 20 },
-      priceFrom: 0.75,
-      thumbnail: 'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?w=800&h=600&fit=crop',
-      gallery: [
-        'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=800&h=600&fit=crop',
-      ],
-      ecoFlags: { ecoChoice: true, fsc: true, recycled: true, biodegradable: true, recycledContent: '40%' },
+      priceFrom: 8,
+      thumbnail: null,
+      gallery: [],
+      ecoFlags: null,
       filters: { industries: ['retail', 'food', 'fashion', 'boutique'], sizes: ['s', 'm', 'l'] },
       editorDefaults: { boxType: 'paper-bag', defaultMaterial: 'kraft', defaultColor: 'one_colour', defaultPrint: 'outside', handle: 'none', support: 'deferred', supportReason: 'Bag = 2+2 side panels with a gusseted base — non-rectangular gusset authoring is unsafe in M8 (spec §14); deferred to post-M8, never shipped with fake geometry.' },
       defaultVariant: { materialCode: 'kraft', color: 'kraft', printMode: 'none', printSides: 'outside_only', finish: 'none' },
@@ -1470,21 +1429,21 @@ async function main() {
           key: 'finish', label: 'Finish', control: 'select', required: false,
           values: [
             { label: 'None', value: 'none', priceDelta: 0, isDefault: true },
-            { label: 'Gloss lamination', value: 'gloss_lamin', priceDelta: 0.04 },
-            { label: 'Matte lamination', value: 'matte_lamin', priceDelta: 0.05 },
+            { label: 'Gloss lamination', value: 'gloss_lamin', priceDelta: 2 },
+            { label: 'Matte lamination', value: 'matte_lamin', priceDelta: 2.4 },
           ],
         },
         {
           key: 'handle', label: 'Handle', control: 'select', required: true,
           values: [
             { label: 'No handle', value: 'none', priceDelta: 0, isDefault: true },
-            { label: 'Twisted paper', value: 'twisted_paper', priceDelta: 0.12, appliesTo: { materials: ['kraft', 'white-kraft'] } },
-            { label: 'Cotton ropes', value: 'cotton_ropes', priceDelta: 0.3 },
-            { label: 'Ribbon', value: 'ribbon', priceDelta: 0.35 },
+            { label: 'Twisted paper', value: 'twisted_paper', priceDelta: 4, appliesTo: { materials: ['kraft', 'white-kraft'] } },
+            { label: 'Cotton ropes', value: 'cotton_ropes', priceDelta: 8 },
+            { label: 'Ribbon', value: 'ribbon', priceDelta: 9 },
           ],
         },
       ],
-      conversion: 0.045,
+      conversion: 3,
       margin: 0.33,
     },
     {
@@ -1492,8 +1451,8 @@ async function main() {
       subcategoryId: 'sub-mailing-bags',
       slug: 'custom-poly-mailer',
       name: 'Custom Poly Mailer',
-      shortDescription: 'Lightweight, waterproof LDPE poly mailers with your brand printed across the bag.',
-      description: 'Cheap-to-ship, waterproof poly mailers made from recycled LDPE. Self-adhesive peel-and-seal closure with a tamper-evident option.',
+      shortDescription: 'Lightweight LDPE poly mailers with your brand printed across the bag.',
+      description: 'Lightweight poly mailers in LDPE. Self-adhesive peel-and-seal closure with a tamper-evident option.',
       productType: 'bag',
       boxType: 'poly-mailer',
       moq: 50,
@@ -1505,13 +1464,10 @@ async function main() {
       ],
       minDims: { length: 10, width: 10, height: 1 },
       maxDims: { length: 60, width: 60, height: 5 },
-      priceFrom: 0.18,
-      thumbnail: 'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=800&h=600&fit=crop',
-      gallery: [
-        'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?w=800&h=600&fit=crop',
-      ],
-      ecoFlags: { ecoChoice: true, recycled: true },
+      priceFrom: 5,
+      thumbnail: null,
+      gallery: [],
+      ecoFlags: null,
       filters: { industries: ['ecommerce', 'apparel', 'subscription'], sizes: ['s', 'm', 'l'] },
       editorDefaults: { boxType: 'poly-mailer', defaultMaterial: 'poly', defaultColor: 'one_colour', defaultPrint: 'outside', handle: 'none', support: 'deferred', supportReason: 'Single-face + back LDPE self-seal pouch — physically not a box; no generic box blueprint/deferral per spec §14.' },
       defaultVariant: { materialCode: 'poly', color: 'clear', printMode: 'none', printSides: 'outside_only', finish: 'none' },
@@ -1525,11 +1481,11 @@ async function main() {
           key: 'closure', label: 'Closure', control: 'select', required: true,
           values: [
             { label: 'Peel & seal', value: 'peel_seal', priceDelta: 0, isDefault: true },
-            { label: 'Tamper evident', value: 'tamper_evident', priceDelta: 0.02 },
+            { label: 'Tamper evident', value: 'tamper_evident', priceDelta: 0.6 },
           ],
         },
       ],
-      conversion: 0.06,
+      conversion: 0.6,
       margin: 0.35,
     },
     {
@@ -1538,7 +1494,7 @@ async function main() {
       slug: 'custom-label-sticker',
       name: 'Custom Labels & Stickers',
       shortDescription: 'Die-cut labels and stickers in paper or vinyl for products, mailing and retail.',
-      description: 'Die-cut to any shape in glossy, matte or kraft papers and durable vinyl. Perfect for product labels, stickers and mailer seals.',
+      description: 'Die-cut to any shape in glossy, matte or kraft papers or vinyl. For product labels, stickers and mailer seals.',
       productType: 'label',
       boxType: 'label',
       moq: 25,
@@ -1551,13 +1507,10 @@ async function main() {
       ],
       minDims: { length: 2, width: 2, height: 0.1 },
       maxDims: { length: 30, width: 20, height: 0.1 },
-      priceFrom: 0.08,
-      thumbnail: 'https://images.unsplash.com/photo-1590846406792-0adc7f938f1d?w=800&h=600&fit=crop',
-      gallery: [
-        'https://images.unsplash.com/photo-1590846406792-0adc7f938f1d?w=800&h=600&fit=crop',
-        'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=800&h=600&fit=crop',
-      ],
-      ecoFlags: { ecoChoice: true, recycled: true },
+      priceFrom: 1.5,
+      thumbnail: null,
+      gallery: [],
+      ecoFlags: null,
       filters: { industries: ['retail', 'food', 'cosmetics', 'mailing'], sizes: ['sq50', 'r75x50', 'r100x75', 'r150x100'] },
       editorDefaults: { boxType: 'label', defaultMaterial: 'paper', defaultColor: 'full_color', defaultPrint: 'outside', dieCut: 'rectangle', support: 'deferred', supportReason: 'Flat 1-panel die-cut with zones on a single face — deferred until non-rectangular die-cut path authoring (spec §14).' },
       defaultVariant: { materialCode: 'paper', color: 'white', printMode: 'none', printSides: 'outside_only', finish: 'none' },
@@ -1573,10 +1526,86 @@ async function main() {
         OPTION_PRINT_COLORS,
         OPTION_FINISH,
       ],
-      conversion: 0.008,
+      conversion: 0.4,
       margin: 0.5,
     },
   ];
+
+  // Unified catalogue expansion: picker-listed products without a seeded
+  // storefront entry join the catalogue from the canonical registry. They are
+  // classified and quotable-by-request, but carry NO product-specific rates
+  // (priceFrom null, no scoped pricing rules — nothing invented) and keep an
+  // explicit deferred production status instead of fake geometry.
+  for (const entry of CATALOGUE_PRODUCTS) {
+    if (CATALOG_PRODUCTS.some((p) => p.id === entry.productId)) continue;
+    // Candidate materials are catalogue intent from the picker data, not a
+    // legacy-cardboard fallback: the default variant uses the product's own
+    // first candidate code (e.g. poly-white, foil-matte, paper-coated-white).
+    const defaultMaterial =
+      CATALOGUE_CANDIDATE_MATERIALS[entry.id]?.[0] ??
+      (entry.pricingFamily === 'box' ? 'cardboard-kraft'
+      : entry.pricingFamily === 'bag' ? 'kraft'
+      : 'paper');
+    CATALOG_PRODUCTS.push({
+      id: entry.productId,
+      subcategoryId: `sub-${entry.subcategory}`,
+      slug: entry.slug,
+      name: entry.name.en,
+      shortDescription: entry.description.en,
+      // No invented marketing copy; the one honest line stays in
+      // shortDescription until real product copy exists.
+      description: null,
+      productType: entry.pricingFamily,
+      boxType: entry.boxType,
+      moq: entry.moq,
+      sizeUnit: 'mm',
+      sizes: [{ code: 'default', name: entry.name.en, ...entry.defaultDimensions }],
+      minDims: null as unknown as CatalogDims,
+      maxDims: null as unknown as CatalogDims,
+      priceFrom: null,
+      thumbnail: null,
+      gallery: [],
+      ecoFlags: null,
+      filters: null,
+      editorDefaults: {
+        boxType: entry.boxType,
+        support: 'deferred',
+        supportReason: entry.supportReason,
+      },
+      defaultVariant: {
+        materialCode: defaultMaterial,
+        color: 'natural',
+        printMode: 'none',
+        printSides: 'outside_only',
+        finish: 'none',
+      },
+      options: [],
+    });
+  }
+
+  // Join every seeded product to its canonical registry entry: attach the
+  // editor picker id, the three-axis readiness verdict and the preview
+  // family routing. The registry is the single source for these fields;
+  // hand-written structure/dieline/prepress literals stay untouched.
+  for (const def of CATALOG_PRODUCTS) {
+    const entry = CATALOGUE_PRODUCTS.find((e) => e.productId === def.id);
+    if (!entry) {
+      throw new Error(`Catalogue product "${def.id}" is missing from shared/catalog/products.ts`);
+    }
+    def.editorDefaults = {
+      ...(def.editorDefaults as Record<string, unknown>),
+      editorType: entry.id,
+      readiness: entry.readiness,
+      ...(entry.previewFamily ? { previewFamily: entry.previewFamily } : {}),
+      ...(entry.plannedFamily ? { plannedFamily: entry.plannedFamily } : {}),
+      // Candidate material codes (catalogue intent, not compatibility
+      // approval); the renderer filters to these and labels them pending
+      // supplier confirmation.
+      ...(CATALOGUE_CANDIDATE_MATERIALS[entry.id]
+        ? { candidateMaterials: CATALOGUE_CANDIDATE_MATERIALS[entry.id] }
+        : {}),
+    };
+  }
 
   for (const cat of CATEGORIES) {
     await prisma.productCategory.upsert({
@@ -1619,7 +1648,9 @@ async function main() {
         priceFrom: p.priceFrom,
         thumbnail: p.thumbnail,
         gallery: p.gallery,
-        ecoFlags: p.ecoFlags,
+        // Nullable Json column: plain null means "leave unchanged" to Prisma;
+        // DbNull actually clears unverified eco claims.
+        ecoFlags: p.ecoFlags ?? Prisma.DbNull,
         filters: p.filters,
         editorDefaults: p.editorDefaults,
         isActive: true,
@@ -1644,7 +1675,7 @@ async function main() {
         priceFrom: p.priceFrom,
         thumbnail: p.thumbnail,
         gallery: p.gallery,
-        ecoFlags: p.ecoFlags,
+        ecoFlags: p.ecoFlags ?? Prisma.DbNull,
         filters: p.filters,
         editorDefaults: p.editorDefaults,
         isActive: true,
@@ -1719,25 +1750,29 @@ async function main() {
       catalogVariants += 1;
     }
 
-    // Scoped pricing rules for this product.
-    await prisma.pricingRule.upsert({
-      where: { id: `rule-${p.id}-conversion` },
-      update: { productType: p.productType, ruleType: 'conversion', value: p.conversion, scope: 'product', scopeId: p.id, isActive: true },
-      create: { id: `rule-${p.id}-conversion`, productType: p.productType, ruleType: 'conversion', value: p.conversion, scope: 'product', scopeId: p.id, isActive: true },
-    });
-    await prisma.pricingRule.upsert({
-      where: { id: `rule-${p.id}-margin` },
-      update: { productType: p.productType, ruleType: 'margin', value: p.margin, scope: 'product', scopeId: p.id, isActive: true },
-      create: { id: `rule-${p.id}-margin`, productType: p.productType, ruleType: 'margin', value: p.margin, scope: 'product', scopeId: p.id, isActive: true },
-    });
-    for (const tier of TIER_LADDER) {
-      if (tier.min <= p.moq) continue;
-      const ruleId = `rule-${p.id}-tier-${tier.min}`;
+    // Scoped pricing rules for this product — only when the registry entry
+    // carries real rate data. quote_required products intentionally get none:
+    // no invented conversion/margin/tier rates reach the pricing engine.
+    if (p.conversion != null && p.margin != null) {
       await prisma.pricingRule.upsert({
-        where: { id: ruleId },
-        update: { productType: p.productType, ruleType: 'discount_tier', value: tier.factor, minQuantity: tier.min, scope: 'product', scopeId: p.id, isActive: true },
-        create: { id: ruleId, productType: p.productType, ruleType: 'discount_tier', value: tier.factor, minQuantity: tier.min, scope: 'product', scopeId: p.id, isActive: true },
+        where: { id: `rule-${p.id}-conversion` },
+        update: { productType: p.productType, ruleType: 'conversion', value: p.conversion, scope: 'product', scopeId: p.id, isActive: true },
+        create: { id: `rule-${p.id}-conversion`, productType: p.productType, ruleType: 'conversion', value: p.conversion, scope: 'product', scopeId: p.id, isActive: true },
       });
+      await prisma.pricingRule.upsert({
+        where: { id: `rule-${p.id}-margin` },
+        update: { productType: p.productType, ruleType: 'margin', value: p.margin, scope: 'product', scopeId: p.id, isActive: true },
+        create: { id: `rule-${p.id}-margin`, productType: p.productType, ruleType: 'margin', value: p.margin, scope: 'product', scopeId: p.id, isActive: true },
+      });
+      for (const tier of TIER_LADDER) {
+        if (tier.min <= p.moq) continue;
+        const ruleId = `rule-${p.id}-tier-${tier.min}`;
+        await prisma.pricingRule.upsert({
+          where: { id: ruleId },
+          update: { productType: p.productType, ruleType: 'discount_tier', value: tier.factor, minQuantity: tier.min, scope: 'product', scopeId: p.id, isActive: true },
+          create: { id: ruleId, productType: p.productType, ruleType: 'discount_tier', value: tier.factor, minQuantity: tier.min, scope: 'product', scopeId: p.id, isActive: true },
+        });
+      }
     }
     catalogProducts += 1;
   }

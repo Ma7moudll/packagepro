@@ -18,7 +18,7 @@ const quoteSchema = z.object({
       unit: z.enum(['cm', 'mm', 'inch']),
     })
     .optional(),
-  config: z.record(z.string()).optional(),
+  config: z.record(z.string(), z.string()).optional(),
   complexity: z.enum(['simple', 'medium', 'complex']).optional(),
   taxRate: z.number().min(0).max(1).optional(),
 });
@@ -53,7 +53,7 @@ export class CatalogController {
 
   async editorConfig(request: FastifyRequest, reply: FastifyReply) {
     const { slug } = request.params as { slug: string };
-    const query = z.object({ quantity: z.coerce.number().int().min(1) }).parse(request.query ?? {});
+    const query = z.object({ quantity: z.coerce.number().int().min(1).optional() }).parse(request.query ?? {});
     const data = await catalogService.getEditorConfig(slug, query.quantity);
     return reply.send({ success: true, data });
   }

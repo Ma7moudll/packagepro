@@ -75,7 +75,7 @@ export function getPasswordStrengthFeedback(password: string): string[] {
   const hasUppercase = /[A-Z]/.test(password);
   const hasLowercase = /[a-z]/.test(password);
   const hasNumbers = /[0-9]/.test(password);
-  const hasSymbols = /[!@#$%^&*()_+\-=\[\]{};:'",.<>?/\\|`~]/.test(password);
+  const hasSymbols = /[!@#$%^&*()_+\-=[\]{};:'",.<>?/\\|`~]/.test(password);
 
   if (!hasUppercase) {
     feedback.push('Add uppercase letters for better security');
