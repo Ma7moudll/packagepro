@@ -49,3 +49,7 @@ test('session restore owns initialization even without catalogue product identit
  assert.ok(page.includes('preserveRestoredDesign={!!sessionIdParam}'))
  assert.ok(editor.indexOf('if (preserveRestoredDesign)')<editor.indexOf('applyCoreState((core)'))
 })
+
+test('mailer seal edges follow selected stock instead of a white default',()=>{
+ const source=readFileSync('components/design-editor/models/SoftProducts.tsx','utf8');assert.match(source,/const seal=stock.outside/);assert.doesNotMatch(source,/#dedede/)
+})

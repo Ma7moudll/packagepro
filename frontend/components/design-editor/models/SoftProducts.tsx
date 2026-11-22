@@ -1,6 +1,4 @@
 "use client"
-import {useMemo} from "react"
-import * as THREE from "three"
 import {StockPanel,type ProductShapeProps} from "./StockPanel"
 
 /** Open rectangular paper carrier with real depth and separate inner lining.
@@ -35,9 +33,10 @@ export function EnvelopeShape({dimensions,stock,openState=0}:ProductShapeProps){
 
 /** Front/back soft-film mailer. Material choice is illustrative; no paperboard
  * liner is silently used as proof of film/barrier suitability. */
-export function MailerBagShape({dimensions,stock,type,openState=0}:ProductShapeProps){
- const l=dimensions.length/100,h=dimensions.height/100,w=Math.max(.008,dimensions.width/100),b=.001,p={thickness:b,edge:stock.edge},paper=type.replace(/_/g,"-")==="paper-mailer-bag"
- const seal=useMemo(()=>new THREE.MeshStandardMaterial({color:paper?"#b59d7c":"#dedede",roughness:.6}),[paper])
+export function MailerBagShape({dimensions,stock,openState=0}:ProductShapeProps){
+ const l=dimensions.length/100,h=dimensions.height/100,w=Math.max(.008,dimensions.width/100),b=.001,p={thickness:b,edge:stock.edge}
+ // The seal inherits the requested stock, never a hardcoded white sidewall.
+ const seal=stock.outside
  return <group name="mailer-bag-construction">
   <StockPanel {...p} width={l} height={h*.91} outside={stock.face("front")} inside={stock.inner("front")} faceId="front" position={[0,h*.455,w/2]}/>
   <StockPanel {...p} width={l} height={h*.91} outside={stock.face("back")} inside={stock.inner("back")} faceId="back" position={[0,h*.455,-w/2]} rotation={[0,Math.PI,0]}/>
