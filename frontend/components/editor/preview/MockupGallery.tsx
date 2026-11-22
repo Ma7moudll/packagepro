@@ -191,9 +191,9 @@ export function MockupGallery({
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto flex flex-col p-4 sm:p-6">
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto flex flex-col p-4 sm:p-6 [&>button[data-slot=dialog-close]]:left-3 [&>button[data-slot=dialog-close]]:right-auto [&>button[data-slot=dialog-close]]:top-3 [&>button[data-slot=dialog-close]]:h-8 [&>button[data-slot=dialog-close]]:w-8 [&>button[data-slot=dialog-close]]:flex [&>button[data-slot=dialog-close]]:items-center [&>button[data-slot=dialog-close]]:justify-center">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 ps-10">
             <ImageIcon className="h-5 w-5" />
             {language === "ar" ? "معرض Mockup" : "Mockup Gallery"}
           </DialogTitle>

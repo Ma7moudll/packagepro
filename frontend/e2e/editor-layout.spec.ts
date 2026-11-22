@@ -13,6 +13,9 @@ for (const language of ['en', 'ar']) {
       await page.waitForFunction(() => typeof (window as any).__editor3DFaces === 'function');
       // Mesh centers must be inside the live camera frame, not merely the DOM.
       await expect.poll(() => page.evaluate(() => (window as any).__editor3DFaces().every((f:any) => f.visible))).toBe(true);
+      const launcher = page.getByRole('button', {name: language === 'ar' ? 'فتح الدعم' : 'Open support', exact:true});
+      const launcherBox = await launcher.boundingBox();
+      expect(launcherBox!.y + launcherBox!.height).toBeLessThanOrEqual(752);
       const canvas = await page.locator('canvas').first().boundingBox();
       expect(canvas!.x).toBeGreaterThanOrEqual(56);
       expect(canvas!.x + canvas!.width).toBeLessThanOrEqual(width);
@@ -28,7 +31,12 @@ for (const language of ['en', 'ar']) {
         const button = await exportButton.boundingBox();
         const quality = await dialog.getByText(language === 'ar' ? 'جودة عالية' : 'High Quality').boundingBox();
         if (width < 640) expect(button!.y).toBeGreaterThanOrEqual(quality!.y + quality!.height);
-        await page.keyboard.press('Escape');
+        const close = dialog.locator('[data-slot=dialog-close]');
+        const closeBox = await close.boundingBox();
+        expect(closeBox!.x).toBeGreaterThanOrEqual(0);
+        expect(closeBox!.x + closeBox!.width).toBeLessThanOrEqual(width);
+        await close.click();
+        await expect(dialog).toBeHidden();
         await more.click();
         await page.getByRole('menuitem', { name: language === 'ar' ? 'مشاركة' : 'Share', exact: true }).click();
         await expect(page.getByRole('dialog')).toBeVisible();
