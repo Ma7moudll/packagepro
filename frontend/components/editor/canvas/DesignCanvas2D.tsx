@@ -867,7 +867,7 @@ export function DesignCanvas2D() {
               }}
             />
           )}
-          <canvas ref={canvasRef} className="shadow-xl border border-slate-300 bg-white relative z-0" />
+          <canvas ref={canvasRef} className="shadow-xl border border-slate-300 relative z-0" />
         </div>
       </div>
     </div>
