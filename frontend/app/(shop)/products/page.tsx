@@ -16,7 +16,6 @@ import {
   ShoppingBag,
   Sticker,
   Loader2,
-  Leaf,
   Sparkles,
   ArrowRight,
   Boxes,
@@ -114,15 +113,15 @@ export default function ProductsPage() {
         <div className="mx-auto max-w-7xl px-4 py-14 text-center">
           <Badge variant="secondary" className="mb-4 gap-1">
             <Sparkles className="h-3.5 w-3.5" />
-            Unified catalogue · live prices on verified products
+            Unified catalogue · estimated pricing
           </Badge>
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
             Custom Packaging for Your Brand
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
             Choose a product, configure material, printing and finishing options, and get
-            live prices across quantity tiers on production-ready products. Products still
-            under preparation are priced on request.
+            prices estimated from our configured rate cards across quantity tiers. Products
+            still under preparation are priced on request.
           </p>
         </div>
       </section>
@@ -225,15 +224,7 @@ export default function ProductsPage() {
                         Customisable
                       </Badge>
                     )}
-                    {p.ecoFlags && Object.keys(p.ecoFlags).length > 0 && (
-                      <Badge
-                        variant="secondary"
-                        className="absolute right-3 top-3 gap-1 bg-emerald-600 text-white"
-                      >
-                        <Leaf className="h-3 w-3" />
-                        Eco
-                      </Badge>
-                    )}
+                    {/* No Eco badge: no verified eco certifications on file. */}
                   </div>
 
                   <div className="p-5">
@@ -255,10 +246,20 @@ export default function ProductsPage() {
                           </Badge>
                         ) : (
                           formatMoney(p.priceFrom, p.currency ?? "EGP") && (
-                            <p className="text-xl font-bold">
-                              {formatMoney(p.priceFrom, p.currency ?? "EGP")}
-                              <span className="text-sm font-normal text-muted-foreground"> from</span>
-                            </p>
+                            <div>
+                              <p className="text-xl font-bold">
+                                {formatMoney(p.priceFrom, p.currency ?? "EGP")}
+                                <span className="text-sm font-normal text-muted-foreground"> from</span>
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Estimated from configured rates
+                              </p>
+                              {p.readiness?.dieline === "deferred" && (
+                                <Badge variant="outline" className="mt-1 gap-1 border-amber-500 text-amber-600">
+                                  Dieline in preparation
+                                </Badge>
+                              )}
+                            </div>
                           )
                         )}
                         <p className="mt-1 text-xs text-muted-foreground">MOQ {p.moq} units</p>

@@ -257,12 +257,7 @@ export default function ProductDetailPage() {
                 Customisable
               </Badge>
             )}
-            {product.ecoFlags && Object.keys(product.ecoFlags).length > 0 && (
-              <Badge variant="secondary" className="absolute right-4 top-4 gap-1 bg-emerald-600 text-white">
-                <Icons.leaf />
-                Eco
-              </Badge>
-            )}
+            {/* No Eco badge: no verified eco certifications on file. */}
           </div>
 
           <div className="mt-6">
@@ -288,7 +283,7 @@ export default function ProductDetailPage() {
                 <p className="text-lg font-bold">
                   {quoteRequired ? "On request" : fmtMoney(product.priceFrom, moneyCurrency)}
                 </p>
-                <p className="text-xs text-muted-foreground">From / unit</p>
+                <p className="text-xs text-muted-foreground">Est. from / unit</p>
               </div>
               <div className="rounded-xl border p-3">
                 <p className="text-lg font-bold">{unit}</p>
@@ -305,13 +300,7 @@ export default function ProductDetailPage() {
                 <Icons.shield />
                 Made to order
               </Badge>
-              {product.ecoFlags &&
-                Object.entries(product.ecoFlags).map(([k, v]) => (
-                  <Badge key={k} variant="outline" className="gap-1">
-                    <Icons.leaf />
-                    {String(v)}
-                  </Badge>
-                ))}
+
             </div>
           </div>
         </div>
@@ -319,6 +308,18 @@ export default function ProductDetailPage() {
         <div className="lg:pl-4">
           <div className="sticky top-6 space-y-6 rounded-2xl border bg-card p-6 shadow-sm">
             <h2 className="text-lg font-semibold">Configure &amp; price</h2>
+
+            {!quoteRequired && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
+                <p className="font-medium text-amber-800">Estimated pricing</p>
+                <p className="mt-0.5 text-amber-700">
+                  Prices are estimated from our configured rate cards and are pending
+                  supplier confirmation.
+                  {product.readiness?.dieline === "deferred" &&
+                    " Dieline and prepress support for this product is still in preparation."}
+                </p>
+              </div>
+            )}
 
             {/* Size */}
             <div>
@@ -460,7 +461,7 @@ export default function ProductDetailPage() {
             {!quoteRequired && (quoteQuery.isLoading || !debounced) && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Calculating live price…
+                Calculating estimated price…
               </div>
             )}
 
@@ -499,7 +500,7 @@ export default function ProductDetailPage() {
                   ) : null}
                   <Row label="Platform margin" value={fmtMoney(bd.marginAmount, moneyCurrency)} muted />
                   <Row label="VAT" value={fmtMoney(bd.tax, moneyCurrency)} muted />
-                  <Row label="Shipping (expedited)" value={fmtMoney(bd.shippingEstimate, moneyCurrency)} />
+                  <Row label="Shipping (estimated)" value={fmtMoney(bd.shippingEstimate, moneyCurrency)} />
                   <Separator className="my-1" />
                   <Row label="Total" value={fmtMoney(bd.total, moneyCurrency)} strong />
                 </div>
