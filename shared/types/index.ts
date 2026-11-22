@@ -145,8 +145,9 @@ export interface PricingResponse {
     code: string
     name: string
     unitPrice: number
-    /** ISO currency of the material rate card (e.g. "USD"); the backend has
-     *  always returned it, the type just didn't say so. */
+    /** ISO currency of the material rate card ("EGP" — the pricing engine
+     *  rejects non-EGP rate cards); the backend has always returned it, the
+     *  type just didn't say so. */
     currency?: string
   }
   productType: string
@@ -462,6 +463,13 @@ export interface ApiResponse<T> {
 
 export type ProductCustomisation = 'custom' | 'plain' | 'pre_printed'
 
+/** Unified-catalogue readiness verdict (shared/catalog/products.ts). */
+export interface CatalogReadiness {
+  preview: 'supported' | 'in_progress' | 'unavailable'
+  dieline: 'supported' | 'deferred'
+  pricing: 'estimated' | 'quote_required'
+}
+
 export interface CatalogProductSummary {
   id: string
   slug: string
@@ -477,6 +485,15 @@ export interface CatalogProductSummary {
   gallery: string[]
   ecoFlags?: Record<string, unknown> | null
   editorDefaults?: Record<string, unknown> | null
+  /** Currency of priceFrom — always EGP (pricing-engine enforced). */
+  currency?: string
+  /** Editor picker ProductType this catalogue row unifies with. */
+  editorType?: string
+  /** Three-axis readiness; listing never implies sale-readiness. */
+  readiness?: CatalogReadiness
+  /** Explicit production support verdict ('supported' | 'deferred'). */
+  support?: string
+  supportReason?: string
 }
 
 export interface CatalogSubcategory {

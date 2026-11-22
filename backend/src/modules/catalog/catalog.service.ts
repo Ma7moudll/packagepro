@@ -17,6 +17,7 @@ const MATERIAL_HEX: Record<string, string> = {
 // Shapes returned by the marketplace (frontend consumes these via /api/catalog).
 
 function toSummary(p: any) {
+  const editorDefaults = p.editorDefaults ?? undefined;
   return {
     id: p.id,
     slug: p.slug,
@@ -32,6 +33,17 @@ function toSummary(p: any) {
     gallery: p.gallery,
     ecoFlags: p.ecoFlags,
     editorDefaults: p.editorDefaults,
+    // Unified-catalogue readiness passthrough (additive; undefined on rows
+    // seeded before the unification).
+    editorType: editorDefaults?.editorType,
+    readiness: editorDefaults?.readiness,
+    support: editorDefaults?.support,
+    supportReason: editorDefaults?.supportReason,
+    // Grounded currency: the pricing engine rejects any material rate card
+    // whose currency is not EGP (pricing.service.ts), so every price this
+    // API serves is EGP by construction. Storefronts must format with this
+    // field, never assume another currency or convert rates.
+    currency: 'EGP',
   };
 }
 
@@ -257,6 +269,9 @@ export class CatalogService {
         prepress: isDeferred ? undefined : (editorDefaults?.prepress ?? undefined),
         support: editorDefaults?.support ?? undefined,
         supportReason: isDeferred ? (editorDefaults?.supportReason ?? undefined) : undefined,
+        // Unified-catalogue join fields (additive).
+        editorType: editorDefaults?.editorType ?? undefined,
+        readiness: editorDefaults?.readiness ?? undefined,
       },
       variant: {
         id: variant.id,
@@ -285,6 +300,9 @@ export class CatalogService {
         unitPrice: Number(quote.unitPrice),
         totalPrice: Number(quote.totalPrice),
         currency: quote.material?.currency ?? 'EGP',
+        // quote_required products have no product-specific rates; this figure
+        // is the engine's generic estimate, not an offer.
+        status: editorDefaults?.readiness?.pricing === 'quote_required' ? 'quote_required' : 'estimated',
       },
     };
   }
