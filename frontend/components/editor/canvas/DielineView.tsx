@@ -74,6 +74,13 @@ export function DielineView({
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 })
 
   const geometry = resolution?.ok ? resolution.geometry : undefined
+  // Panel rotation is metadata in the canonical geometry and this view draws
+  // panels unrotated. Artwork is withheld for any rotated panel rather than
+  // drawn in a plausible but wrong orientation.
+  const rotatedFaces = geometry
+    ? Object.entries(geometry.panels).filter(([, panel]) => (panel.rotation ?? 0) !== 0).map(([id]) => id)
+    : []
+  const artworkWithheld = rotatedFaces.filter((id) => faceArtwork?.[id])
   const bounds = geometry ? flatBounds(geometry) : undefined
   const sheetW = bounds ? bounds.x1 - bounds.x0 : 0
   const sheetH = bounds ? bounds.y1 - bounds.y0 : 0
@@ -147,7 +154,7 @@ export function DielineView({
   return (
     <div className="flex flex-col h-full bg-slate-100">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-white border-b">
+      <div className="flex flex-wrap items-center justify-between gap-y-2 px-4 py-2 bg-white border-b">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-slate-700">
             {language === "ar" ? "عرض المخطط المسطح" : "Dieline View"}
@@ -155,9 +162,16 @@ export function DielineView({
           <span className="text-xs text-slate-500">
             ({sheetW.toFixed(0)} x {sheetH.toFixed(0)} mm)
           </span>
+          {artworkWithheld.length > 0 && (
+            <span className="text-xs text-amber-700" data-artwork-withheld={artworkWithheld.join(",")}>
+              {language === "ar"
+                ? "معاينة التصميم غير متاحة للوحات المدوّرة"
+                : "Artwork preview unavailable for rotated panels"}
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => handleZoom(-0.1)}>
             <ZoomOut className="h-4 w-4" />
           </Button>
@@ -238,7 +252,7 @@ export function DielineView({
                 data-face-id={faceId}
                 onClick={() => !isFlap && onSelectFace(id)}
                 className={`
-                  absolute border transition-all
+                  group absolute border transition-all
                   ${isFlap ? "cursor-default" : "cursor-pointer hover:ring-2 hover:ring-blue-400"}
                   ${selectedFace === id && !isFlap ? "ring-2 ring-blue-500 z-10" : ""}
                 `}
@@ -252,7 +266,7 @@ export function DielineView({
                   borderColor: selectedFace === id ? "#3b82f6" : "#cbd5e1",
                 }}
               >
-                {faceArtwork?.[faceId] && (
+                {faceArtwork?.[faceId] && (panel.rotation ?? 0) === 0 && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={faceArtwork[faceId]}
@@ -262,10 +276,11 @@ export function DielineView({
                     className="absolute inset-0 w-full h-full pointer-events-none select-none"
                   />
                 )}
-                <div className={faceArtwork?.[faceId] ? "absolute top-0.5 left-0.5 pointer-events-none" : "absolute inset-0 flex items-center justify-center"}>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <span
                     className={`
                       text-[9px] font-medium px-1 py-0.5 rounded bg-white/80
+                      ${faceArtwork?.[faceId] && (panel.rotation ?? 0) === 0 ? "opacity-0 group-hover:opacity-100 transition-opacity" : ""}
                       ${isFlap ? "text-slate-500" : "text-slate-600"}
                     `}
                   >

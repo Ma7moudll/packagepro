@@ -32,8 +32,15 @@ export function DielineCanvas({ resolution }: DielineCanvasProps) {
   // 3D preview uses. Transparent where nothing is drawn. It is never part of
   // the SVG export and never changes the canonical geometry.
   const [faceArtwork, setFaceArtwork] = useState<Record<string, string>>({})
+  // Withhold artwork when the resolved geometry was built from other
+  // dimensions than the artwork's (stale resolution): scale would be wrong.
+  const geomDims = resolution?.ok ? resolution.geometry.dims : undefined
+  const dimsMatch = !!geomDims &&
+    Math.abs(geomDims.length - model.dimensions.length) < 0.01 &&
+    Math.abs(geomDims.width - model.dimensions.width) < 0.01 &&
+    Math.abs(geomDims.height - model.dimensions.height) < 0.01
   useEffect(() => {
-    if (product?.support === "deferred") { setFaceArtwork({}); return }
+    if (product?.support === "deferred" || !dimsMatch) { setFaceArtwork({}); return }
     let cancelled = false
     const timer = setTimeout(() => {
       generateTextureFromLayers(layers, model, { scale: 2 })
@@ -44,7 +51,7 @@ export function DielineCanvas({ resolution }: DielineCanvasProps) {
         .catch(() => { if (!cancelled) setFaceArtwork({}) })
     }, 150)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [layers, model, product?.support])
+  }, [layers, model, product?.support, dimsMatch])
 
   // M8-J (spec §14): deferred products never render a net — not the canonical
   // DielineView, and not the frozen M7 generic fallback. Show the deferral

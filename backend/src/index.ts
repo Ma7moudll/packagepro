@@ -187,10 +187,15 @@ server.get('/', async () => {
 
 // Health check endpoint
 server.get('/health', async () => {
+  const redisReady = isRedisEnabled();
   return {
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    // Additive: Redis is optional for boot, but background work (email,
+    // settlement, reminder, marketing and export queues) only runs with it.
+    redis: redisReady ? 'ready' : 'unavailable',
+    backgroundWorkers: redisReady ? 'running_or_starting' : 'disabled',
   };
 });
 
@@ -281,6 +286,18 @@ async function registerRoutes() {
   logger.info('Routes registered');
 }
 
+// Redis is optional for boot, but without it the BullMQ workers never start.
+// Say so loudly in production instead of at info level.
+function warnRedisUnavailable(): void {
+  if (process.env.NODE_ENV === 'production') {
+    logger.warn(
+      'Redis is not available: background workers (email, settlement, reminder, marketing, export) are disabled and queued work will not run. /health reports redis=unavailable.',
+    );
+  } else {
+    logger.info('Running without Redis (optional service)');
+  }
+}
+
 // Start server
 async function start() {
   try {
@@ -291,10 +308,10 @@ async function start() {
       if (isRedisEnabled()) {
         logger.info('Redis connected');
       } else {
-        logger.info('Running without Redis (optional service)');
+        warnRedisUnavailable();
       }
     } catch (error) {
-      logger.info('Running without Redis (optional service)');
+      warnRedisUnavailable();
     }
 
     // Register plugins
