@@ -121,6 +121,71 @@ export const CATALOGUE_SUBCATEGORIES: CatalogueSubcategory[] = [
 
 export const DEFERRED_DIELINE_REASON = "Unified catalogue entry without a production dieline blueprint yet; manufacturing geometry is deferred and never shipped as a generic box substitute."
 
+/**
+ * Candidate material codes per picker product, verbatim from the editor
+ * picker data (products-data.ts availableMaterials). CATALOGUE INTENT,
+ * not supplier certification: the renderer filters to these candidates
+ * and labels them pending supplier confirmation. No rates exist for
+ * codes outside the legacy priced set.
+ */
+export const CATALOGUE_CANDIDATE_MATERIALS: Record<string, string[]> = {
+  mailer_box: ["cardboard-kraft", "cardboard-white", "corrugated-kraft", "corrugated-white"],
+  ecommerce_mailer_box: ["corrugated-kraft", "corrugated-white"],
+  shipping_box: ["corrugated-kraft", "corrugated-white"],
+  snap_lock_box: ["cardboard-white", "cardboard-kraft", "cardboard-coated"],
+  auto_bottom_box: ["cardboard-white", "cardboard-coated"],
+  bottle_box: ["cardboard-white", "cardboard-coated"],
+  pizza_box: ["corrugated-kraft", "corrugated-white"],
+  pillow_box: ["cardboard-white", "cardboard-kraft", "cardboard-coated"],
+  christmas_gift_box: ["cardboard-white", "cardboard-kraft"],
+  sleeve: ["cardboard-kraft"],
+  folding_carton: ["cardboard-white", "cardboard-coated"],
+  rigid_box: ["cardboard-white", "cardboard-coated"],
+  rigid_magnetic_box: ["cardboard-white", "cardboard-coated"],
+  rigid_jewellery_box: ["cardboard-white", "cardboard-coated"],
+  rigid_cosmetic_box: ["cardboard-white", "cardboard-coated"],
+  rigid_magnetic_cosmetic_box: ["cardboard-white", "cardboard-coated"],
+  rigid_wine_box: ["cardboard-white", "cardboard-coated"],
+  rigid_magnetic_wine_box: ["cardboard-white", "cardboard-coated"],
+  rigid_flower_box: ["cardboard-white", "cardboard-coated"],
+  rigid_shirt_box: ["cardboard-white", "cardboard-coated"],
+  gift_box: ["cardboard-white", "cardboard-coated"],
+  paper_bag: ["paper-kraft", "paper-white"],
+  cotton_bag: ["cotton-natural", "cotton-white"],
+  mesh_bag: ["mesh-recycled"],
+  muslin_bag: ["muslin-natural"],
+  paper_mailer_bag: ["paper-kraft", "paper-white"],
+  poly_mailer_bag: ["poly-white", "poly-black"],
+  bio_poly_mailer_bag: ["bio-poly"],
+  frosted_ziplock_bag: ["plastic-frosted"],
+  stand_up_pouch: ["foil-matte", "foil-glossy"],
+  doypack_pouch: ["foil-matte", "foil-glossy", "kraft-lined"],
+  compostable_doypack: ["compostable"],
+  recyclable_doypack: ["recyclable-mono"],
+  doypack_valve: ["foil-matte", "kraft-lined"],
+  cup: ["paper-coated-white"],
+  smoothie_cup: ["plastic-clear"],
+  tube: ["cardboard-kraft", "cardboard-white"],
+  tube_metal_lid: ["cardboard-kraft", "cardboard-white"],
+  envelope: ["cardboard-kraft", "cardboard-white"],
+  corrugated_envelope: ["corrugated-kraft"],
+  tissue_paper: ["tissue-white"],
+  packing_paper: ["kraft-paper", "newsprint"],
+  paper_tape: ["paper-tape-kraft"],
+  plastic_tape: ["plastic-tape-clear"],
+  water_activated_tape: ["kraft-tape"],
+  rectangle_label: ["label-paper", "label-vinyl"],
+  circle_label: ["label-paper", "label-vinyl"],
+  square_label: ["label-paper", "label-vinyl"],
+  labels_sheet: ["label-paper"],
+  business_card: ["card-stock-white", "card-stock-kraft"],
+  loyalty_card: ["card-stock-white"],
+  thank_you_card: ["card-stock-white", "card-stock-kraft"],
+  menu_card: ["card-stock-white"],
+  ribbon: ["satin-ribbon", "grosgrain-ribbon"],
+  stamp_ink_pad: ["rubber-stamp"],
+};
+
 export const CATALOGUE_PRODUCTS: CatalogueProduct[] = [
   {
     id: "mailer_box", boxType: "mailer-box", productId: "prod-mailer-box", slug: "custom-mailer-box",

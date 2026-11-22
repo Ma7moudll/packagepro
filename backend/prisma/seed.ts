@@ -5,6 +5,7 @@ import {
   CATALOGUE_CATEGORIES,
   CATALOGUE_SUBCATEGORIES,
   CATALOGUE_PRODUCTS,
+  CATALOGUE_CANDIDATE_MATERIALS,
 } from '../../shared/catalog/products';
 
 const prisma = new PrismaClient();
@@ -1537,10 +1538,14 @@ async function main() {
   // explicit deferred production status instead of fake geometry.
   for (const entry of CATALOGUE_PRODUCTS) {
     if (CATALOG_PRODUCTS.some((p) => p.id === entry.productId)) continue;
+    // Candidate materials are catalogue intent from the picker data, not a
+    // legacy-cardboard fallback: the default variant uses the product's own
+    // first candidate code (e.g. poly-white, foil-matte, paper-coated-white).
     const defaultMaterial =
-      entry.pricingFamily === 'box' ? 'cardboard-kraft'
+      CATALOGUE_CANDIDATE_MATERIALS[entry.id]?.[0] ??
+      (entry.pricingFamily === 'box' ? 'cardboard-kraft'
       : entry.pricingFamily === 'bag' ? 'kraft'
-      : 'paper';
+      : 'paper');
     CATALOG_PRODUCTS.push({
       id: entry.productId,
       subcategoryId: `sub-${entry.subcategory}`,
@@ -1593,6 +1598,12 @@ async function main() {
       readiness: entry.readiness,
       ...(entry.previewFamily ? { previewFamily: entry.previewFamily } : {}),
       ...(entry.plannedFamily ? { plannedFamily: entry.plannedFamily } : {}),
+      // Candidate material codes (catalogue intent, not compatibility
+      // approval); the renderer filters to these and labels them pending
+      // supplier confirmation.
+      ...(CATALOGUE_CANDIDATE_MATERIALS[entry.id]
+        ? { candidateMaterials: CATALOGUE_CANDIDATE_MATERIALS[entry.id] }
+        : {}),
     };
   }
 
