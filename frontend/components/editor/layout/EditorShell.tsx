@@ -1,6 +1,6 @@
 "use client"
 
-import { ReactNode, useState } from "react"
+import { ReactNode, useEffect, useState } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { EditorHeader } from "./EditorHeader"
 import { EditorLeftSidebar } from "./EditorLeftSidebar"
@@ -20,6 +20,14 @@ export function EditorShell({ headerExtra, center, onSessionSaved }: EditorShell
 
   const [cartOpen, setCartOpen] = useState(false)
   useKeyboardShortcuts()
+
+  // On phones and small tablets the side panels are overlays (max-lg). Start with the
+  // right panel closed so the first screen shows the preview; it opens from the header toggle.
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      useDesignStore.getState().setRightSidebarOpen(false)
+    }
+  }, [])
 
   return (
     <div className="h-screen flex flex-col bg-slate-50">

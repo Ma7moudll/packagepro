@@ -19,7 +19,16 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Save,
+  MoreHorizontal,
+  Camera,
+  Share2,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { scheduleAutoSave, cancelAutoSave, ensureCloudSession } from "@/lib/editor/services/storage"
 import { useLanguage } from "@/providers/language-provider"
 import { useAuth } from "@/providers/auth-provider"
@@ -71,6 +80,8 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
   // an actual manual save request is in flight.
   const [manualSaving, setManualSaving] = useState(false)
   const [showTutorial, setShowTutorial] = useState(false)
+  const [mockupOpen, setMockupOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
 
   const title = `${model.type.replace(/_/g, " ")} ${model.dimensions.length}×${model.dimensions.width}×${model.dimensions.height}mm`
 
@@ -153,7 +164,7 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
       <header className="h-14 bg-white border-b border-slate-200 px-3 flex items-center justify-between gap-2">
         {/* Left: Logo, Sidebar Toggles & Title */}
         <div className="flex items-center gap-2 min-w-0">
-          <Link href="/" className="flex items-center gap-2 shrink-0">
+          <Link href="/" className="hidden sm:flex items-center gap-2 shrink-0">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white font-bold text-sm">
               P
             </span>
@@ -198,7 +209,7 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
             </Tooltip>
           </div>
 
-          <div className="h-5 w-px bg-slate-200" />
+          <div className="hidden lg:block h-5 w-px bg-slate-200" />
 
           <div className="min-w-0">
             <h1 className="text-sm font-semibold text-slate-800 truncate capitalize">{title}</h1>
@@ -229,14 +240,14 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
         </div>
 
         {/* Center: Title Info */}
-        <div className="hidden md:flex items-center gap-3 text-xs text-slate-400">
+        <div className="hidden lg:flex items-center gap-3 text-xs text-slate-400">
           <span>{model.type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</span>
           <span className="text-slate-300">|</span>
           <span>{language === "ar" ? "طبقات" : "Layers"}: {layersCount}</span>
         </div>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* Undo/Redo */}
           <div className="flex items-center gap-0.5 bg-slate-50 rounded-lg p-0.5">
             <Tooltip>
@@ -274,18 +285,53 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
             </Tooltip>
           </div>
 
-          <div className="h-5 w-px bg-slate-200" />
+          <div className="hidden lg:block h-5 w-px bg-slate-200" />
 
           {/* Mockup & Share */}
-          <MockupGallery />
-          <ShareDialog />
+          <div className="hidden lg:flex items-center gap-2">
+            <MockupGallery />
+            <ShareDialog />
+          </div>
+
+          {/* Below lg: Mockup, Share and Tutorial move into one menu */}
+          <div className="lg:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-md"
+                  aria-label={language === "ar" ? "المزيد" : "More"}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => setMockupOpen(true)}>
+                  <Camera className="h-4 w-4 mr-2" />
+                  {language === "ar" ? "معاينة Mockup" : "Mockup Preview"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setShareOpen(true)}>
+                  <Share2 className="h-4 w-4 mr-2" />
+                  {language === "ar" ? "مشاركة" : "Share"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setShowTutorial(true)}>
+                  <HelpCircle className="h-4 w-4 mr-2" />
+                  {language === "ar" ? "دليل الاستخدام" : "Tutorial"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <MockupGallery open={mockupOpen} onOpenChange={setMockupOpen} hideTrigger />
+          <ShareDialog open={shareOpen} onOpenChange={setShareOpen} hideTrigger />
 
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-md"
+                className="hidden lg:inline-flex h-8 w-8 rounded-md"
+                aria-label={language === "ar" ? "دليل الاستخدام" : "Tutorial"}
                 onClick={() => setShowTutorial(true)}
               >
                 <HelpCircle className="h-4 w-4" />
@@ -296,7 +342,7 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
             </TooltipContent>
           </Tooltip>
 
-          <div className="h-5 w-px bg-slate-200" />
+          <div className="hidden lg:block h-5 w-px bg-slate-200" />
 
           {/* Add to Cart */}
           <AddToCart
@@ -311,21 +357,22 @@ export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved
             onEnsureSession={handleEnsureSession}
           />
 
-          <div className="h-5 w-px bg-slate-200" />
+          <div className="hidden lg:block h-5 w-px bg-slate-200" />
 
           {/* Save Button */}
           <Button
             size="sm"
-            className="bg-slate-900 hover:bg-slate-800 text-white font-medium h-8 px-4 rounded-lg"
+            className="bg-slate-900 hover:bg-slate-800 text-white font-medium h-8 px-3 sm:px-4 rounded-lg"
+            aria-label={language === "ar" ? "حفظ" : "Save"}
             onClick={handleSave}
             disabled={manualSaving}
           >
             {saveStatus === "saving" ? (
-              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              <Loader2 className="h-4 w-4 sm:mr-1.5 animate-spin" />
             ) : (
-              <Save className="h-4 w-4 mr-1.5" />
+              <Save className="h-4 w-4 sm:mr-1.5" />
             )}
-            {language === "ar" ? "حفظ" : "Save"}
+            <span className="hidden sm:inline">{language === "ar" ? "حفظ" : "Save"}</span>
           </Button>
 
           {/* Close */}

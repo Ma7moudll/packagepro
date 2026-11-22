@@ -63,9 +63,18 @@ const SAMPLE_SHARED_USERS: SharedUser[] = [
   },
 ]
 
-export function ShareDialog() {
+export function ShareDialog({
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
+}: { open?: boolean; onOpenChange?: (open: boolean) => void; hideTrigger?: boolean } = {}) {
   const { language } = useLanguage()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = controlledOpen ?? internalOpen
+  const setOpen = (value: boolean) => {
+    setInternalOpen(value)
+    onOpenChange?.(value)
+  }
   const [shareLink, setShareLink] = useState("")
   const [linkCopied, setLinkCopied] = useState(false)
   const [sharedUsers, setSharedUsers] = useState<SharedUser[]>(SAMPLE_SHARED_USERS)
@@ -132,12 +141,14 @@ export function ShareDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8">
-          <Share2 className="h-4 w-4 mr-2" />
-          {language === "ar" ? "مشاركة" : "Share"}
-        </Button>
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm" className="h-8">
+            <Share2 className="h-4 w-4 mr-2" />
+            {language === "ar" ? "مشاركة" : "Share"}
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

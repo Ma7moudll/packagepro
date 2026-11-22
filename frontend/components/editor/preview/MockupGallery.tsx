@@ -100,9 +100,18 @@ const SCENE_CATEGORIES = [
   { id: "luxury", name: { en: "Luxury", ar: "فاخر" } },
 ]
 
-export function MockupGallery() {
+export function MockupGallery({
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
+}: { open?: boolean; onOpenChange?: (open: boolean) => void; hideTrigger?: boolean } = {}) {
   const { language } = useLanguage()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = controlledOpen ?? internalOpen
+  const setOpen = (value: boolean) => {
+    setInternalOpen(value)
+    onOpenChange?.(value)
+  }
   const [selectedScene, setSelectedScene] = useState(MOCKUP_SCENES[0])
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [exporting, setExporting] = useState(false)
@@ -174,12 +183,14 @@ export function MockupGallery() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8">
-          <Camera className="h-4 w-4 mr-2" />
-          {language === "ar" ? "معاينة Mockup" : "Mockup Preview"}
-        </Button>
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm" className="h-8">
+            <Camera className="h-4 w-4 mr-2" />
+            {language === "ar" ? "معاينة Mockup" : "Mockup Preview"}
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-4xl h-[80vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

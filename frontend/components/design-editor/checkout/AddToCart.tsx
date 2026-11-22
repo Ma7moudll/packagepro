@@ -121,9 +121,9 @@ export function AddToCart({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button disabled={unpriced} title={unpriced ? (language === "ar" ? "المواصفات تحتاج عرض سعر" : "Specifications require a quote") : undefined} className="bg-emerald-600 hover:bg-emerald-700" size="sm" onClick={() => setDesignName("")}>
-          <ShoppingCart className="h-4 w-4 mr-2" />
-          {language === "ar" ? "إضافة إلى السلة" : "Add to Cart"}
+        <Button disabled={unpriced} title={unpriced ? (language === "ar" ? "المواصفات تحتاج عرض سعر" : "Specifications require a quote") : undefined} className="bg-emerald-600 hover:bg-emerald-700" size="sm" aria-label={language === "ar" ? "إضافة إلى السلة" : "Add to Cart"} onClick={() => setDesignName("")}>
+          <ShoppingCart className="h-4 w-4 min-[380px]:mr-2" />
+          <span className="hidden min-[380px]:inline">{language === "ar" ? "إضافة إلى السلة" : "Add to Cart"}</span>
         </Button>
       </DialogTrigger>
       <DialogContent>
