@@ -31,10 +31,10 @@ test('cut edges retain no printable face and inside faces are distinct',()=>{
  assert.match(source,/geometry\.dispose/)
 })
 test('shipping top artwork is cropped across two flaps, not repeated as a complete logo',()=>{
- const s=readFileSync('components/design-editor/models/BoxModels.tsx','utf8')
- const section=s.slice(s.indexOf('export function ShippingBox'),s.indexOf('export function RigidBox'))
- assert.match(section,/uvRect=\{\[0,0,1,\.5\]\}/)
- assert.match(section,/uvRect=\{\[0,\.5,1,1\]\}/)
+ const section=readFileSync('components/design-editor/models/ShippingConstruction.tsx','utf8')
+ assert.match(section,/uvRect=\{side===1\?\[0,0,1,\.5\]:\[0,\.5,1,1\]\}/)
+ const panel=readFileSync('components/design-editor/models/CorrugatedPanel.tsx','utf8')
+ assert.equal([...panel.matchAll(/uvRect=\{uvRect\}/g)].length,2)
 })
 test('nonpaper material policy does not pretend film/foil are cardboard liners',()=>{
  for(const type of ['poly_mailer_bag','bio_poly_mailer_bag','stand_up_pouch','doypack_valve']){

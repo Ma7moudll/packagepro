@@ -35,7 +35,7 @@ export type PanelProfile = "rounded" | "tuck" | "wing" | "notch"
  * Caps have separate material groups, edges never inherit printed artwork.
  * UVs stay in the original rectangular panel bounds, not the clipped outline.
  */
-export function createMailerPanel(width: number, height: number, thickness: number, profile: PanelProfile = "rounded", radius = 0.025) {
+export function createMailerPanel(width: number, height: number, thickness: number, profile: PanelProfile = "rounded", radius = 0.025, curveSegments = 16) {
   const x = width / 2, y = height / 2
   const r = Math.min(radius, width / 8, height / 8)
   const s = new THREE.Shape()
@@ -61,7 +61,7 @@ export function createMailerPanel(width: number, height: number, thickness: numb
   const g = new THREE.ExtrudeGeometry(s, {
     depth: thickness, bevelEnabled: true,
     bevelThickness: thickness * 0.12, bevelSize: thickness * 0.12,
-    bevelSegments: 2, steps: 1, curveSegments: 16,
+    bevelSegments: 2, steps: 1, curveSegments,
   })
   g.translate(0, 0, -thickness / 2)
   const uv = g.getAttribute("uv"), pos = g.getAttribute("position"), normals = g.getAttribute("normal")

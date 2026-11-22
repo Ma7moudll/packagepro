@@ -7,6 +7,7 @@ import { LINERS, type BoardSpecification } from "@/lib/editor/material-specifica
 import { MailerConstruction } from "./MailerConstruction"
 import {useProductOpening} from "./useProductOpening"
 import { StockPanel } from "./StockPanel"
+import { ShippingConstruction } from "./ShippingConstruction"
 import { PouchShape } from "./PouchProduct"
 import { CupShape, TubeShape } from "./CurvedProducts"
 import { FlatProductShape } from "./FlatProducts"
@@ -852,12 +853,12 @@ export function MailerBox({
 
 /** Fine paper grain for non-mailer stock, without painted corrugation bands.
  * Corrugation belongs to a cut edge, not wood-like stripes across every liner. */
-function createProductPaper(colour:string){
+function createProductPaper(colour:string,subtle=false){
  const c=document.createElement("canvas");c.width=512;c.height=512
  const ctx=c.getContext("2d")!;ctx.fillStyle=colour;ctx.fillRect(0,0,512,512)
  for(let i=0;i<18000;i++){
   const x=Math.random()*512,y=Math.random()*512
-  ctx.fillStyle=i%2?"rgba(255,255,255,.045)":"rgba(55,43,28,.025)"
+  ctx.fillStyle=subtle?(i%2?"rgba(255,255,255,.012)":"rgba(55,43,28,.008)"):(i%2?"rgba(255,255,255,.045)":"rgba(55,43,28,.025)")
   ctx.fillRect(x,y,.6+Math.random(),.6+Math.random())
  }
  const map=new THREE.CanvasTexture(c);map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=16
@@ -873,7 +874,7 @@ function createNeutralFilm(colour="#eeeeec"){
 }
 function useProductStock({boardSpecification:requestedBoard, material:requestedMaterial, textures, reliefMasks, type}: BoxModelProps) {
   // A paperboard liner request must not turn a film/foil product into cardboard.
-  const coverage=productPreviewCoverage(type),paper=coverage.paperSurface
+  const coverage=productPreviewCoverage(type),paper=coverage.paperSurface,subtlePaper=coverage.family==="shipping"||coverage.family==="bag"
   const boardSpecification=coverage.twoSidedStock?requestedBoard:undefined
   // Non-paper families use a neutral illustrative film surface until their own
   // material selector is prepared. A saved kraft box material is not film.
@@ -883,8 +884,8 @@ function useProductStock({boardSpecification:requestedBoard, material:requestedM
   const legacy = useMemo(() => boardLook(material), [material])
   const exterior = LINERS.find(l => l.id === boardSpecification?.outside)
   const interior = LINERS.find(l => l.id === boardSpecification?.inside)
-  const outsideMap = useMemo(() => paper?createProductPaper(exterior?.colour ?? (material?.includes("kraft")?"#a8855a":"#e9ecef")):createNeutralFilm(filmColour), [legacy.textureTone, exterior, material,paper,filmColour])
-  const insideMap = useMemo(() => paper?createProductPaper(interior?.colour ?? (material?.includes("kraft")?"#d9c7a8":"#e9ecef")):createNeutralFilm(filmColour), [legacy.textureTone, interior, material,paper,filmColour])
+  const outsideMap = useMemo(() => paper?createProductPaper(exterior?.colour ?? (material?.includes("kraft")?"#a8855a":"#e9ecef"),subtlePaper):createNeutralFilm(filmColour), [legacy.textureTone, exterior, material,paper,filmColour,subtlePaper])
+  const insideMap = useMemo(() => paper?createProductPaper(interior?.colour ?? (material?.includes("kraft")?"#d9c7a8":"#e9ecef"),subtlePaper):createNeutralFilm(filmColour), [legacy.textureTone, interior, material,paper,filmColour,subtlePaper])
   const outside = useMemo(() => new THREE.MeshPhysicalMaterial({map:outsideMap,color:!paper||exterior?"#ffffff":legacy.outsideColor,roughness:!paper?(material?.includes("matte")?.8:polyFilm?.58:.45):exterior?.id==="white-imported-gloss"?.12:exterior?.roughness??(material?.includes("gloss")?.12:material?.includes("matte")?.85:legacy.roughness),clearcoat:!paper?(polyFilm?.035:.12):exterior?.id==="white-imported-gloss"||(!exterior&&material?.includes("gloss"))?1:0,clearcoatRoughness:.08,metalness:0}), [outsideMap,exterior,legacy,paper,polyFilm])
   const inside = useMemo(() => new THREE.MeshPhysicalMaterial({map:insideMap,color:!paper||interior?"#ffffff":legacy.insideColor,roughness:interior?.id==="white-imported-gloss"?.12:interior?.roughness??.92,clearcoat:interior?.id==="white-imported-gloss"?1:0,clearcoatRoughness:.08,metalness:0}), [insideMap,interior,legacy,paper])
   const edge = useMemo(() => new THREE.MeshStandardMaterial({color:!paper?"#d8d8d8":exterior?.id.includes("white")?"#cbbfa9":"#aa8c63",roughness:1}), [exterior,paper])
@@ -895,30 +896,8 @@ function useProductStock({boardSpecification:requestedBoard, material:requestedM
 // SHIPPING BOX (RSC) - فارغ من الداخل + إغلاق سلس
 // ============================================
 export function ShippingBox(props: BoxModelProps) {
- const motion=useProductOpening(props.openState??0)
- const {dimensions}=props
- const {length:L,width:W,height:H}=dimensions,l=L/100,w=W/100,h=H/100,b=.006
- const stock=useProductStock(props),t=easeInOutCubic(motion)
- const minor=easeInOutCubic(Math.min(1,t*1.6))*Math.PI*.64
- const major=easeInOutCubic(Math.max(0,t-.15)/.85)*Math.PI*.64
- const p={thickness:b,edge:stock.edge}
- const d=Math.max(b,w/2-b),sideDepth=Math.max(b,Math.min(w/2,l/2)-b)
- return <group name="shipping-construction">
-  <StockPanel {...p} width={l} height={h} outside={stock.face("front")} inside={stock.inner("front")} faceId="front" position={[0,h/2,w/2]}/>
-  <StockPanel {...p} width={l} height={h} outside={stock.face("back")} inside={stock.inner("back")} faceId="back" position={[0,h/2,-w/2]} rotation={[0,Math.PI,0]}/>
-  <StockPanel {...p} width={w} height={h} outside={stock.face("left")} inside={stock.inner("left")} faceId="left" position={[-l/2,h/2,0]} rotation={[0,-Math.PI/2,0]}/>
-  <StockPanel {...p} width={w} height={h} outside={stock.face("right")} inside={stock.inner("right")} faceId="right" position={[l/2,h/2,0]} rotation={[0,Math.PI/2,0]}/>
-  <StockPanel {...p} width={l-b} height={w-b} outside={stock.face("bottom")} inside={stock.inner("bottom")} faceId="bottom" position={[0,b/2,0]} rotation={[Math.PI/2,0,0]}/>
-  {[-1,1].map(side=><group key={side} position={[side*l/2,h-b,0]} rotation={[0,0,-side*minor]}>
-   <StockPanel {...p} width={sideDepth} height={w-b*2} outside={stock.outside} inside={stock.inside} position={[-side*sideDepth/2,0,0]} rotation={[-Math.PI/2,0,0]}/>
-  </group>)}
-  <group position={[0,h+b,w/2]} rotation={[major,0,0]}>
-   <StockPanel {...p} width={l} height={d} outside={stock.face("top")} inside={stock.inner("top")} faceId="top" uvRect={[0,0,1,.5]} position={[0,0,-d/2]} rotation={[-Math.PI/2,0,0]}/>
-  </group>
-  <group position={[0,h+b,-w/2]} rotation={[-major,0,0]}>
-   <StockPanel {...p} width={l} height={d} outside={stock.face("top")} inside={stock.inner("top")} faceId="top" uvRect={[0,.5,1,1]} position={[0,0,d/2]} rotation={[-Math.PI/2,0,0]}/>
-  </group>
- </group>
+ const stock=useProductStock(props)
+ return <ShippingConstruction dimensions={props.dimensions} stock={stock} openState={props.openState}/>
 }
 
 // Two-piece rigid construction, with an open hollow lid rather than a solid block.
