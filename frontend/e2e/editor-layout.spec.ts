@@ -35,12 +35,14 @@ for (const language of ['en', 'ar']) {
         const closeBox = await close.boundingBox();
         expect(closeBox!.x).toBeGreaterThanOrEqual(0);
         expect(closeBox!.x + closeBox!.width).toBeLessThanOrEqual(width);
+        await dialog.locator('div.overflow-y-auto').first().evaluate(e => { e.scrollTop = e.scrollHeight; });
         await close.click();
         await expect(dialog).toBeHidden();
         await more.click();
         await page.getByRole('menuitem', { name: language === 'ar' ? 'مشاركة' : 'Share', exact: true }).click();
         await expect(page.getByRole('dialog')).toBeVisible();
-        await page.keyboard.press('Escape');
+        await page.getByRole('dialog').locator('[data-slot=dialog-close]').click();
+        await expect(page.getByRole('dialog')).toBeHidden();
         // Exercise both side panel toggles, including closure via backdrop.
         for (const index of [0, 1]) {
           await page.locator('header button').nth(index).click();

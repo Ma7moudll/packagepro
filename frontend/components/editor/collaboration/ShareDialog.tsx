@@ -149,15 +149,15 @@ export function ShareDialog({
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 [&>button[data-slot=dialog-close]]:left-3 [&>button[data-slot=dialog-close]]:right-auto [&>button[data-slot=dialog-close]]:top-3 [&>button[data-slot=dialog-close]]:h-8 [&>button[data-slot=dialog-close]]:w-8 [&>button[data-slot=dialog-close]]:flex [&>button[data-slot=dialog-close]]:items-center [&>button[data-slot=dialog-close]]:justify-center">
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="flex items-center gap-2 ps-10">
             <Share2 className="h-5 w-5" />
             {language === "ar" ? "مشاركة التصميم" : "Share Design"}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-6 py-4 min-h-0 overflow-y-auto">
           {/* Add People */}
           <div className="space-y-3">
             <Label className="text-xs font-bold flex items-center gap-2">
