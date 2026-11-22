@@ -4,7 +4,7 @@ import { BoardSpecificationPanel } from "@/components/editor/panels/BoardSpecifi
 import { RaisedPrintControl } from "@/components/editor/panels/RaisedPrintControl"
 import { useState, useEffect, useRef } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
-import { pricingApi } from "@/lib/api/pricing"
+import {useEditorPresetQuote} from "@/lib/editor/hooks/useEditorPresetQuote"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,7 +28,6 @@ import { COLOR_VARIANTS, FINISHING_OPTIONS, LAMINATION_OPTIONS, MATERIAL_TYPES, 
 import {CATALOGUE_PRODUCTS,CATALOGUE_CATEGORIES,CATALOGUE_CANDIDATE_MATERIALS,canonicalEditorType} from "../../../../shared/catalog/products"
 import {catalogApi} from "@/lib/api/catalog"
 import {productConfiguration,productDimensionChange,materialCandidateLabel,readinessLabel,requestProductMaterial} from "@/lib/editor/product-configuration"
-import {editorRequiresQuote} from "@/lib/editor/quote-policy"
 import { useLanguage } from "@/providers/language-provider"
 import { ValidationPanel } from "@/components/editor/panels/ValidationPanel"
 import { ColorPicker } from "@/components/editor/panels/ColorPicker"
@@ -63,7 +62,10 @@ export function EditorRightSidebar({onContinue}:{onContinue:()=>void}) {
   const updateLayer = useDesignStore((s) => s.updateLayer)
   const removeLayer = useDesignStore((s) => s.removeLayer)
   const applyCoreState = useDesignStore((s) => s.applyCoreState)
-  const customQuote = editorRequiresQuote({model,layers})
+  const pricing = useEditorPresetQuote()
+  const customQuote = pricing.status === "unpriced"
+  const quote = pricing.quote
+  const quoteLoading = pricing.status === "loading"
   const initProduct=useDesignStore(s=>s.initFromEditorConfig)
   const selected = layers.find((l) => l.id === selectedIds[0])
 
@@ -73,53 +75,6 @@ export function EditorRightSidebar({onContinue}:{onContinue:()=>void}) {
   const [productLoading,setProductLoading]=useState(false)
   const [productError,setProductError]=useState("")
   const productRequest=useRef(0)
-
-  // Live pricing from the backend pricing engine. The previous hardcoded
-  // getBasePrice switch invented prices (and a quantity discount) unrelated
-  // to any rate card, then displayed them as SAR while the seeded materials
-  // price in EGP.
-  const [quote, setQuote] = useState<{ total: number; unit: number; currency: string } | null>(null)
-  const [quoteLoading, setQuoteLoading] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    if (customQuote) { setQuote(null); setQuoteLoading(false); return }
-    setQuoteLoading(true)
-    const timer = setTimeout(() => {
-      const t = (model.type || "").toLowerCase()
-      const productType = t.includes("bag") || t.includes("pouch") ? "bag" : t.includes("label") ? "label" : "box"
-      pricingApi
-        .calculate({
-          productType,
-          quantity: model.quantity,
-          dimensions: { ...model.dimensions, unit: "mm" },
-          materialCode: model.material,
-        })
-        .then((res) => {
-          if (cancelled) return
-          const data = res.data
-          if (res.success && data) {
-            setQuote({
-              total: data.totalPrice,
-              unit: (data as any).unitPrice ?? data.totalPrice / model.quantity,
-              currency: data.material?.currency ?? "EGP",
-            })
-          } else {
-            setQuote(null)
-          }
-        })
-        .catch(() => {
-          if (!cancelled) setQuote(null)
-        })
-        .finally(() => {
-          if (!cancelled) setQuoteLoading(false)
-        })
-    }, 400)
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  }, [customQuote, model.type, model.material, model.dimensions.length, model.dimensions.width, model.dimensions.height, model.quantity])
 
   const canonicalType=canonicalEditorType(model.type)
   const currentProduct = getProductById(canonicalType as any)
@@ -715,7 +670,7 @@ export function EditorRightSidebar({onContinue}:{onContinue:()=>void}) {
             </Select>
           </div>
           <div className="text-right">
-            <div className="text-xl font-bold text-slate-900">
+            <div data-testid="editor-summary-total" className="text-xl font-bold text-slate-900">
               {customQuote ? (<span className="text-sm font-normal text-amber-700">{language === "ar" ? "يتطلب عرض سعر" : "Quote required"}</span>) : quoteLoading && !quote ? (
                 <span className="text-sm font-normal text-slate-400">…</span>
               ) : quote ? (
@@ -738,6 +693,7 @@ export function EditorRightSidebar({onContinue}:{onContinue:()=>void}) {
             )}
           </div>
         </div>
+        {pricing.status === "error" && <Button variant="outline" size="sm" onClick={pricing.retry}>{language === "ar" ? "إعادة حساب السعر" : "Retry price"}</Button>}
         <Button onClick={onContinue} disabled={customQuote} className="w-full bg-slate-900 hover:bg-slate-800 text-white h-10">
           {customQuote?(language === "ar" ? "يتطلب عرض سعر" : "Quote required"):(language === "ar" ? "متابعة الطلب" : "Continue")}
         </Button>
