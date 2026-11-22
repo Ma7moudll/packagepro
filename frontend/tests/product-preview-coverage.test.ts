@@ -42,3 +42,10 @@ test('nonpaper material policy does not pretend film/foil are cardboard liners',
  }
  for(const type of ['paper_bag','paper_mailer_bag','cup','tube','envelope','business_card'])assert.equal(productPreviewCoverage(type).twoSidedStock,true)
 })
+
+test('session restore owns initialization even without catalogue product identity',()=>{
+ const page=readFileSync('app/editor/page.tsx','utf8')
+ const editor=readFileSync('components/design-editor/PackhelpEditor.tsx','utf8')
+ assert.match(page,/preserveRestoredDesign=\{ !!sessionIdParam\}/.source.replace(' ',''))
+ assert.ok(editor.indexOf('if (preserveRestoredDesign)')<editor.indexOf('applyCoreState((core)'))
+})

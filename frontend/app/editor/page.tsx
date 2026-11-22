@@ -245,6 +245,7 @@ export default function EditorPage() {
       }
       center={
         <PackhelpEditor
+          preserveRestoredDesign={!!sessionIdParam}
           productType={productType}
           boxType={displayType as any}
           material={displayMaterial}

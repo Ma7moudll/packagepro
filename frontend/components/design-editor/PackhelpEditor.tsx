@@ -10,6 +10,7 @@ import { WallViewCanvas } from "@/components/editor/canvas/WallViewCanvas"
 import { analyticsService } from "@/lib/analytics/analytics-service"
 
 interface PackhelpEditorProps {
+  preserveRestoredDesign?: boolean
   productType?: "box" | "bag" | "cup" | "tube"
   boxType?: "mailer-box" | "gift-box" | "folding-carton" | "rigid-box" | "cup" | "bag" | "shipping-box"
   material?: string
@@ -36,6 +37,7 @@ const MATERIAL_COLORS: Record<string, string> = {
 
 // Initialize store with initial design if provided
 export function PackhelpEditor({
+  preserveRestoredDesign = false,
   productType = "box",
   boxType = "mailer-box",
   material,
@@ -74,6 +76,9 @@ export function PackhelpEditor({
   // Initialize store with initial design if provided
   useEffect(() => {
     if (isInitialized.current) return
+    // A saved non-catalogue design has no product id. Its async restore owns
+    // initialization too, even if it finishes before this component mounts.
+    if (preserveRestoredDesign) { isInitialized.current = true; return }
 
     // When the store was already hydrated by initFromEditorConfig (catalog-driven entry),
     // do not clobber it with the default initialDesign props.
@@ -147,7 +152,7 @@ export function PackhelpEditor({
     })
 
     isInitialized.current = true
-  }, [initialDesign, boxType, material, applyCoreState])
+  }, [initialDesign, boxType, material, applyCoreState, preserveRestoredDesign])
 
   switch (viewMode) {
     case "2d":
