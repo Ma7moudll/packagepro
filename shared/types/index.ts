@@ -66,6 +66,7 @@ export interface Order {
   shippingAddress: ShippingAddress
   paymentMethod: PaymentMethod
   paymentStatus: PaymentStatus
+  /** New tax-exclusive-v1 orders: sum of pre-tax, shipping-exclusive lines. */
   subtotal: number
   tax: number
   shipping: number
@@ -99,7 +100,11 @@ export interface OrderItem {
   material?: string | null
   color?: string
   finish?: string
+  /** New tax-exclusive-v1 orders: rounded pre-tax display unit, excluding shipping. */
   unitPrice: number
+  /** New tax-exclusive-v1 orders: authoritative pre-tax line, excluding shipping.
+   * Do not reconstruct from rounded unitPrice times quantity or reinterpret
+   * unmarked historical rows as having this prospective convention. */
   totalPrice: number
   // Traceability: catalog + design references persisted on the order line.
   productId?: string | null
