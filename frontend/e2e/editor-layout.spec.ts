@@ -26,7 +26,7 @@ for (const language of ['en', 'ar']) {
         const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0;
       }).map(b => {
         const r = b.getBoundingClientRect();
-        return {left:r.left, right:r.right, hit:b.disabled || document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button') === b};
+        return {left:r.left, right:r.right, hit:b instanceof HTMLButtonElement && (b.disabled || document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button') === b)};
       }));
       for (const control of headerControls) {
         expect(control.left).toBeGreaterThanOrEqual(0);
