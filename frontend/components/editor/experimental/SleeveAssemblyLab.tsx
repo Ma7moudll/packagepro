@@ -74,7 +74,7 @@ export function SleeveAssemblyLab() {
   const setMailer = (key: keyof AssemblyInput["mailerMm"], value: number) => setInput(prev => ({ ...prev, mailerMm: { ...prev.mailerMm, [key]: value } }))
   const setSleeve = (key: "length" | "width" | "height" | "glueFlap" | "caliperMm", value: number) => setInput(prev => ({ ...prev, sleeve: { ...prev.sleeve, [key]: value } }))
   const changeRemoval = (value: number) => { setRemoval(value); if (value !== 1) setOpening(0) }
-  return <div data-testid="assembly-lab" className="min-h-screen bg-slate-100 p-4 text-slate-900 md:p-7">
+  return <div data-testid="assembly-lab" className="min-h-screen bg-slate-100 p-4 text-slate-900 max-sm:pr-20 md:p-7">
     <header className="mx-auto mb-5 max-w-7xl">
       <p className="text-sm font-bold uppercase tracking-widest text-amber-800">PackagePro / Experimental geometry lab</p>
       <h1 className="mt-2 text-2xl font-bold">Mailer + removable sleeve <span lang="ar" dir="rtl">علبة وغلاف تجريبي</span></h1>

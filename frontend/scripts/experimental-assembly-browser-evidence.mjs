@@ -43,9 +43,15 @@ try {
   await page.getByTestId('assembly-preview').waitFor()
   await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(2000)
   await screenshot('06-mobile.png')
+  const floatingChat = page.locator('button.fixed.bottom-4.right-4')
+  if (await floatingChat.count()) {
+    const chat = await floatingChat.boundingBox()
+    const glue = await page.getByLabel('Glue flap', { exact: true }).boundingBox()
+    if (!chat || !glue || glue.x + glue.width > chat.x - 8) throw new Error('Mobile floating chat overlaps the input column')
+  }
   const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
   if (horizontalOverflow) throw new Error('Mobile horizontal overflow')
-  await writeFile(path.join(output, 'results.json'), JSON.stringify({ errors, horizontalOverflow, checks: ['actual local Next route', 'partial/full removal', 'lid guard/reset', 'axis switch', 'nominal overlap warning', 'invalid input removes preview', 'mobile layout'] }, null, 2))
+  await writeFile(path.join(output, 'results.json'), JSON.stringify({ errors, horizontalOverflow, checks: ['actual local Next route', 'partial/full removal', 'lid guard/reset', 'axis switch', 'nominal overlap warning', 'invalid input removes preview', 'mobile layout and chat clearance'] }, null, 2))
   if (errors.length) throw new Error(`${errors.length} browser page errors, inspect results.json`)
   console.log(`Experimental browser checks passed. Inspect actual pixels in ${output} before treating visual evidence as ready.`)
 } finally { await browser.close() }
