@@ -91,3 +91,155 @@ describe('design ownership on real Postgres', () => {
     await expect(designService.createSession({ orderId: o.id }, a.userId)).rejects.toMatchObject({ statusCode: 403 });
   });
 });
+import { vi } from 'vitest';
+
+// Force the stale-read interleavings that found the original ownership bug.
+// Reads and writes below still run against PostgreSQL, not an in-memory DB.
+async function synchronizedSaves(sessionId: string, a: string, b: string) {
+  const read = prisma.design.findUnique.bind(prisma.design);
+  let reads = 0;
+  let release!: () => void;
+  const bothRead = new Promise<void>((resolve) => { release = resolve; });
+  const spy = vi.spyOn(prisma.design, 'findUnique').mockImplementation((async (args: any) => {
+    const row = await read(args);
+    if (args.where.sessionId === sessionId) {
+      reads++;
+      if (reads === 2) release();
+      await bothRead;
+    }
+    return row;
+  }) as any);
+  try {
+    return await Promise.allSettled([
+      designService.saveDesign({ sessionId, designData: { by: a } }, a),
+      designService.saveDesign({ sessionId, designData: { by: b } }, b),
+    ]);
+  } finally {
+    spy.mockRestore();
+  }
+}
+
+describe('ownership deterministic PostgreSQL interleavings', () => {
+  it('two stale reads of one ownerless draft cannot both claim or overwrite it', async () => {
+    const a = await user('sync-a'); const b = await user('sync-b');
+    const sid = `${marker}-sync-existing`; sessionIds.push(sid);
+    await prisma.design.create({ data: { sessionId: sid } });
+    const results = await synchronizedSaves(sid, a.userId, b.userId);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const failure = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(failure.reason).toMatchObject({ statusCode: 403 });
+    const row = await prisma.design.findUniqueOrThrow({ where: { sessionId: sid } });
+    expect([a.userId, b.userId]).toContain(row.ownerId);
+    expect(row.designData).toEqual({ by: row.ownerId });
+  });
+
+  it('two first saves after synchronized missing-row reads return one success and one 409', async () => {
+    const a = await user('first-a'); const b = await user('first-b');
+    const sid = `${marker}-sync-new`; sessionIds.push(sid);
+    const results = await synchronizedSaves(sid, a.userId, b.userId);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const failure = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(failure.reason).toMatchObject({ statusCode: 409 });
+    const rows = await prisma.design.findMany({ where: { sessionId: sid } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].designData).toEqual({ by: rows[0].ownerId });
+  });
+
+  it('a submission after the initial draft read prevents the save write', async () => {
+    const a = await user('state-a');
+    const sid = `${marker}-state`; sessionIds.push(sid);
+    const d = await prisma.design.create({ data: { sessionId: sid, ownerId: a.userId, designData: { keep: true } } });
+    const read = prisma.design.findUnique.bind(prisma.design);
+    let injected = false;
+    const spy = vi.spyOn(prisma.design, 'findUnique').mockImplementation((async (args: any) => {
+      const row = await read(args);
+      if (!injected && args.where.sessionId === sid) {
+        injected = true;
+        await prisma.design.update({ where: { id: d.id }, data: { lifecycleStatus: 'SUBMITTED' } });
+      }
+      return row;
+    }) as any);
+    try {
+      await expect(designService.saveDesign({ sessionId: sid, designData: { forbidden: true } }, a.userId)).rejects.toMatchObject({ statusCode: 400 });
+    } finally { spy.mockRestore(); }
+    expect((await prisma.design.findUniqueOrThrow({ where: { id: d.id } })).designData).toEqual({ keep: true });
+  });
+
+  it('operator reassignment after the order read cannot claim an existing legacy design', async () => {
+    const a = await user('move-a'); const b = await user('move-b');
+    const o = await order(a.customerId, 'move-order');
+    const sid = `${marker}-move`; sessionIds.push(sid);
+    const d = await prisma.design.create({ data: { orderId: o.id, sessionId: sid } });
+    const read = prisma.order.findUnique.bind(prisma.order);
+    let injected = false;
+    const spy = vi.spyOn(prisma.order, 'findUnique').mockImplementation((async (args: any) => {
+      const row = await read(args);
+      if (!injected && args.where.id === o.id) {
+        injected = true;
+        await prisma.order.update({ where: { id: o.id }, data: { customerId: b.customerId } });
+      }
+      return row;
+    }) as any);
+    try {
+      await expect(designService.createSession({ orderId: o.id }, a.userId)).rejects.toMatchObject({ statusCode: 403 });
+    } finally { spy.mockRestore(); }
+    expect(await prisma.design.findUniqueOrThrow({ where: { id: d.id } })).toMatchObject({ ownerId: null, sessionId: sid });
+  });
+
+  it('order deletion after the ownership read returns 403 instead of a raw foreign-key failure', async () => {
+    const a = await user('delete-before-a');
+    const o = await order(a.customerId, 'delete-before');
+    const read = prisma.order.findUnique.bind(prisma.order);
+    let injected = false;
+    const spy = vi.spyOn(prisma.order, 'findUnique').mockImplementation((async (args: any) => {
+      const row = await read(args);
+      if (!injected && args.where.id === o.id) {
+        injected = true;
+        await prisma.order.delete({ where: { id: o.id } });
+      }
+      return row;
+    }) as any);
+    try {
+      await expect(designService.createSession({ orderId: o.id }, a.userId)).rejects.toMatchObject({ statusCode: 403 });
+    } finally { spy.mockRestore(); }
+    expect(await prisma.design.count({ where: { orderId: o.id } })).toBe(0);
+  });
+
+  it('order deletion after an existing-design claim returns 409, never success with a null design', async () => {
+    const a = await user('delete-claim-a');
+    const o = await order(a.customerId, 'delete-claim');
+    await prisma.design.create({ data: { orderId: o.id, ownerId: a.userId, sessionId: `${marker}-delete-claim` } });
+    const update = prisma.design.updateMany.bind(prisma.design);
+    let injected = false;
+    const spy = vi.spyOn(prisma.design, 'updateMany').mockImplementation((async (args: any) => {
+      const result = await update(args);
+      if (!injected && args.where.orderId === o.id) {
+        injected = true;
+        await prisma.order.delete({ where: { id: o.id } });
+      }
+      return result;
+    }) as any);
+    try {
+      await expect(designService.createSession({ orderId: o.id }, a.userId)).rejects.toMatchObject({ statusCode: 409 });
+    } finally { spy.mockRestore(); }
+  });
+
+  it('design deletion after a save write returns 409, never success with a null design', async () => {
+    const a = await user('delete-save-a');
+    const sid = `${marker}-delete-save`; sessionIds.push(sid);
+    const d = await prisma.design.create({ data: { ownerId: a.userId, sessionId: sid } });
+    const update = prisma.design.updateMany.bind(prisma.design);
+    let injected = false;
+    const spy = vi.spyOn(prisma.design, 'updateMany').mockImplementation((async (args: any) => {
+      const result = await update(args);
+      if (!injected && args.where.id === d.id) {
+        injected = true;
+        await prisma.design.delete({ where: { id: d.id } });
+      }
+      return result;
+    }) as any);
+    try {
+      await expect(designService.saveDesign({ sessionId: sid, designData: {} }, a.userId)).rejects.toMatchObject({ statusCode: 409 });
+    } finally { spy.mockRestore(); }
+  });
+});

@@ -49,6 +49,9 @@ export class DesignService {
     // An authenticated user may only attach a design to an order they own.
     // This first check is a read; order ownership is not enforced as immutable
     // by the database, so the claim below repeats it inside its guarded WHERE.
+    // A first insert still uses this read snapshot. Concurrent direct database
+    // reassignment before that insert is an operator-writer boundary, not an
+    // application guarantee. Current app paths do not reassign these relations.
     // Unknown and foreign orders give the same 403 (no oracle).
     if (data.orderId && ownerId) {
       const order = await prisma.order.findUnique({
@@ -287,7 +290,7 @@ export class DesignService {
         // (it then goes through the guarded update), never overwrite.
         if (error?.code === 'P2002') throw new AppError(409, 'Design session is being saved by another request; retry');
         // The referenced order disappeared before the insert.
-        if (error?.code === 'P2003') throw new AppError(409, 'Design could not be saved because its order no longer exists');
+        if (error?.code === 'P2003') throw new AppError(409, 'Design could not be saved because a linked record no longer exists');
         throw error;
       }
     }
@@ -492,7 +495,7 @@ export class DesignService {
     // Verify design exists
     const design = await this.getDesign(designId);
 
-    // Check if user can export (owner or admin)
+    // Only the design owner can export.
     const isOwner = await isDesignOwner(userId, designId);
     if (!isOwner) {
       throw new AppError(403, 'Only the design owner can export');
@@ -510,8 +513,8 @@ export class DesignService {
     // M8-J: certified dieline delivery is synchronous — the geometry lives in the
     // frontend canonical pipeline (resolveDieline -> serializeSVG), so the server
     // returns an explicit delivery receipt grounded in the persisted M8-I result
-    // and the design lifecycle, never a fabricated artifact. Raster/composite
-    // formats keep the async job queue below.
+    // and the design lifecycle, never a fabricated artifact. Other formats
+    // return 501 until a real server-side exporter exists.
     if (options.format === 'svg') {
       const boxType = (design.designData as any)?.manifest?.product?.boxType ?? (design.designData as any)?.product?.boxType;
       const prepress = design.orderId
