@@ -61,6 +61,16 @@ jobs:
           DATABASE_URL: postgresql://packagepro:packagepro123@localhost:5432/packagepro_test
         run: npx prisma migrate deploy
 
+      - name: Seed test database
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://packagepro:packagepro123@localhost:5432/packagepro_test
+        # Catalogue/material/pricing integration tests require the seed fixtures
+        # (they fail explicitly with "run npm run prisma:seed first" otherwise).
+        # prisma/seed.ts only writes rows via Prisma (verified: no network calls);
+        # it targets this job's disposable packagepro_test database only.
+        run: npm run prisma:seed
+
       - name: Run linter
         working-directory: ./backend
         # No ESLint configuration exists in this package: eslint exits 2 with
@@ -81,6 +91,13 @@ jobs:
           # contact an external SMTP host or send real email (see
           # backend/src/services/email/email.service.ts).
           EMAIL_PROVIDER: test
+          # Non-functional DHL literals: the webhook suite stubs axios entirely,
+          # but its credential preflight rejects empty values. The loopback base
+          # URL is hard containment: even if a stub ever failed to install, a
+          # carrier call would hit 127.0.0.1:9 and error, never api.dhl.com.
+          DHL_API_KEY: ci-only-nonfunctional-dhl-key
+          DHL_API_SECRET: ci-only-nonfunctional-dhl-secret
+          DHL_BASE_URL: http://127.0.0.1:9
         run: npm test -- --run
 
       - name: Build
