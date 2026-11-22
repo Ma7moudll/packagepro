@@ -8,6 +8,7 @@ import { AppError } from './utils/errors';
 import { startWorkers, getBackgroundWorkerStatus } from './workers';
 
 import rawBody from 'fastify-raw-body';
+import { registerReviewFileRedaction } from './modules/designs/artwork-review-response';
 
 const server = Fastify({
   logger: process.env.NODE_ENV === 'development',
@@ -18,6 +19,9 @@ const server = Fastify({
   // preventing header spoofing from bypassing per-IP rate limits.
   trustProxy: process.env.TRUST_PROXY === 'true',
 });
+
+// Strip private review metadata from every nested API file list.
+registerReviewFileRedaction(server);
 
 // Register plugins
 async function registerPlugins() {
