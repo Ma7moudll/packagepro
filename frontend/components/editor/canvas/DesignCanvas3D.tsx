@@ -1,6 +1,7 @@
 "use client"
 
 import { BoardStudioEnvironment } from "./BoardStudioEnvironment"
+import {ProductOpeningCamera} from "./ProductOpeningCamera"
 import { Canvas, useThree, useFrame } from "@react-three/fiber"
 import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react"
 import { productPreviewCoverage } from "@/lib/editor/product-preview-coverage"
@@ -10,7 +11,7 @@ import { intersectionFaceId } from "@/lib/editor/geometry/intersection-face"
 import { generateReliefMasks } from "@/lib/editor/services/relief-masks"
 import { generateTextureFromLayers } from "@/lib/editor/services/texture-generator"
 import { setTexturesPending } from "@/lib/editor/services/texture-status"
-import { Stage, ContactShadows, OrbitControls } from "@react-three/drei"
+import { Stage, ContactShadows } from "@react-three/drei"
 import * as THREE from "three"
 import type { FaceId } from "@/lib/editor/state/types"
 
@@ -249,27 +250,6 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   const canvas = useDesignStore((s) => s.canvas)
   const boxOpenState = useDesignStore((s) => s.ui.boxOpenState)
 
-  // Open-lid framing compensation: the opened lid doubles the box height, so
-  // with the closed-box camera the lid clips the top of the canvas. Dolly the
-  // camera out and raise the orbit target in proportion to openState (the
-  // footer slider drives partial states too). Relative scaling keeps user
-  // zoom intact and never remounts the Canvas.
-  const controlsRef = useRef<any>(null)
-  const openZoomAppliedRef = useRef(1)
-  useEffect(() => {
-    const want = 1 + 0.55 * boxOpenState
-    const f = want / openZoomAppliedRef.current
-    const c = controlsRef.current
-    if (c && Math.abs(f - 1) > 0.001) {
-      c.object.position.multiplyScalar(f)
-      c.update()
-    }
-    openZoomAppliedRef.current = want
-    if (c) {
-      c.target.y = ((model.dimensions.height / 100) / 2) * (1 + 0.6 * boxOpenState)
-      c.update()
-    }
-  }, [boxOpenState])
   const selectedFace = useDesignStore((s) => s.ui.selectedFace)
   const setSelectedFace = useDesignStore((s) => s.setSelectedFace)
   const isValidFace = useFaceValidity()
@@ -364,8 +344,6 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   const maxDim = Math.max(dims.length, dims.width, dims.height || 1) / 100
   const camDist = Math.max(1.6, maxDim * 2.4 + 0.9)
   const camPos: [number, number, number] = [camDist * 0.62, camDist * 0.5, camDist * 0.62]
-  // Calculate box center for camera target
-  const boxCenterY = (model.dimensions.height / 100) / 2
 
   return (
     <div className="w-full h-full" style={{ background: "#f8f8f8" }}>
@@ -471,19 +449,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
           </SpinBox>
         </Suspense>
 
-        {/* تحكم الكاميرا */}
-        <OrbitControls
-          ref={controlsRef}
-          enablePan={true}
-          enableZoom={true}
-          enableRotate={true}
-          minDistance={camDist * 0.35}
-          maxDistance={camDist * 2.6}
-          minPolarAngle={Math.PI / 8}
-          maxPolarAngle={Math.PI / 2.1}
-          autoRotate={false}
-          target={[0, boxCenterY, 0]}
-        />
+        <ProductOpeningCamera family={productPreviewCoverage(model.type).family} dimensions={model.dimensions} open={boxOpenState} camDist={camDist}/>
       </Canvas>
     </div>
   )
