@@ -31,7 +31,7 @@ export function DielineCanvas({ resolution }: DielineCanvasProps) {
   // Display-only artwork per face (outside and inside), rendered from the same layers the
   // 3D preview uses. Transparent where nothing is drawn. It is never part of
   // the SVG export and never changes the canonical geometry.
-  const [faceArtwork, setFaceArtwork] = useState<Record<string, string>>({})
+  const [artworkFrame, setArtworkFrame] = useState<{model:typeof model;layers:typeof layers;textures:Record<string,string>}|null>(null)
   // Withhold artwork when the resolved geometry was built from other
   // dimensions than the artwork's (stale resolution): scale would be wrong.
   const geomDims = resolution?.ok ? resolution.geometry.dims : undefined
@@ -40,18 +40,23 @@ export function DielineCanvas({ resolution }: DielineCanvasProps) {
     Math.abs(geomDims.width - model.dimensions.width) < 0.01 &&
     Math.abs(geomDims.height - model.dimensions.height) < 0.01
   useEffect(() => {
-    if (product?.support === "deferred" || !dimsMatch) { setFaceArtwork({}); return }
+    if (product?.support === "deferred" || !dimsMatch) { setArtworkFrame(null); return }
     let cancelled = false
     const timer = setTimeout(() => {
       generateTextureFromLayers(layers, model, { scale: 2 })
         .then((textures) => {
           if (cancelled) return
-          setFaceArtwork(textures)
+          setArtworkFrame({model,layers,textures})
         })
-        .catch(() => { if (!cancelled) setFaceArtwork({}) })
+        .catch(() => { if (!cancelled) setArtworkFrame(null) })
     }, 150)
     return () => { cancelled = true; clearTimeout(timer) }
   }, [layers, model, product?.support, dimsMatch])
+
+  // Never paint an old image on a newly resolved or resized panel while the
+  // asynchronous texture pass catches up.
+  const faceArtwork = dimsMatch && artworkFrame?.model === model && artworkFrame.layers === layers
+    ? artworkFrame.textures : undefined
 
   // M8-J (spec §14): deferred products never render a net — not the canonical
   // DielineView, and not the frozen M7 generic fallback. Show the deferral
@@ -65,6 +70,7 @@ export function DielineCanvas({ resolution }: DielineCanvasProps) {
       resolution={resolution}
       backgroundColor={canvas.backgroundColor}
       faceArtwork={faceArtwork}
+      artworkDimensionsUnavailable={!dimsMatch && layers.some(layer=>layer.visible)}
       selectedFace={selectedFace}
       onSelectFace={setSelectedFace}
     />

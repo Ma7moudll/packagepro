@@ -19,12 +19,12 @@ describe('background worker status is truthful', () => {
     expect(mod.getBackgroundWorkerStatus()).toBe('not_started_restart_required');
   });
 
-  it('boots with Redis: started, and reports Redis loss without claiming workers stopped', async () => {
+  it('boots with Redis: bootstrap completion, and reports Redis loss without claiming processing health', async () => {
     state.ready = true;
     const mod = await import('./index');
     await mod.startWorkers();
-    expect(mod.getBackgroundWorkerStatus()).toBe('started');
+    expect(mod.getBackgroundWorkerStatus()).toBe('bootstrap_completed');
     state.ready = false;
-    expect(mod.getBackgroundWorkerStatus()).toBe('started_redis_unavailable');
+    expect(mod.getBackgroundWorkerStatus()).toBe('bootstrap_completed_redis_unavailable');
   });
 });

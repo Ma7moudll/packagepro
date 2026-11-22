@@ -17,6 +17,7 @@ import {
   CameraState,
   UIState,
 } from "./types"
+import {withPrintCoverageFaces} from "../print-coverage"
 import {productConfiguration} from "../product-configuration"
 import {CATALOGUE_CANDIDATE_MATERIALS,getCatalogueProduct,canonicalEditorType} from "../../../../shared/catalog/products"
 import type { DielineBlueprint } from "../../../../shared/types/index.ts"
@@ -375,6 +376,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     applyCoreState: (updater) => {
       const core = get().history.present
       let nextCore = updater(core)
+      nextCore = {...nextCore, model:withPrintCoverageFaces(nextCore.model)}
       // M7-C: the view mode is a live client preference — never let a state
       // replacement (session restore, template load, editor re-init) revert it.
       nextCore = { ...nextCore, ui: { ...nextCore.ui, viewMode: get().ui.viewMode } }

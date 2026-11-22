@@ -51,6 +51,7 @@ interface DielineViewProps {
   backgroundColor: string
   /** Display-only artwork (PNG data URL per outside face). Not exported. */
   faceArtwork?: Record<string, string>
+  artworkDimensionsUnavailable?: boolean
   selectedFace: FaceId | null
   onSelectFace: (faceId: FaceId) => void
 }
@@ -59,6 +60,7 @@ export function DielineView({
   resolution,
   backgroundColor,
   faceArtwork,
+  artworkDimensionsUnavailable,
   selectedFace,
   onSelectFace,
 }: DielineViewProps) {
@@ -105,8 +107,8 @@ export function DielineView({
     if (!geometry || !containerRef.current) return
     const cw = containerRef.current.clientWidth
     const ch = containerRef.current.clientHeight
-    const scale = Math.min((cw - 100) / sheetW, (ch - 100) / sheetH)
-    setZoom(Math.min(scale, 1))
+    const scale = Math.max(0.25, Math.min((cw - 100) / sheetW, (ch - 100) / sheetH, 2))
+    setZoom(scale)
     setPan({ x: (cw - sheetW * scale) / 2, y: (ch - sheetH * scale) / 2 })
   }, [geometry, sheetW, sheetH])
 
@@ -162,6 +164,9 @@ export function DielineView({
           <span className="text-xs text-slate-500">
             ({sheetW.toFixed(0)} x {sheetH.toFixed(0)} mm)
           </span>
+          {artworkDimensionsUnavailable && <span role="status" className="text-xs text-amber-700" data-artwork-dimensions-unavailable>
+            {language === "ar" ? "معاينة التصميم غير متاحة أثناء تحديث الأبعاد" : "Artwork preview unavailable while dimensions update"}
+          </span>}
           {artworkWithheld.length > 0 && (
             <span className="text-xs text-amber-700" data-artwork-withheld={artworkWithheld.join(",")}>
               {language === "ar"
@@ -209,6 +214,10 @@ export function DielineView({
           </Button>
         </div>
       </div>
+
+      {faceArtwork && Object.keys(faceArtwork).length > 0 && <p role="note" className="px-4 py-1 text-[11px] text-slate-600 bg-white border-b">
+        {language === "ar" ? "معاينة على لوحات مستطيلة فقط، بدون هوامش طباعة أو قص حسب الشكل. ملف SVG يصدر خطوط التصنيع بدون التصميم." : "Rectangular-panel artwork preview only, without bleed or cut-shape masking. SVG exports geometry without artwork."}
+      </p>}
 
       {/* Canvas */}
       <div
@@ -310,7 +319,7 @@ export function DielineView({
             className="absolute inset-0 pointer-events-none"
             width={sheetW}
             height={sheetH}
-            style={{ left: bounds?.x0, top: bounds?.y0 }}
+            style={{ left: bounds?.x0, top: bounds?.y0, zIndex: 4 }}
           >
             {geometry.cutPaths.map((p) => (
               <LineElement key={p.id} path={p} stroke="#1e293b" strokeWidth="1" dash="none" />

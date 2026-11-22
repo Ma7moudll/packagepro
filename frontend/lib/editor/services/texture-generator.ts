@@ -1,4 +1,5 @@
 import { Layer, Face, ModelState, ModelDimensions } from "@/lib/editor/state/types"
+import {faceIsPrinted} from "../print-coverage"
 import { TEXTURE_PX_PER_MM, pxToMm } from "@/lib/editor/geometry/units"
 
 interface TextureOptions {
@@ -75,6 +76,7 @@ export async function generateTextureFromLayers(
 
   // 3. Render each face (ONLY if it has visible layers)
   for (const face of model.faces) {
+    if (!faceIsPrinted(model.printCoverage, face.id)) continue
     // Get layers for this face FIRST
     const faceLayers = layers
       .filter((l) => l.faceId === face.id && l.visible)
