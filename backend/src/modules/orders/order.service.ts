@@ -15,6 +15,9 @@ import {
 } from './order-status-transitions';
 import { randomUUID } from 'crypto';
 
+const round2 = (value: number): number => Math.round(value * 100) / 100;
+const ORDER_PRICING_CONTRACT = 'tax-exclusive-v1';
+
 /**
  * Map Prisma Payment.status → shared PaymentStatus union the FE renders.
  * 'captured' (webhook-confirmed Stripe capture) is surfaced as 'succeeded'
@@ -155,10 +158,9 @@ export class OrderService {
               materialCode: item.materialCode,
             });
 
-        // Line total EXCLUDES shipping; shipping is aggregated separately so
-        // it is not double-counted in the order total.
-        const lineTotal =
-          pricing.breakdown.subtotal + pricing.breakdown.tax;
+        // New-order line amounts exclude tax and shipping, like the cart.
+        // The quote subtotal already includes its discounts and adjustments.
+        const lineTotal = round2(pricing.breakdown.subtotal);
 
         return {
           productType: item.productType,
@@ -167,7 +169,7 @@ export class OrderService {
           material: item.materialCode,
           color: item.color,
           finish: item.finish,
-          unitPrice: lineTotal / item.quantity,
+          unitPrice: round2(lineTotal / item.quantity),
           totalPrice: lineTotal,
           tax: pricing.breakdown.tax,
           shippingEstimate: pricing.breakdown.shippingEstimate,
@@ -183,13 +185,13 @@ export class OrderService {
     );
 
     // Calculate totals
-    const subtotal = orderItems.reduce((sum, item) => sum + item.totalPrice, 0);
-    const tax = orderItems.reduce((sum, item) => sum + item.tax, 0);
-    const shippingCost = orderItems.reduce(
+    const subtotal = round2(orderItems.reduce((sum, item) => sum + item.totalPrice, 0));
+    const tax = round2(orderItems.reduce((sum, item) => sum + item.tax, 0));
+    const shippingCost = round2(orderItems.reduce(
       (sum, item) => sum + item.shippingEstimate,
       0
-    );
-    const total = subtotal + tax + shippingCost;
+    ));
+    const total = round2(subtotal + tax + shippingCost);
 
     // 4c: persist the per-group shipping split (one group per productType,
     // the same grouping multi-vendor POs use) so order views can show
@@ -218,7 +220,12 @@ export class OrderService {
         notes: data.notes,
         // 4c: stored under metadata; approval.service spreads-and-extends
         // this object, so the breakdown survives the approval transition.
-        metadata: { shippingBreakdown },
+        metadata: {
+          shippingBreakdown,
+          // Prospective convention only. Unmarked historical orders are not
+          // reinterpreted, repriced or migrated by this write-time correction.
+          pricingContract: ORDER_PRICING_CONTRACT,
+        },
         items: {
           create: orderItems.map((item) => ({
             productType: item.productType,

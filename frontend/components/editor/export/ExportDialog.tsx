@@ -14,6 +14,7 @@ import { exportDesign, ExportOptions } from "@/lib/editor/services/export"
 import { useLanguage } from "@/providers/language-provider"
 import { generateAI, generateEPS, downloadBlob } from "@/lib/editor/services/vector-export"
 import { CertifiedExportProvider, useCertifiedExport } from "./certified-export-context"
+import { ArtworkReviewDownload } from "./ArtworkReviewDownload"
 
 export function ExportDialog() {
   return (
@@ -109,6 +110,7 @@ function ExportDialogInner() {
           <DialogTitle>{language === "ar" ? "تصدير التصميم" : "Export Design"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
+          <div className="rounded-lg border p-3"><ArtworkReviewDownload /></div>
           <div className="rounded-lg border p-3 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">

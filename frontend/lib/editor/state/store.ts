@@ -1,5 +1,7 @@
 "use client"
 
+import {presetColourVariant} from "../preset-catalog-quote"
+
 import { create } from "zustand"
 import { nanoid } from "nanoid"
 import { mmToPx, facePanel } from "@/lib/editor/geometry/units"
@@ -449,6 +451,9 @@ export const useDesignStore = create<DesignStore>((set, get) => {
         material: policy.boardStock?(config.material.code || "cardboard-kraft"):(candidate??config.material.code),
         boardSpecification:policy.boardStock?current.model.boardSpecification:undefined,
         printCoverage:config.variant.printSides>=2?"both":"outside",
+        // New preset initialization reflects its actual print mode. Session
+        // restoration uses applyCoreState and retains explicit saved requests.
+        ...(presetColourVariant(config.variant.printMode) ? {colorVariant:presetColourVariant(config.variant.printMode)!} : {}),
         carrierHandle:modelType==='paper_bag'?(['none','twisted_paper','cotton_ropes','ribbon'].includes(config.product.defaultHandle??'')?config.product.defaultHandle:'none') as ModelState['carrierHandle']:undefined,
         carrierHandleCandidates:modelType==='paper_bag'?config.product.candidateHandles:undefined,
         materialSpecification:!policy.boardStock&&candidate?{version:1,productType:modelType,code:candidate,status:"requested",supplierConfirmed:false}:undefined,
