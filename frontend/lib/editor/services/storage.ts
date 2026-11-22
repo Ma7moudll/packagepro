@@ -210,7 +210,8 @@ export function scheduleAutoSave(
   name: string,
   state: DesignCoreState,
   saveToCloud = false,
-  onSaved?: () => void
+  onSaved?: () => void,
+  onError?: () => void
 ): void {
   if (autoSaveTimeout) {
     clearTimeout(autoSaveTimeout)
@@ -228,6 +229,7 @@ export function scheduleAutoSave(
       onSaved?.()
     } catch (error) {
       console.error("Auto-save failed:", error)
+      onError?.()
     }
   }, AUTO_SAVE_DELAY)
 }

@@ -59,8 +59,9 @@ export class CartService {
 
   /**
    * Server-authoritative pricing for a single cart item.
-   * item.totalPrice excludes shipping (shipping is aggregated per order),
-   * matching OrderService.createOrder aggregation.
+   * Cart item prices are tax-exclusive and shipping-exclusive. The summary
+   * adds each line's separate tax and shipping exactly once. This response
+   * contract does not assert that downstream order aggregation is repaired.
    */
   private async enrichItem(item: any, template?: any) {
     if (item.designId) {
@@ -93,7 +94,7 @@ export class CartService {
           materialCode: item.materialCode || undefined,
         });
 
-    const itemSubtotal = round2(pricing.breakdown.subtotal + pricing.breakdown.tax);
+    const itemSubtotal = round2(pricing.breakdown.subtotal);
 
     return {
       id: item.id,

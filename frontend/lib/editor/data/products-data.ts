@@ -808,6 +808,8 @@ export function getProductsByCategory(category: ProductCategory): ProductInfo[] 
 
 // Color variants configuration
 export const COLOR_VARIANTS = [
+  { id: "none", name: { en: "No print", ar: "بدون طباعة" }, description: { en: "No production print selected", ar: "بدون اختيار طباعة إنتاجية" } },
+  { id: "full_colour", name: { en: "Full colour (preset)", ar: "ألوان كاملة (إعداد المنتج)" }, description: { en: "Full colour preset print", ar: "طباعة ألوان كاملة للإعداد" } },
   { id: "one_colour", name: { en: "One Colour", ar: "لون واحد" }, description: { en: "Single color print", ar: "طباعة لون واحد" } },
   { id: "white", name: { en: "White Colour", ar: "أبيض" }, description: { en: "White base material", ar: "مادة أساسية بيضاء" } },
   { id: "multicolour_muted", name: { en: "Multicolour – muted", ar: "ألوان متعددة هادئة" }, description: { en: "Soft, muted colors", ar: "ألوان ناعمة هادئة" } },

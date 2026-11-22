@@ -16,6 +16,8 @@ COPY --from=deps /app/frontend/node_modules ./node_modules
 COPY frontend/ ./
 # The unified catalogue is shared source outside the frontend directory.
 COPY shared/ /app/shared/
+# Pure F42 review validator imported by the browser export module.
+COPY backend/src/modules/designs/artwork-review-contract.ts /app/backend/src/modules/designs/artwork-review-contract.ts
 
 # Set build-time environment variables
 ARG NEXT_PUBLIC_API_URL
