@@ -4,6 +4,9 @@ import { pricingService, CatalogQuoteRequest, CatalogQuoteResult } from '../../s
 
 /** Material hex color lookup — seeded materials store hex in metadata. */
 const MATERIAL_HEX: Record<string, string> = {
+  'paper-coated-white':'#eeeeec', 'paper-white':'#eeeeec','paper-kraft':'#b8936a',
+  'poly-white':'#eeeeec','poly-black':'#242424','foil-matte':'#dddddd','foil-glossy':'#eeeeec',
+  'plastic-clear':'#eeeeee','cotton-natural':'#ddd5c2','cotton-white':'#eeeeec',
   'cardboard-kraft': '#b8936a',
   'cardboard-white': '#ffffff',
   'cardboard-coated': '#ffffff',
@@ -218,7 +221,8 @@ export class CatalogService {
       ? await prisma.material.findFirst({ where: { code: variant.materialCode } })
       : null;
 
-    const quote = await pricingService.quoteCatalog({
+    const quoteRequired=(product.editorDefaults as any)?.readiness?.pricing==='quote_required';
+    const quote = quoteRequired?null:await pricingService.quoteCatalog({
       productId: product.id,
       variantId: variant.id,
       quantity,
@@ -272,6 +276,7 @@ export class CatalogService {
         // Unified-catalogue join fields (additive).
         editorType: editorDefaults?.editorType ?? undefined,
         readiness: editorDefaults?.readiness ?? undefined,
+        candidateMaterials: editorDefaults?.candidateMaterials ?? [],
       },
       variant: {
         id: variant.id,
@@ -297,12 +302,11 @@ export class CatalogService {
       },
       quantity,
       pricing: {
-        unitPrice: Number(quote.unitPrice),
-        totalPrice: Number(quote.totalPrice),
-        currency: quote.material?.currency ?? 'EGP',
-        // quote_required products have no product-specific rates; this figure
-        // is the engine's generic estimate, not an offer.
-        status: editorDefaults?.readiness?.pricing === 'quote_required' ? 'quote_required' : 'estimated',
+        unitPrice: quote?Number(quote.unitPrice):null,
+        totalPrice: quote?Number(quote.totalPrice):null,
+        currency: quote?.material?.currency ?? 'EGP',
+        // Quote-only products never receive an unrelated generic estimate.
+        status: quoteRequired ? 'quote_required' : 'estimated',
       },
     };
   }

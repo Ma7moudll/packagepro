@@ -177,20 +177,16 @@ export class CartService {
       }
     }
     assertSpecificationPriced(design?.designData);
-    // Validate product type and pricing by running the engine up-front so we
-    // never persist an unpriceable line.
-    await pricingService.calculatePrice({
-      productType: input.productType,
-      quantity: input.quantity,
-      dimensions: input.dimensions,
-      materialCode: input.materialCode,
-    });
-
-    const cart = await this.getOrCreateCart(customerId);
     const designId = design?.id;
-    const productId = input.productId ?? design?.productId ?? undefined;
-    const variantId = input.variantId ?? design?.variantId ?? undefined;
+    if(design?.productId&&input.productId&&design.productId!==input.productId)throw new ValidationError('Design product does not match cart product');
+    if(design?.variantId&&input.variantId&&design.variantId!==input.variantId)throw new ValidationError('Design variant does not match cart variant');
+    const productId = design?.productId ?? input.productId ?? undefined;
+    const variantId = design?.variantId ?? input.variantId ?? undefined;
     const sku = input.sku ?? design?.sku ?? undefined;
+    // Validate the actual catalogue identity before creating any cart rows.
+    if(productId)await pricingService.quoteCatalog({productId,variantId,quantity:input.quantity,dimensions:input.dimensions,config:input.config});
+    else await pricingService.calculatePrice({productType:input.productType,quantity:input.quantity,dimensions:input.dimensions,materialCode:input.materialCode});
+    const cart = await this.getOrCreateCart(customerId);
     const config = input.config ?? (design?.designConfig as Record<string, string> | undefined) ?? undefined;
 
     const existing = cart.items.find(

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { prisma } from '../../lib/prisma';
 import { catalogService } from './catalog.service';
+import {pricingService} from '../../services/pricing-engine/pricing.service';
 import {
   CATALOGUE_PRODUCTS,
   CATALOGUE_CATEGORIES,
@@ -15,7 +16,7 @@ import {
  *  - quote_required products carry NO scoped pricing rules and no anchor
  *    price — nothing invented reaches the pricing engine;
  *  - the editor-config endpoint exposes readiness and flags quote_required
- *    pricing honestly (its number is the generic engine estimate, not a rate);
+ *    pricing honestly (no generic engine estimate is returned);
  *  - classification (categories/subcategories) is complete and ordered.
  */
 describe('unified catalogue — 55 products, honest readiness', () => {
@@ -84,12 +85,24 @@ describe('unified catalogue — 55 products, honest readiness', () => {
     expect(cfg.product.support).toBe('deferred');
     expect(cfg.product.dieline).toBeUndefined();
     expect((cfg.pricing as any).status).toBe('quote_required');
+    expect(cfg.pricing.unitPrice).toBeNull();
+    expect(cfg.pricing.totalPrice).toBeNull();
 
     // estimated: original products keep their pricing status
     const supported = CATALOGUE_PRODUCTS.find((p) => p.readiness.dieline === 'supported')!;
     const cfg2 = await catalogService.getEditorConfig(supported.slug, 100);
     expect(cfg2.product.readiness).toEqual(supported.readiness);
     expect((cfg2.pricing as any).status).toBe('estimated');
+  });
+
+  it('all 47 quote-only products have own candidates and cannot be quoted generically',async()=>{
+    for(const entry of CATALOGUE_PRODUCTS.filter(p=>p.readiness.pricing==='quote_required')){
+      const cfg=await catalogService.getEditorConfig(entry.slug,entry.moq);
+      expect(cfg.product.candidateMaterials.length,entry.id).toBeGreaterThan(0);
+      expect(cfg.product.candidateMaterials,entry.id).toContain(cfg.material.code);
+      expect(cfg.pricing.totalPrice,entry.id).toBeNull();
+      await expect(pricingService.quoteCatalog({slug:entry.slug,quantity:entry.moq})).rejects.toThrow(/QUOTE_REQUIRED/);
+    }
   });
 
   it('exposes the full classification through the catalog list endpoint', async () => {

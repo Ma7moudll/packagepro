@@ -17,6 +17,8 @@ import {
   CameraState,
   UIState,
 } from "./types"
+import {productConfiguration} from "../product-configuration"
+import {CATALOGUE_CANDIDATE_MATERIALS,getCatalogueProduct} from "../../../../shared/catalog/products"
 import type { DielineBlueprint } from "../../../../shared/types/index.ts"
 
 /** Minimal shape of EditorConfig consumed by the store (avoids circular import). */
@@ -37,11 +39,12 @@ export interface EditorConfigLike {
     /** M8-J (spec §14): product-coverage support flag — `"deferred"` products never carry a dieline. */
     support?: 'supported' | 'deferred'
     supportReason?: string
+    candidateMaterials?: string[]
   }
   variant: { id: string; sku: string; sizeCode: string | null; materialCode: string | null; color?: string; printMode: string; printSides: number; finish: string; dimensions: { length: number; width: number; height: number; unit?: string } }
   material: { code: string; name: string; hex: string }
   quantity: number
-  pricing?: { unitPrice: number; totalPrice: number; currency?: string }
+  pricing?: { unitPrice: number|null; totalPrice: number|null; currency?: string }
   sessionId?: string
 }
 
@@ -143,7 +146,7 @@ export interface DesignStore extends DesignState {
   setSelectedLayers: (ids: string[]) => void
   reorderLayers: (idsInOrder: string[]) => void
   applyCoreState: (updater: (core: DesignCoreState) => DesignCoreState) => void
-  initFromEditorConfig: (config: EditorConfigLike) => void
+  initFromEditorConfig: (config: EditorConfigLike, options?: {preserveHistory?:boolean;transform?:(core:DesignCoreState)=>DesignCoreState}) => void
   undo: () => void
   redo: () => void
   resetHistory: () => void
@@ -386,7 +389,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
       pushToHistory(nextCore)
     },
 
-    initFromEditorConfig: (config) => {
+    initFromEditorConfig: (config, options) => {
       const current = get().history.present
       const dims = config.variant.dimensions
       const length = Number(dims.length) || 200
@@ -431,17 +434,23 @@ export const useDesignStore = create<DesignStore>((set, get) => {
         backgroundColor: config.material.hex || "#d2b48c",
       }
 
+      const catalogue=getCatalogueProduct(modelType)
+      const policy=productConfiguration(modelType,config.product.candidateMaterials??CATALOGUE_CANDIDATE_MATERIALS[modelType]??[])
+      const candidate=policy.materials.includes(config.material.code)?config.material.code:policy.materials[0]
       const model: ModelState = {
         ...current.model,
         type: modelType,
-        category: "boxes",
+        category: (catalogue?.category??"boxes") as ModelState["category"],
         dimensions: { length, width, height },
-        material: config.material.code || "cardboard-kraft",
+        material: policy.boardStock?(config.material.code || "cardboard-kraft"):(candidate??config.material.code),
+        boardSpecification:policy.boardStock?current.model.boardSpecification:undefined,
+        printCoverage:config.variant.printSides>=2?"both":"outside",
+        materialSpecification:!policy.boardStock&&candidate?{version:1,productType:modelType,code:candidate,status:"requested",supplierConfirmed:false}:undefined,
         faces,
         quantity: config.quantity,
       }
 
-      const nextCore: DesignCoreState = {
+      let nextCore: DesignCoreState = {
         ...current,
         canvas,
         model,
@@ -472,6 +481,9 @@ export const useDesignStore = create<DesignStore>((set, get) => {
         manifestMetadata: undefined,
       }
 
+      if(options?.transform)nextCore=options.transform(nextCore)
+      // A picker change is undoable; first entry still starts a clean history.
+      if(options?.preserveHistory){get().applyCoreState(()=>nextCore);return}
       // Reset history so the EditorConfig init becomes the clean baseline
       set({
         ...nextCore,

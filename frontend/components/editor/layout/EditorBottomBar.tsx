@@ -21,6 +21,7 @@ import { useLanguage } from "@/providers/language-provider"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Slider } from "@/components/ui/slider"
 import { RepeatTool } from "@/components/editor/tools/RepeatTool"
+import {productConfiguration} from "@/lib/editor/product-configuration"
 import { cn } from "@/lib/utils"
 
 export function EditorBottomBar() {
@@ -163,7 +164,7 @@ export function EditorBottomBar() {
         <div className="w-px h-6 bg-slate-200" />
 
         {/* Box Open/Close - only in 3D mode */}
-        {viewMode === "3d" && (
+        {viewMode === "3d" && productConfiguration(model.type).opening && (
           <>
             <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
               <Tooltip>

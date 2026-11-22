@@ -6,7 +6,7 @@ import type {ProductShapeProps} from "./StockPanel"
 /** Cylindrical artwork uses separate front/back half-wraps. This is a preview,
  * not a conical/cylindrical production unroll or food-contact certification. */
 export function CupShape({dimensions,type,stock}:ProductShapeProps){
- const top=dimensions.width/200,bottom=dimensions.length/250,h=dimensions.height/100,b=.003
+ const top=dimensions.width/200,bottom=dimensions.length/200,h=dimensions.height/100,b=.003
  const clear=type.replace(/_/g,"-")==="smoothie-cup"
  const body=useMemo(()=>{const m=stock.outside.clone();if(clear){m.transparent=true;m.opacity=.28;m.roughness=.12;m.clearcoat=1;m.depthWrite=false}return m},[stock.outside,clear])
  const innerFront=useMemo(()=>{const m=stock.inner("front").clone();m.side=THREE.BackSide;return m},[stock])

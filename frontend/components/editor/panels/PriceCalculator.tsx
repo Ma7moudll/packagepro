@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import {editorRequiresQuote} from "@/lib/editor/quote-policy"
 import { useDesignStore } from '@/lib/editor/state/store';
 import { pricingApi } from '@/lib/api/pricing';
 import type { PricingResponse } from '@shared/types';
@@ -28,7 +29,7 @@ export function PriceCalculator({ className }: PriceCalculatorProps) {
   // summary reads the same value, so panel and footer can never disagree.
   const model = useDesignStore((s) => s.model);
   const applyCoreState = useDesignStore((s) => s.applyCoreState);
-  const customQuote = useDesignStore(s => !!s.model.boardSpecification || s.layers.some(l => !!l.raisedPrint));
+  const customQuote = useDesignStore(editorRequiresQuote);
   const quantity = model.quantity;
   const setQuantity = (q: number) =>
     applyCoreState((s) => ({ ...s, model: { ...s.model, quantity: q } }));

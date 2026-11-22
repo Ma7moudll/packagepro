@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
+import {editorRequiresQuote} from "@/lib/editor/quote-policy"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { Button } from "@/components/ui/button"
 import {
@@ -49,7 +50,7 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
   const router = useRouter()
   const sessionId = searchParams.get("sessionId")
   const model = useDesignStore((s) => s.model)
-  const customQuote = useDesignStore(s => !!s.model.boardSpecification || s.layers.some(l => !!l.raisedPrint))
+  const customQuote = useDesignStore(editorRequiresQuote)
   const layersCount = useDesignStore((s) => s.layers.length)
   const pastLength = useDesignStore((s) => s.history.past.length)
   const futureLength = useDesignStore((s) => s.history.future.length)

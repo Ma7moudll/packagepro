@@ -348,6 +348,7 @@ export class PricingService {
     if (!product.isActive) {
       throw new ValidationError(`Product "${product.name}" is not available`);
     }
+    if(product.editorDefaults?.readiness?.pricing==='quote_required')throw new ValidationError('QUOTE_REQUIRED: No product-specific rates exist for this product');
     if (request.quantity < product.moq) {
       throw new ValidationError(
         `Minimum order quantity for "${product.name}" is ${product.moq}`

@@ -18,6 +18,7 @@ const ROUTES: Record<string, PreviewFamily> = {
 export function productPreviewCoverage(type:string){
  const normalized=type.toLowerCase().replace(/_/g,"-")
  const family=ROUTES[normalized]
- const twoSidedStock=family!==undefined&&["mailer","shipping","rigid","carton","pizza","cup","bag","tube","envelope","flat","label"].includes(family)||normalized==="paper-mailer-bag"
- return {normalized,family,geometry:family?"preview":"unavailable",twoSidedStock,selectiveTextRelief:!!family,productionApproved:false} as const
+ const paperSurface=family!==undefined&&["mailer","shipping","rigid","carton","pizza","cup","bag","tube","envelope","flat","label"].includes(family)||normalized==="paper-mailer-bag"
+ const twoSidedStock=!!family&&["mailer","shipping","rigid","carton","pizza"].includes(family)
+ return {normalized,family,geometry:family?"preview":"unavailable",twoSidedStock,paperSurface,selectiveTextRelief:!!family,productionApproved:false} as const
 }

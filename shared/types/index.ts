@@ -789,6 +789,9 @@ export interface EditorConfig {
     name: string
     type: string
     boxType?: string
+    candidateMaterials?: string[]
+    editorType?: string
+    readiness?: {preview:string;dieline:string;pricing:string}
     structure?: ProductStructure
     /** M8-B: additive blueprint passthrough — present when the product has one. */
     schemaVersion?: number
@@ -823,9 +826,10 @@ export interface EditorConfig {
   }
   quantity: number
   pricing: {
-    unitPrice: number
-    totalPrice: number
+    unitPrice: number|null
+    totalPrice: number|null
     currency: string
+    status?: "estimated"|"quote_required"
   }
   sessionId?: string
 }
