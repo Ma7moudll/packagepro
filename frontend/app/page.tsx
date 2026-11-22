@@ -427,7 +427,7 @@ export default function HomePage() {
           </div>
 
           <div className="text-center mb-8">
-            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white mb-4 px-3 py-1.5 text-sm">
+            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white mb-4 px-3 py-1.5 text-sm max-w-full whitespace-normal text-center">
               <Award className="w-3 h-3 mr-1.5" />
               {language === "ar" ? "منصة التعبئة والتغليف الرائدة في مصر" : "Leading Packaging Platform in Egypt"}
             </Badge>
@@ -936,7 +936,7 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <Button asChild size="lg" className="bg-green-600 hover:bg-green-700">
+              <Button asChild size="lg" className="bg-green-600 hover:bg-green-700 max-w-full whitespace-normal h-auto min-h-10 text-center">
                 <Link href="/sustainable">
                   {language === "ar" ? "اكتشف منتجاتنا المستدامة" : "Discover Our Sustainable Products"}
                   <ArrowRight className="w-5 h-5 mr-2" />
