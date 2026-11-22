@@ -46,7 +46,7 @@ export function LiveChat() {
       <Button
         onClick={() => setIsOpen(true)}
         aria-label={isRTL ? "فتح الدعم" : "Open support"}
-        className={`fixed ${editor ? "bottom-16" : "bottom-4"} right-4 z-40 rounded-full w-14 h-14 shadow-lg`}
+        className={`fixed ${editor ? "bottom-16 lg:right-80" : "bottom-4"} right-4 z-40 rounded-full w-14 h-14 shadow-lg`}
         size="icon"
       >
         <MessageCircle className="h-6 w-6" />

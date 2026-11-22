@@ -213,9 +213,9 @@ export function EditorHeader({ onPropertiesToggle, extra, cartOpen, onCartOpenCh
             </Tooltip>
           </div>
 
-          <div className="hidden lg:block h-5 w-px bg-slate-200" />
+          <div className="hidden xl:block h-5 w-px bg-slate-200" />
 
-          <div className="hidden lg:block min-w-0">
+          <div className="hidden xl:block min-w-0">
             <h1 className="text-sm font-semibold text-slate-800 truncate capitalize">{title}</h1>
             <div className="flex items-center gap-1 text-[10px] text-slate-400">
               {saveStatus === "saving" && (
@@ -247,7 +247,7 @@ export function EditorHeader({ onPropertiesToggle, extra, cartOpen, onCartOpenCh
         </div>
 
         {/* Center: Title Info */}
-        <div className="hidden lg:flex items-center gap-3 text-xs text-slate-400">
+        <div className="hidden xl:flex items-center gap-3 text-xs text-slate-400">
           <span>{model.type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</span>
           <span className="text-slate-300">|</span>
           <span>{language === "ar" ? "طبقات" : "Layers"}: {layersCount}</span>
@@ -292,16 +292,16 @@ export function EditorHeader({ onPropertiesToggle, extra, cartOpen, onCartOpenCh
             </Tooltip>
           </div>
 
-          <div className="hidden lg:block h-5 w-px bg-slate-200" />
+          <div className="hidden xl:block h-5 w-px bg-slate-200" />
 
           {/* Mockup & Share */}
-          <div className="hidden lg:flex items-center gap-2">
+          <div className="hidden xl:flex items-center gap-2">
             <Button variant="outline" size="sm" className="h-8" onClick={() => setMockupOpen(true)}><Camera className="h-4 w-4 mr-2" />{language === "ar" ? "معاينة Mockup" : "Mockup Preview"}</Button>
             <Button variant="outline" size="sm" className="h-8" onClick={() => setShareOpen(true)}><Share2 className="h-4 w-4 mr-2" />{language === "ar" ? "مشاركة" : "Share"}</Button>
           </div>
 
-          {/* Below lg: Mockup, Share and Tutorial move into one menu */}
-          <div className="lg:hidden">
+          {/* Below xl: Mockup, Share and Tutorial move into one menu */}
+          <div className="xl:hidden">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -337,7 +337,7 @@ export function EditorHeader({ onPropertiesToggle, extra, cartOpen, onCartOpenCh
               <Button
                 variant="ghost"
                 size="icon"
-                className="hidden lg:inline-flex h-8 w-8 rounded-md"
+                className="hidden xl:inline-flex h-8 w-8 rounded-md"
                 aria-label={language === "ar" ? "دليل الاستخدام" : "Tutorial"}
                 onClick={() => setShowTutorial(true)}
               >
@@ -349,7 +349,7 @@ export function EditorHeader({ onPropertiesToggle, extra, cartOpen, onCartOpenCh
             </TooltipContent>
           </Tooltip>
 
-          <div className="hidden lg:block h-5 w-px bg-slate-200" />
+          <div className="hidden xl:block h-5 w-px bg-slate-200" />
 
           {/* Add to Cart */}
           <AddToCart
@@ -364,7 +364,7 @@ export function EditorHeader({ onPropertiesToggle, extra, cartOpen, onCartOpenCh
             onEnsureSession={handleEnsureSession}
           />
 
-          <div className="hidden lg:block h-5 w-px bg-slate-200" />
+          <div className="hidden xl:block h-5 w-px bg-slate-200" />
 
           {/* Save Button */}
           <Button
@@ -391,6 +391,7 @@ export function EditorHeader({ onPropertiesToggle, extra, cartOpen, onCartOpenCh
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 rounded-lg hover:bg-red-50 hover:text-red-500"
+                  aria-label={language === "ar" ? "إغلاق المحرر" : "Close Editor"}
                 >
                   <X className="h-4 w-4" />
                 </Button>

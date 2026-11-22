@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 for (const language of ['en', 'ar']) {
-  for (const width of [320, 360, 390, 768, 1280]) {
+  for (const width of [320, 360, 390, 768, 1024, 1100, 1280, 1440]) {
     test(`editor controls and preview fit ${language} ${width}`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });
       await page.addInitScript(l => localStorage.setItem('language', l), language);
@@ -15,12 +15,30 @@ for (const language of ['en', 'ar']) {
       await expect.poll(() => page.evaluate(() => (window as any).__editor3DFaces().every((f:any) => f.visible))).toBe(true);
       const launcher = page.getByRole('button', {name: language === 'ar' ? 'فتح الدعم' : 'Open support', exact:true});
       const launcherBox = await launcher.boundingBox();
+      if (width >= 1024) {
+        const panel = await page.locator("[data-editor-properties]").boundingBox();
+        const overlap = launcherBox!.x < panel!.x + panel!.width && launcherBox!.x + launcherBox!.width > panel!.x;
+        expect(overlap).toBe(false);
+      }
       expect(launcherBox!.y + launcherBox!.height).toBeLessThanOrEqual(752);
+      // Every visible header control must fit and be reachable at its center.
+      const headerControls = await page.locator('header button').evaluateAll(buttons => buttons.filter(b => {
+        const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0;
+      }).map(b => {
+        const r = b.getBoundingClientRect();
+        return {left:r.left, right:r.right, hit:b.disabled || document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button') === b};
+      }));
+      for (const control of headerControls) {
+        expect(control.left).toBeGreaterThanOrEqual(0);
+        expect(control.right).toBeLessThanOrEqual(width);
+        expect(control.hit).toBe(true);
+      }
+      await expect(page.getByRole('button', {name: language === 'ar' ? 'إغلاق المحرر' : 'Close Editor', exact:true})).toBeVisible();
       const canvas = await page.locator('canvas').first().boundingBox();
       expect(canvas!.x).toBeGreaterThanOrEqual(56);
       expect(canvas!.x + canvas!.width).toBeLessThanOrEqual(width);
-      if (width < 1024) {
-        await expect.poll(async () => (await page.locator("[data-editor-properties]").boundingBox())!.width).toBeLessThanOrEqual(1);
+      if (width < 1280) {
+        if (width < 1024) await expect.poll(async () => (await page.locator("[data-editor-properties]").boundingBox())!.width).toBeLessThanOrEqual(1);
         const more = page.locator('header button[aria-haspopup="menu"]');
         await more.click();
         await page.getByRole('menuitem', { name: language === 'ar' ? 'معاينة Mockup' : 'Mockup Preview' }).click();
@@ -44,7 +62,7 @@ for (const language of ['en', 'ar']) {
         await page.getByRole('dialog').locator('[data-slot=dialog-close]').click();
         await expect(page.getByRole('dialog')).toBeHidden();
         // Exercise both side panel toggles, including closure via backdrop.
-        for (const index of [0, 1]) {
+        if (width < 1024) for (const index of [0, 1]) {
           await page.locator('header button').nth(index).click();
           if (index === 1) await expect.poll(async () => (await page.locator('[data-editor-properties]').boundingBox())!.width).toBeGreaterThan(200);
           await page.locator('.fixed.inset-0.bg-black\\/30').first().click({position:{x:width / 2,y:10}});
