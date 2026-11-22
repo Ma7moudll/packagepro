@@ -166,7 +166,20 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
-          path: frontend/.next
+          # Only the production runtime/static output is needed for review.
+          # .next is hidden; explicitly opt in, never upload source env/auth files.
+          path: |
+            frontend/.next/standalone/
+            frontend/.next/static/
+            frontend/.next/BUILD_ID
+            !frontend/.next/**/.env*
+            !frontend/.next/**/.npmrc
+            !frontend/.next/**/.yarnrc*
+            !frontend/.next/**/.git/**
+            !frontend/.next/**/*.pem
+            !frontend/.next/**/*.key
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 7
 
   security-scan:
