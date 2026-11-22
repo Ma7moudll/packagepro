@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
 import { constants as fsConstants } from 'fs';
@@ -40,36 +40,35 @@ export interface UploadResult {
 }
 
 export class FileUploadService {
-  // Review artifacts never receive a CDN/public URL. Local bytes live outside
-  // the generic /files upload root; S3 bytes require private bucket policy.
+  // Local-only until an isolated private S3 policy is independently verified.
+  // An object ACL cannot override a bucket-wide public-read policy.
+  private requireLocalReviews(): void {
+    if (isS3Configured()) throw new ValidationError('S3 artwork reviews are disabled pending verified private storage policy');
+  }
+
   async writePrivateReview(buffer: Buffer, designId: string): Promise<string> {
+    this.requireLocalReviews();
     if (!/^[a-zA-Z0-9_-]{1,100}$/.test(designId)) throw new ValidationError('Invalid review design');
     if (buffer.length > 10 * 1024 * 1024) throw new ValidationError('Review PDF exceeds 10MB');
     const key = `private-artwork-reviews/${designId}/${randomUUID()}.pdf`;
-    if (isS3Configured()) {
-      await s3Client.send(new PutObjectCommand({ Bucket: BUCKET_NAME, Key: key, Body: buffer, ContentType: 'application/pdf', ACL: 'private' }));
-    } else {
-      const dest = path.join(LOCAL_UPLOAD_DIR, '..', key);
-      await mkdir(path.dirname(dest), { recursive: true });
-      await writeFile(dest, buffer, { flag: 'wx', mode: 0o600 });
-    }
+    const dest = path.join(LOCAL_UPLOAD_DIR, '..', key);
+    await mkdir(path.dirname(dest), { recursive: true, mode: 0o700 });
+    await writeFile(dest, buffer, { flag: 'wx', mode: 0o600 });
     return key;
   }
 
   async readPrivateReview(key: string): Promise<Buffer> {
+    this.requireLocalReviews();
     if (!/^private-artwork-reviews\/[a-zA-Z0-9_-]{1,100}\/[a-f0-9-]{36}\.pdf$/.test(key)) throw new ValidationError('Invalid review storage key');
-    if (!isS3Configured()) return readFile(path.join(LOCAL_UPLOAD_DIR, '..', key));
-    const result = await s3Client.send(new GetObjectCommand({ Bucket: BUCKET_NAME, Key: key }));
-    if (!result.Body || (result.ContentLength ?? 0) > 10 * 1024 * 1024) throw new ValidationError('Review PDF unavailable');
-    const bytes = await result.Body.transformToByteArray();
+    const bytes = await readFile(path.join(LOCAL_UPLOAD_DIR, '..', key));
     if (bytes.length > 10 * 1024 * 1024) throw new ValidationError('Review PDF exceeds 10MB');
-    return Buffer.from(bytes);
+    return bytes;
   }
 
   async deletePrivateReview(key: string): Promise<void> {
+    this.requireLocalReviews();
     if (!/^private-artwork-reviews\/[a-zA-Z0-9_-]{1,100}\/[a-f0-9-]{36}\.pdf$/.test(key)) throw new ValidationError('Invalid review storage key');
-    if (isS3Configured()) await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: key }));
-    else await unlink(path.join(LOCAL_UPLOAD_DIR, '..', key));
+    await unlink(path.join(LOCAL_UPLOAD_DIR, '..', key));
   }
   /**
    * Generate presigned URL for direct upload from client

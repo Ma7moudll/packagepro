@@ -1,9 +1,10 @@
-import { beforeAll, afterAll, describe, it, expect } from 'vitest';
+import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import { createHash } from 'crypto';
 import Fastify from 'fastify';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFDict, PDFString } from 'pdf-lib';
 import fixture from './fixtures/f42-artwork-review.json';
 import { prisma } from '../../lib/prisma';
+import { registerReviewFileRedaction } from './artwork-review-response';
 import { artworkReviewService } from './artwork-review.service';
 import { reviewSnapshot, REVIEW_ROLE, REVIEW_FILE_TYPE } from './artwork-review-contract';
 import { designService } from './design.service';
@@ -26,6 +27,7 @@ async function setup(data:any=fixture) {
 beforeAll(async()=>{
   ownerId=(await prisma.user.create({data:{email:`${marker}-owner@test.local`,passwordHash:'local-test',role:'CUSTOMER'}})).id;
   otherId=(await prisma.user.create({data:{email:`${marker}-other@test.local`,passwordHash:'local-test',role:'CUSTOMER'}})).id;
+  registerReviewFileRedaction(app);
   app.setErrorHandler((error:any,_request,reply)=>reply.status(error.statusCode||500).send({success:false,error:error.message}));
   await app.register(designRoutes,{prefix:'/api'});await app.ready();
 });
@@ -90,4 +92,54 @@ describe('saved review artifact on real Postgres and private storage',()=>{
     expect(response.statusCode).toBe(200);expect(response.headers['cache-control']).toBe('private, no-store');
     expect(Buffer.from(response.json().data.pdfBase64,'base64')).toEqual(bytes);
   });
+  it('redacts private metadata from every generic design response, without losing owner retrieval',async()=>{
+    const {design,body}=await setup();const record=await artworkReviewService.create(design.id,ownerId,body);
+    const token=jwtService.generateAccessToken(ownerId,'owner@test.local','CUSTOMER');
+    for (const url of [`/api/designs/${design.id}`,`/api/designs/${design.id}/files`,`/api/designs/session/${design.sessionId}`,'/api/designs']) {
+      const response=await app.inject({method:'GET',url,headers:{authorization:`Bearer ${token}`}});
+      expect(response.statusCode).toBe(200);
+      const text=response.body;
+      expect(text).toContain(record.id);expect(text).not.toContain('storageKey');expect(text).not.toContain('private-artwork-reviews/');expect(text).not.toContain(record.sha256);expect(text).not.toContain(body.snapshotHash);
+    }
+    const saved=await app.inject({method:'POST',url:'/api/designs/save',headers:{authorization:`Bearer ${token}`},payload:{sessionId:design.sessionId,designData:fixture}});
+    expect(saved.statusCode).toBe(200);expect(saved.body).not.toContain('storageKey');expect(saved.body).not.toContain(record.sha256);
+    expect((await artworkReviewService.get(design.id,record.id,ownerId)).sha256).toBe(record.sha256);
+  });
+  it('fails closed for S3 review storage regardless of ACL or bucket claims',async()=>{
+    vi.stubEnv('S3_ACCESS_KEY_ID','configured-test-key');vi.stubEnv('S3_SECRET_ACCESS_KEY','configured-test-secret');
+    try {
+      await expect(fileUploadService.writePrivateReview(Buffer.from('test'),'test')).rejects.toThrow('disabled');
+      await expect(fileUploadService.readPrivateReview('private-artwork-reviews/test/00000000-0000-0000-0000-000000000000.pdf')).rejects.toThrow('disabled');
+      await expect(fileUploadService.deletePrivateReview('private-artwork-reviews/test/00000000-0000-0000-0000-000000000000.pdf')).rejects.toThrow('disabled');
+    } finally {vi.unstubAllEnvs();}
+  });
+  it.each(['AA','Annots','AcroForm','XFA','nested-action','action-name'])('rejects %s interactive structures beyond catalog checks',async(kind)=>{
+    const {design,body,bytes}=await setup();const pdf=await PDFDocument.load(bytes);
+    if(kind==='AA') pdf.getPages()[0].node.set(PDFName.of('AA'),pdf.context.obj({}));
+    else if(kind==='Annots') pdf.getPages()[0].node.set(PDFName.of('Annots'),pdf.context.obj([{Type:'Annot',Subtype:'Link',A:{S:'URI',URI:PDFString.of('https://example.invalid')}}]));
+    else if(kind==='action-name') pdf.context.register(pdf.context.obj({S:'Launch'}));
+    else if(kind==='nested-action') {
+      const dict=PDFDict.withContext(pdf.context);dict.set(PDFName.of('A'),pdf.context.obj({S:'Launch'}));pdf.context.register(dict);
+    } else pdf.catalog.set(PDFName.of(kind),pdf.context.obj({}));
+    await expect(artworkReviewService.create(design.id,ownerId,{...body,pdfBase64:Buffer.from(await pdf.save()).toString('base64')})).rejects.toMatchObject({statusCode:422});
+    expect(await prisma.designFile.count({where:{designId:design.id}})).toBe(0);
+  });
+  it('caps retained records per design and owner before writing bytes',async()=>{
+    const {design,body,bytes}=await setup();
+    const existing=await artworkReviewService.create(design.id,ownerId,body);
+    const rows=Array.from({length:9},(_,i)=>({designId:design.id,fileType:REVIEW_FILE_TYPE,fileName:`old-${i}.pdf`,fileUrl:'owner-authorized-review',metadata:{ownerId,snapshotHash:'old'}}));
+    await prisma.designFile.createMany({data:rows});
+    expect((await artworkReviewService.create(design.id,ownerId,body)).id).toBe(existing.id);
+    const changed=structuredClone(fixture);changed.layers[0].textProperties.content='quota change';
+    await prisma.design.update({where:{id:design.id},data:{designData:changed}});
+    const snapshotHash=hash(reviewSnapshot(changed));const pdf=await PDFDocument.load(bytes);pdf.setSubject(`${REVIEW_ROLE}:${snapshotHash}`);
+    const nextBody={snapshotHash,pdfBase64:Buffer.from(await pdf.save()).toString('base64')};
+    await expect(artworkReviewService.create(design.id,ownerId,nextBody)).rejects.toMatchObject({statusCode:409});
+    expect(await prisma.designFile.count({where:{designId:design.id}})).toBe(10);
+    await prisma.designFile.createMany({data:Array.from({length:90},(_,i)=>({...rows[0],fileName:`older-${i}.pdf`}))});
+    const another=await setup();
+    await expect(artworkReviewService.create(another.design.id,ownerId,another.body)).rejects.toMatchObject({statusCode:409});
+    expect(await prisma.designFile.count({where:{designId:another.design.id}})).toBe(0);
+  });
+
 });

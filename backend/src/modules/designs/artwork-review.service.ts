@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { PDFDocument, PDFName, PDFArray } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFArray, PDFDict, PDFStream } from 'pdf-lib';
 import { prisma } from '../../lib/prisma';
 import { designOwnerMatches } from '../../middleware/auth.middleware';
 import { fileUploadService } from '../../services/file-upload/upload.service';
@@ -18,6 +18,30 @@ function verifyDesign(design: any, ownerId: string, snapshotHash?: string): stri
   return current;
 }
 
+// This is rejection of interactive structures, not a general PDF safety certificate.
+export function rejectInteractiveReviewPdf(pdf: PDFDocument): void {
+  const forbidden = new Set(['A','AA','AcroForm','XFA','Annots','JS','JavaScript','EmbeddedFiles','AF','EF','RichMedia','URI','Launch','SubmitForm','ImportData','GoToR']);
+  const seen = new Set<unknown>();
+  const visit = (value: unknown): void => {
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    if (value instanceof PDFStream) visit(value.dict);
+    else if (value instanceof PDFDict) {
+      const action=value.get(PDFName.of('S'));
+      if (action instanceof PDFName && ['JavaScript','Launch','URI','SubmitForm','ImportData','GoToR','GoToE','Rendition','Movie','Sound','Named','SetOCGState'].includes(action.decodeText())) throw new AppError(422,'Interactive PDF actions are not supported in artwork reviews');
+      for (const [key, child] of value.entries()) {
+        const name = key.decodeText();
+        if (forbidden.has(name) || (name === 'OpenAction' && !(value === pdf.catalog && child instanceof PDFArray))) throw new AppError(422,'Interactive PDF content is not supported in artwork reviews');
+        visit(child);
+      }
+    } else if (value instanceof PDFArray) for (const child of value.asArray()) visit(child);
+  };
+  for (const [, value] of pdf.context.enumerateIndirectObjects()) visit(value);
+}
+
+export const REVIEW_LIMIT_PER_DESIGN = 10;
+export const REVIEW_LIMIT_PER_OWNER = 100;
+
 export class ArtworkReviewService {
   async create(designId: string, ownerId: string, body: {snapshotHash:string;pdfBase64:string}) {
     if (!/^[a-f0-9]{64}$/.test(body.snapshotHash) || !/^[A-Za-z0-9+/]+={0,2}$/.test(body.pdfBase64) || body.pdfBase64.length > 14_000_000) throw new AppError(400,'Invalid review payload');
@@ -25,17 +49,22 @@ export class ArtworkReviewService {
     if (bytes.length > 10*1024*1024 || !bytes.subarray(0,5).equals(Buffer.from('%PDF-'))) throw new AppError(400,'Review must be a PDF of at most 10MB');
     let pdf: PDFDocument;
     try { pdf=await PDFDocument.load(bytes); } catch { throw new AppError(422,'Review PDF cannot be parsed'); }
+    rejectInteractiveReviewPdf(pdf);
     const pages=pdf.getPages();
     if (pages.length !== 1 || Math.abs(pages[0].getWidth()-390*72/25.4)>0.05 || Math.abs(pages[0].getHeight()-218*72/25.4)>0.05 || pdf.getSubject() !== `${REVIEW_ROLE}:${body.snapshotHash}` || (pdf.catalog.has(PDFName.of('OpenAction')) && !(pdf.catalog.get(PDFName.of('OpenAction')) instanceof PDFArray)) || pdf.catalog.has(PDFName.of('AA')) || pdf.catalog.has(PDFName.of('Names'))) throw new AppError(422,'Invalid F42 review PDF layout or metadata');
     let storageKey: string | null=null;
     try {
       return await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtext(${ownerId}))`;
         await tx.$queryRaw`SELECT id FROM designs WHERE id = ${designId} FOR UPDATE`;
         const design=await tx.design.findUnique({where:{id:designId},include:{order:{include:{customer:true}}}});
         verifyDesign(design,ownerId,body.snapshotHash);
         if (design!.lifecycleStatus !== 'DRAFT') throw new AppError(409,'Create review PDFs while the design is DRAFT');
         const existing=await tx.designFile.findFirst({where:{designId,fileType:REVIEW_FILE_TYPE,metadata:{path:['snapshotHash'],equals:body.snapshotHash}},orderBy:{createdAt:'desc'}});
         if (existing) return {id:existing.id,designId,snapshotHash:body.snapshotHash,fileName:existing.fileName,sha256:(existing.metadata as any).sha256};
+        const designCount=await tx.designFile.count({where:{designId,fileType:REVIEW_FILE_TYPE}});
+        const ownerCount=await tx.designFile.count({where:{fileType:REVIEW_FILE_TYPE,metadata:{path:['ownerId'],equals:ownerId}}});
+        if (designCount >= REVIEW_LIMIT_PER_DESIGN || ownerCount >= REVIEW_LIMIT_PER_OWNER) throw new AppError(409,'Review storage limit reached. No further artifacts were stored.');
         storageKey=await fileUploadService.writePrivateReview(bytes,designId);
         const file=await tx.designFile.create({data:{designId,fileType:REVIEW_FILE_TYPE,fileName:'f42-outside-artwork-review.pdf',fileUrl:'owner-authorized-review',fileSize:bytes.length,mimeType:'application/pdf',metadata:{artifactRole:REVIEW_ROLE,snapshotHash:body.snapshotHash,sha256:sha(bytes),storageKey,ownerId,colorMode:'RGB',samplingDpi:300,widthMm:390,heightMm:218,productionReady:false}}});
         return {id:file.id,designId,snapshotHash:body.snapshotHash,fileName:file.fileName,sha256:sha(bytes)};
