@@ -39,6 +39,11 @@ function toSummary(p: any) {
     readiness: editorDefaults?.readiness,
     support: editorDefaults?.support,
     supportReason: editorDefaults?.supportReason,
+    // Grounded currency: the pricing engine rejects any material rate card
+    // whose currency is not EGP (pricing.service.ts), so every price this
+    // API serves is EGP by construction. Storefronts must format with this
+    // field, never assume another currency or convert rates.
+    currency: 'EGP',
   };
 }
 

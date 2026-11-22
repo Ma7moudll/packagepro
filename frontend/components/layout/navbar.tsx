@@ -53,7 +53,9 @@ export function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <NavigationMenu className="hidden lg:flex">
+          {/* Full nav needs ~1150px; below xl the hamburger takes over so the
+              right-side actions never clip. */}
+          <NavigationMenu className="hidden xl:flex">
             <NavigationMenuList>
               <NavigationMenuItem>
                 <NavigationMenuTrigger>{t("nav.products")}</NavigationMenuTrigger>
@@ -313,7 +315,7 @@ export function Navbar() {
             )}
 
             {/* Contact Button */}
-            <Button asChild className="hidden lg:flex bg-emerald-600 hover:bg-emerald-700">
+            <Button asChild className="hidden 2xl:flex bg-emerald-600 hover:bg-emerald-700">
               <Link href="/contact">
                 <Phone className={`h-4 w-4 ${isRTL ? "ml-2" : "mr-2"}`} />
                 {isRTL ? "احصل على عرض سعر" : "Get Quote"}
@@ -323,7 +325,7 @@ export function Navbar() {
             {/* Mobile Menu */}
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="sm" className="lg:hidden">
+                <Button variant="ghost" size="sm" className="xl:hidden">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>

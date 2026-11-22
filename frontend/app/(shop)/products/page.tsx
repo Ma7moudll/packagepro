@@ -36,9 +36,15 @@ const typeIcon: Record<string, typeof Package> = {
   label: Sticker,
 }
 
-function formatMoney(value: number | null | undefined): string | null {
+// Format with the API-verified currency (EGP, enforced by the pricing
+// engine). Never assume another currency and never convert rates.
+function formatMoney(value: number | null | undefined, currency: string = "EGP"): string | null {
   if (value === null || value === undefined) return null
-  return `$${Number(value).toFixed(2)}`
+  return new Intl.NumberFormat("en", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(Number(value))
 }
 
 export default function ProductsPage() {
@@ -108,14 +114,15 @@ export default function ProductsPage() {
         <div className="mx-auto max-w-7xl px-4 py-14 text-center">
           <Badge variant="secondary" className="mb-4 gap-1">
             <Sparkles className="h-3.5 w-3.5" />
-            Backend-driven catalog · real-time pricing
+            Unified catalogue · live prices on verified products
           </Badge>
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
             Custom Packaging for Your Brand
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
             Choose a product, configure material, printing and finishing options, and get
-            live prices across quantity tiers — from production to your door.
+            live prices across quantity tiers on production-ready products. Products still
+            under preparation are priced on request.
           </p>
         </div>
       </section>
@@ -157,7 +164,7 @@ export default function ProductsPage() {
               size="sm"
               onClick={() => setOnlyCustom((v) => !v)}
             >
-              Fully customisable
+              Customisable
             </Button>
             <select
               aria-label="Sort"
@@ -212,7 +219,7 @@ export default function ProductsPage() {
                     ) : (
                       <Icon className="h-16 w-16 text-muted-foreground/60" />
                     )}
-                    {p.customisable && (
+                    {p.customisable && !quoteRequired && (
                       <Badge className="absolute left-3 top-3 gap-1 bg-primary text-primary-foreground">
                         <Sparkles className="h-3 w-3" />
                         Customisable
@@ -247,9 +254,9 @@ export default function ProductsPage() {
                             Under preparation
                           </Badge>
                         ) : (
-                          formatMoney(p.priceFrom) && (
+                          formatMoney(p.priceFrom, p.currency ?? "EGP") && (
                             <p className="text-xl font-bold">
-                              {formatMoney(p.priceFrom)}
+                              {formatMoney(p.priceFrom, p.currency ?? "EGP")}
                               <span className="text-sm font-normal text-muted-foreground"> from</span>
                             </p>
                           )
