@@ -3,6 +3,7 @@ import { useDesignStore } from "@/lib/editor/state/store"
 import { LINERS, initialBoardSpecification, type BoardSpecification, type LinerId } from "@/lib/editor/material-specification"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { productPreviewCoverage } from "@/lib/editor/product-preview-coverage"
 
 export function BoardSpecificationPanel({arabic}:{arabic:boolean}) {
  const model=useDesignStore(s=>s.model),apply=useDesignStore(s=>s.applyCoreState)
@@ -13,7 +14,7 @@ export function BoardSpecificationPanel({arabic}:{arabic:boolean}) {
  }
  if(!spec)return <div className="border-t pt-3 space-y-2"><Button variant="outline" size="sm" className="w-full text-xs" onClick={()=>write(initialBoardSpecification(model.material))}>{arabic?"تخصيص الخامة من الداخل والخارج":"Configure inside and outside stock"}</Button><p className="text-[10px] text-slate-500">{arabic?"مواصفات تصنيع مستقلة، تحتاج عرض سعر قبل الطلب.":"Independent manufacturing specification. A quote is required before ordering."}</p></div>
  return <fieldset className="border-t pt-3 space-y-3" aria-label={arabic?"مواصفات الخامة والطباعة":"Stock and printing specification"}>
-  {!model.type.includes("mailer")&&<p role="status" className="text-[10px] text-amber-800">{arabic?"المعاينة المستقلة للخامة مدعومة لعلبة البريد فقط حاليا؛ تحفظ المواصفات لباقي المنتجات بدون معاينة مطابقة.":"Independent stock preview currently supports mailer boxes only. Other products save the specification without a matching preview."}</p>}
+  {!productPreviewCoverage(model.type).twoSidedStock&&<p role="status" className="text-[10px] text-amber-800">{arabic?"المعاينة المستقلة للخامة غير مجهزة لهذا المنتج حاليا؛ تحفظ المواصفات بدون معاينة مطابقة.":"Independent stock preview is not prepared for this product yet. The specification is saved without a matching preview."}</p>}
   <legend className="text-xs font-semibold">{arabic?"الخامة والطباعة":"Stock and printing"}</legend>
   {(["outside","inside"] as const).map(side=><label key={side} className="block text-[11px] space-y-1"><span>{side==="outside"?(arabic?"الخارج":"Outside liner"):(arabic?"الداخل":"Inside liner")}</span><select aria-label={side==="outside"?"Outside liner":"Inside liner"} className="w-full border rounded-md p-2 bg-white" value={spec[side]} onChange={e=>write({...spec,[side]:e.target.value as LinerId})}>{LINERS.map(l=><option key={l.id} value={l.id}>{arabic?l.ar:l.en}</option>)}</select></label>)}
   {(spec.outside==="kraft-water-resistant"||spec.inside==="kraft-water-resistant")&&<p className="text-[10px] text-amber-800">{arabic?"مطلوب للاستخدام في الثلاجات حسب وصف الخامة. لم يتم اعتماد درجة العزل أو ملاءمة ملامسة الطعام.":"Requested for refrigerator use. Water resistance, cold-use and food-contact ratings are not verified."}</p>}
