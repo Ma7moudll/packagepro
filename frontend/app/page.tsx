@@ -742,7 +742,7 @@ export default function HomePage() {
                 className="rounded-2xl shadow-2xl"
               />
 
-              <div className="absolute -bottom-6 -right-6 bg-white p-6 rounded-xl shadow-lg">
+              <div className="absolute -bottom-6 right-0 bg-white p-6 rounded-xl shadow-lg">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
                     <Star className="w-6 h-6 text-emerald-600" />
@@ -754,7 +754,7 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div className="absolute -top-6 -left-6 bg-white p-4 rounded-xl shadow-lg">
+              <div className="absolute -top-6 left-0 bg-white p-4 rounded-xl shadow-lg">
                 <div className="flex items-center gap-2">
                   <Shield className="w-8 h-8 text-emerald-600" />
                   <div>
@@ -882,7 +882,7 @@ export default function HomePage() {
                 className="rounded-2xl shadow-2xl"
               />
 
-              <div className="absolute -top-6 -left-6 bg-white p-4 rounded-xl shadow-lg">
+              <div className="absolute -top-6 left-0 bg-white p-4 rounded-xl shadow-lg">
                 <div className="flex items-center gap-2">
                   <Recycle className="w-8 h-8 text-green-600" />
                   <div>
