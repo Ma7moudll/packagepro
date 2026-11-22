@@ -13,28 +13,36 @@ import { pricingApi } from "@/lib/api/pricing"
 import { useRouter } from "next/navigation"
 
 interface AddToCartProps {
+  open?: boolean
+  onOpenChange?: (open:boolean)=>void
+  getDesignRevision?: ()=>string
   quoteRequired?: boolean
   productType: "box" | "bag" | "label"
   materialCode: string
   dimensions: { length: number; width: number; height: number }
   defaultQuantity: number
-  sessionId: string | null
   onEnsureSession: () => Promise<string>
 }
 
 export function AddToCart({
+  open: controlledOpen,
+  onOpenChange,
+  getDesignRevision,
   quoteRequired = false,
   productType,
   materialCode,
   dimensions,
   defaultQuantity,
-  sessionId,
   onEnsureSession,
 }: AddToCartProps) {
   const { language } = useLanguage()
   const router = useRouter()
   const { user } = useAuth()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = controlledOpen ?? internalOpen
+  const setOpen = (value:boolean) => {setInternalOpen(value);onOpenChange?.(value)}
+  const [cartError, setCartError] = useState<string | null>(null)
+  const [addedWithNewerEdits, setAddedWithNewerEdits] = useState(false)
   const [adding, setAdding] = useState(false)
   const [designName, setDesignName] = useState("")
   const [quantity, setQuantity] = useState(defaultQuantity)
@@ -48,6 +56,10 @@ export function AddToCart({
   useEffect(() => {
     if (open) setQuantity(defaultQuantity)
   }, [open, defaultQuantity])
+
+  useEffect(() => {
+    if (open) {setCartError(null);setAddedWithNewerEdits(false)}
+  }, [open])
 
   useEffect(() => {
     let cancelled = false
@@ -91,8 +103,18 @@ export function AddToCart({
     }
 
     setAdding(true)
+    setCartError(null)
+    const revision = getDesignRevision?.()
+    let phase: "save" | "cart" = "save"
+    let designChanged = false
     try {
-      const sid = sessionId || (await onEnsureSession())
+      // Existing sessions must save too, or the cart links older artwork.
+      const sid = await onEnsureSession()
+      if (getDesignRevision && getDesignRevision() !== revision) {
+        designChanged = true
+        throw new Error("Design changed during save")
+      }
+      phase = "cart"
       await cartApi.addItem({
         productType,
         quantity,
@@ -103,10 +125,20 @@ export function AddToCart({
         // entered design name with the item (no dedicated column yet).
         ...(designName.trim() ? { config: { designName: designName.trim() } } : {}),
       })
+      if (getDesignRevision && getDesignRevision() !== revision) {
+        setAddedWithNewerEdits(true)
+        setCartError(language === "ar" ? "تمت إضافة النسخة المحفوظة إلى السلة. التعديلات الأحدث ما زالت في المحرر ولم تُضمّن. ارجع للمحرر لمراجعتها." : "The saved version was added to the cart. Newer edits are still in the editor and were not included. Return to the editor to review them.")
+        return
+      }
       setOpen(false)
       router.push("/cart")
     } catch (error) {
       console.error("Failed to add to cart:", error)
+      setCartError(designChanged
+        ? (language === "ar" ? "تغير التصميم أثناء الحفظ. لم تتم إضافته إلى السلة. حاول مرة أخرى لحفظ التعديلات الحالية." : "The design changed while saving. Nothing was added to the cart. Try again to save the current edits.")
+        : phase === "save"
+          ? (language === "ar" ? "تعذر حفظ التصميم. العمل ما زال هنا ولم تتم إضافته إلى السلة. حاول مرة أخرى." : "Could not save the design. Your artwork is still here and nothing was added to the cart. Try again.")
+          : (language === "ar" ? "تعذر تأكيد تحديث السلة. التصميم محفوظ. راجع السلة قبل المحاولة مرة أخرى." : "Could not confirm the cart update. Your design is saved. Check the cart before trying again."))
     } finally {
       setAdding(false)
     }
@@ -138,6 +170,7 @@ export function AddToCart({
             </Label>
             <Input
               id="designName"
+              disabled={adding}
               value={designName}
               onChange={(e) => setDesignName(e.target.value)}
               placeholder={language === "ar" ? "اسم التصميم..." : "Design name..."}
@@ -153,6 +186,7 @@ export function AddToCart({
               id="quantity"
               type="number"
               min={1}
+              disabled={adding}
               value={quantity}
               onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
               className="w-32"
@@ -192,10 +226,13 @@ export function AddToCart({
             ) : null}
           </div>
 
+          {cartError && <p role="alert" className="text-sm text-red-600">{cartError}</p>}
+          {addedWithNewerEdits && <Button variant="outline" onClick={() => setOpen(false)}>{language === "ar" ? "العودة للمحرر" : "Return to editor"}</Button>}
+
           {/* Add to Cart Button */}
           <Button
             onClick={handleAddToCart}
-            disabled={quoteRequired || adding || priceLoading}
+            disabled={quoteRequired || adding || priceLoading || addedWithNewerEdits}
             className="w-full"
           >
             {adding ? (

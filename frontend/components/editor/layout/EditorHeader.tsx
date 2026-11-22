@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
+import {cartDesignFingerprint} from "@/lib/editor/cart-design-fingerprint"
 import {editorRequiresQuote} from "@/lib/editor/quote-policy"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { Button } from "@/components/ui/button"
@@ -35,6 +36,9 @@ import {
 
 interface EditorHeaderProps {
   extra?: React.ReactNode
+  onSessionSaved?: (sessionId:string)=>void
+  cartOpen?: boolean
+  onCartOpenChange?: (open:boolean)=>void
 }
 
 function mapProductType(type: string): "box" | "bag" | "label" {
@@ -44,7 +48,7 @@ function mapProductType(type: string): "box" | "bag" | "label" {
   return "box"
 }
 
-export function EditorHeader({ extra }: EditorHeaderProps) {
+export function EditorHeader({ extra, cartOpen, onCartOpenChange, onSessionSaved }: EditorHeaderProps) {
   const { language } = useLanguage()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -105,6 +109,7 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
       // Persist to the backend (durable, reload-safe)
       try {
         const sid = await ensureCloudSession(sessionId, name, coreState)
+        if (sid) onSessionSaved?.(sid)
         if (sid && sid !== sessionId) {
           const params = new URLSearchParams(searchParams.toString())
           params.set("sessionId", sid)
@@ -131,6 +136,7 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
     const name = title
     const coreState = useDesignStore.getState().history.present
     const sid = await ensureCloudSession(sessionId, name, coreState)
+    if (sid) onSessionSaved?.(sid)
     if (sid && sid !== sessionId) {
       const params = new URLSearchParams(searchParams.toString())
       params.set("sessionId", sid)
@@ -294,12 +300,14 @@ export function EditorHeader({ extra }: EditorHeaderProps) {
 
           {/* Add to Cart */}
           <AddToCart
+            open={cartOpen}
+            onOpenChange={onCartOpenChange}
+            getDesignRevision={() => cartDesignFingerprint(useDesignStore.getState().history.present)}
             quoteRequired={customQuote}
             productType={mapProductType(model.type)}
             materialCode={model.material || "cardboard-kraft"}
             dimensions={model.dimensions}
             defaultQuantity={model.quantity || 30}
-            sessionId={sessionId}
             onEnsureSession={handleEnsureSession}
           />
 

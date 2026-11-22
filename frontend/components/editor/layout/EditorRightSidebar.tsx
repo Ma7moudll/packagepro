@@ -55,7 +55,7 @@ const SIDEBAR_TABS = [
 
 type TabId = (typeof SIDEBAR_TABS)[number]["id"]
 
-export function EditorRightSidebar() {
+export function EditorRightSidebar({onContinue}:{onContinue:()=>void}) {
   const { language, isRTL } = useLanguage()
   const layers = useDesignStore((s) => s.layers)
   const selectedIds = useDesignStore((s) => s.selectedLayerIds)
@@ -738,7 +738,7 @@ export function EditorRightSidebar() {
             )}
           </div>
         </div>
-        <Button disabled={customQuote} className="w-full bg-slate-900 hover:bg-slate-800 text-white h-10">
+        <Button onClick={onContinue} disabled={customQuote} className="w-full bg-slate-900 hover:bg-slate-800 text-white h-10">
           {customQuote?(language === "ar" ? "يتطلب عرض سعر" : "Quote required"):(language === "ar" ? "متابعة الطلب" : "Continue")}
         </Button>
       </div>
