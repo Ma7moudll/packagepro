@@ -28,7 +28,8 @@
 // imported only by storage.ts. Never a duplicate geometry model — the resolve
 // layer (M8-C/D/E, resolve-dieline.ts) is the single source of resolved geometry.
 
-import { resolveDieline } from "../geometry/resolve-dieline.ts"
+import { resolveDieline, selectEffectiveDieline } from "../geometry/resolve-dieline.ts"
+import { checkOverlaps, DIELINE_SERIALIZER_VERSION } from "./dieline-service.ts"
 import { BLEED_MM, DPI_MIN, SAFE_MM, facePanel, isTwoFaceSheet, mmToPx } from "../geometry/units.ts"
 import { unsupportedSheetArtwork } from "../print-coverage.ts"
 import type { DielineGeometry, FaceId } from "../../../../shared/types/index.ts"
@@ -69,6 +70,34 @@ export interface DesignManifest {
   prepress: DesignManifestPrepress
   /** Full resolved dieline snapshot — paths + faceRelationships. Absent when legacy migration cannot reconstruct. */
   dieline?: DielineGeometry
+  /**
+   * Panel-overlap pairs in the resolved blueprint geometry at the saved
+   * dimensions, when any exist (a blueprint whose own authored layout
+   * overlaps resolves with that overlap at its authored size). Recording
+   * the pairs keeps the defect explicit in the saved record instead of
+   * presenting the geometry as clean. Absent when the resolved layout is
+   * coherent (and for no-blueprint designs, which carry no snapshot).
+   */
+  dielineOverlaps?: { a: string; b: string }[]
+  /**
+   * Present only when `dieline` is a STORED snapshot re-emitted verbatim
+   * because the engine could not freshly resolve geometry at save time
+   * (see serializeDesignData). Absent for freshly resolved snapshots, so
+   * consumers can always tell stored geometry from computed geometry.
+   */
+  dielineSource?: "stored-snapshot"
+  /**
+   * Version of the canonical SVG serializer (see DIELINE_SERIALIZER_VERSION
+   * in dieline-service) whose form this snapshot's geometry corresponds
+   * to. Stamped when a fresh snapshot is written; preserved verbatim when
+   * a stored snapshot is re-emitted. Absent on envelopes saved before
+   * serializer versioning existed — those are version 1 by definition.
+   * The record identifies the producing serializer for this save only:
+   * it does not prove a previously delivered artifact's bytes are
+   * unchanged, and it is not certification evidence for historical
+   * artifacts (that recertification question is open).
+   */
+  dielineSerializerVersion?: number
   /**
    * Set when a two-face sheet design carries artwork on inside faces its
    * preview does not support. The artwork stays in the saved design data;
@@ -114,9 +143,19 @@ const CANONICAL_FACE_IDS: readonly FaceId[] = [
   "inside_bottom",
 ]
 
-function resolveFaces(state: DesignCoreState): Record<string, { w: number; h: number }> {
-  const resolution = resolveDieline(state.product?.dieline, state.model.dimensions)
+function resolveFaces(state: DesignCoreState, storedGeometry?: DielineGeometry): Record<string, { w: number; h: number }> {
   const faces: Record<string, { w: number; h: number }> = {}
+  // A stored snapshot that this save re-emits (see serializeDesignData)
+  // supplies the face extents — the saved faces must not be rewritten by
+  // fresh resolution or the best-effort reconstruction while the
+  // snapshot itself is kept verbatim.
+  if (storedGeometry) {
+    for (const [faceId, panel] of Object.entries(storedGeometry.panels)) {
+      faces[faceId] = { w: panel.w, h: panel.h }
+    }
+    return faces
+  }
+  const resolution = resolveDieline(state.product?.dieline, state.model.dimensions)
   if (resolution.ok) {
     for (const [faceId, panel] of Object.entries(resolution.geometry.panels)) {
       faces[faceId] = { w: panel.w, h: panel.h }
@@ -151,17 +190,43 @@ function resolveFaces(state: DesignCoreState): Record<string, { w: number; h: nu
 export function serializeDesignData(state: DesignCoreState): DesignDataV2 {
   const resolution = resolveDieline(state.product?.dieline, state.model.dimensions)
 
+  // Stored-snapshot preservation, decided by the SAME effective-geometry
+  // selector the display and export paths use (selectEffectiveDieline),
+  // so save can never diverge from what the editor shows: when the
+  // selector is in historical mode (source "stored" — a restored snapshot
+  // for the same product at the same dimensions whose geometry fresh
+  // resolution fails to reproduce, or reproduces differently), the
+  // snapshot is re-emitted verbatim, marked dielineSource:
+  // "stored-snapshot". A geometry-input edit invalidates the carrier in
+  // the store before serialize runs, and a dimension edit also falls out
+  // of the selector's dims match — either way an edited design is written
+  // as a fresh revision, never as the stored snapshot.
+  const stored = state.storedDielineSnapshot
+  const dims = state.model.dimensions
+  const effective = selectEffectiveDieline(resolution, {
+    productId: state.product?.id,
+    dims,
+    stored,
+  })
+  const storedGeometry = effective.ok && effective.source === "stored" ? effective.geometry : undefined
+
   const manifestSource: DesignManifestSource =
     state.manifestMetadata?.manifestSource ?? (resolution.ok ? "blueprint" : "migrated")
+  // Provenance describes the geometry actually persisted: a carried
+  // "exact" survives only when this envelope reproduces geometry exactly
+  // (fresh resolution, or the stored snapshot re-emitted verbatim). When
+  // neither holds, claiming exact reproducibility would be false.
   const reproducibility: DesignReproducibility =
     state.manifestMetadata?.reproducibility ?? (resolution.ok ? "exact" : "best_effort")
+  const effectiveReproducibility: DesignReproducibility =
+    reproducibility === "exact" && !resolution.ok && !storedGeometry ? "best_effort" : reproducibility
 
-  // Persist the full state body, but drop the in-memory provenance marker —
+  // Persist the full state body, but drop the in-memory provenance markers —
   // the envelope (below) is the authority for lineage.
   const stateBody: Record<string, unknown> = { ...state }
   delete stateBody.manifestMetadata
+  delete stateBody.storedDielineSnapshot
 
-  const dims = state.model.dimensions
   const unsupportedArtwork = unsupportedSheetArtwork(state.model.faces, state.layers, state.model.type)
   const manifest: DesignManifest = {
     product: {
@@ -174,10 +239,41 @@ export function serializeDesignData(state: DesignCoreState): DesignDataV2 {
       sku: state.productConfig?.sku,
       dimensions: { length: dims.length, width: dims.width, height: dims.height, unit: "mm" },
     },
-    faces: resolveFaces(state),
+    faces: resolveFaces(state, storedGeometry),
     zones: state.zones ?? {},
     prepress: { bleedMm: BLEED_MM, safeMm: SAFE_MM, dpiMin: DPI_MIN, ...(state.product?.prepress ?? {}) },
-    ...(resolution.ok ? { dieline: resolution.geometry } : {}),
+    ...(resolution.ok && !storedGeometry
+      ? { dieline: resolution.geometry, dielineSerializerVersion: DIELINE_SERIALIZER_VERSION }
+      : {}),
+    ...(resolution.ok
+      ? (() => {
+          const overlaps = checkOverlaps(resolution.geometry)
+          return overlaps.length > 0 ? { dielineOverlaps: overlaps } : {}
+        })()
+      : {}),
+    // Stored snapshot re-emission (see above): the saved geometry and its
+    // recorded overlaps survive the resave, explicitly marked as stored.
+    // Overlaps recorded at the original save are kept; when the stored
+    // envelope predates that field, they are recomputed from the stored
+    // geometry itself (never from fresh geometry).
+    ...(storedGeometry
+      ? {
+          dieline: storedGeometry,
+          dielineSource: "stored-snapshot" as const,
+          // The stored snapshot keeps the serializer version it was saved
+          // under (absent = pre-versioning), never the current one.
+          ...(stored!.serializerVersion
+            ? { dielineSerializerVersion: stored!.serializerVersion }
+            : {}),
+          ...(() => {
+            const recorded =
+              stored!.dielineOverlaps && stored!.dielineOverlaps.length > 0
+                ? stored!.dielineOverlaps
+                : checkOverlaps(storedGeometry)
+            return recorded.length > 0 ? { dielineOverlaps: recorded } : {}
+          })(),
+        }
+      : {}),
     // Inside-face artwork on a two-face sheet is preserved in the saved
     // state body above; flag it on the manifest so no consumer (proof,
     // export) can present this design as complete while it is unresolved.
@@ -187,7 +283,7 @@ export function serializeDesignData(state: DesignCoreState): DesignDataV2 {
   return {
     schemaVersion: DESIGN_DATA_SCHEMA_VERSION,
     manifestSource,
-    reproducibility,
+    reproducibility: effectiveReproducibility,
     manifest,
     ...stateBody,
   }
@@ -235,7 +331,23 @@ export function normalizeFromManifest(
   state: DesignCoreState,
   manifest?: DesignManifest
 ): DesignCoreState {
-  if (!manifest?.variant?.dimensions) return state
+  // Carry the saved dieline snapshot into the restored state (in-memory
+  // only) so a later save can re-emit it when the engine cannot freshly
+  // resolve at the restored dimensions — see serializeDesignData. The
+  // geometry itself is never merged into live panels or re-derived here.
+  const snapshot = manifest?.dieline
+    ? {
+        storedDielineSnapshot: {
+          geometry: manifest.dieline,
+          ...(manifest.dielineOverlaps ? { dielineOverlaps: manifest.dielineOverlaps } : {}),
+          ...(manifest.product?.id ? { productId: manifest.product.id } : {}),
+          ...(manifest.dielineSerializerVersion
+            ? { serializerVersion: manifest.dielineSerializerVersion }
+            : {}),
+        },
+      }
+    : {}
+  if (!manifest?.variant?.dimensions) return { ...state, ...snapshot }
   const mDim = manifest.variant.dimensions
   const length = Number(mDim.length) || state.model.dimensions.length
   const width = Number(mDim.width) || state.model.dimensions.width
@@ -244,6 +356,7 @@ export function normalizeFromManifest(
   const panel = facePanel(dims, state.ui.selectedFace)
   return {
     ...state,
+    ...snapshot,
     model: { ...state.model, dimensions: dims },
     canvas: { ...state.canvas, width: mmToPx(panel.w), height: mmToPx(panel.h) },
     product:

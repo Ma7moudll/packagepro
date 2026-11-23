@@ -31,9 +31,19 @@ import type {
 
 /** Raised when the blueprint/dims cannot be resolved to valid mm geometry. */
 export class DielineResolutionError extends Error {
-  constructor(message: string) {
+  /**
+   * Machine-readable failure kind. `"unsupported-size"` marks the explicit,
+   * detectable result for a blueprint whose declared topology cannot
+   * produce a coherent net at the requested dimensions (see buildDieline);
+   * it is distinct from a malformed blueprint (`"error"`) and from a
+   * missing blueprint (`"no-blueprint"`, which never reaches this class).
+   */
+  readonly code?: string
+
+  constructor(message: string, code?: string) {
     super(message)
     this.name = "DielineResolutionError"
+    this.code = code
   }
 }
 
@@ -92,9 +102,12 @@ function lineKey(points: [DielinePoint, DielinePoint]): string {
 
 /**
  * Resolve the blueprint to mm `DielineGeometry`. Panel sizes come from
- * `facePanel(dims, faceId)`; positions come from the blueprint's authored flat
- * layout. The blueprint is trusted input (validated at seed/API, M8-B); a
- * malformed blueprint raises `DielineResolutionError` deterministically.
+ * `facePanel(dims, faceId)`; positions follow the three-case layout in
+ * step 1b below (authored positions at the authored size; fold-derived
+ * positions where the declared topology is sufficient; validated legacy
+ * positions — or an explicit coded unsupported-size failure — where it
+ * is not). The blueprint is trusted input (validated at seed/API, M8-B);
+ * a malformed blueprint raises `DielineResolutionError` deterministically.
  */
 export function buildDieline(
   blueprint: DielineBlueprint,
@@ -134,6 +147,241 @@ export function buildDieline(
       h: size.h,
       rotation: raw.rotation,
       edges: raw.edges,
+    }
+  }
+
+  // 1b) Layout. Three cases, decided by evidence per blueprint and size:
+  //
+  // (a) AUTHORED SIZE. The blueprint's authored size is derived from its
+  //     panel sizes (front/back give L×H, left/right W×H, top/bottom L×W;
+  //     all declarations must agree). At that size the authored positions
+  //     are used verbatim — the historical behaviour and the compatibility
+  //     baseline for every blueprint, sufficient topology or not.
+  //
+  // (b) SUFFICIENT TOPOLOGY (every fold declaration reciprocal with equal
+  //     edge lengths, all physical panels connected): positions are
+  //     DERIVED from the fold relationships by walking them from the root
+  //     panel (front, anchored at its authored position; inside_* panels
+  //     mirror their base panel). Copying authored positions here is what
+  //     made nets incoherent at other sizes; the derived layout stays
+  //     coherent as dimensions vary, and at the authored size it
+  //     reproduces the authored layout (asserted by tests).
+  //
+  // (c) INSUFFICIENT TOPOLOGY at a non-authored size: the legacy
+  //     (authored-position) layout is computed and VALIDATED — no physical
+  //     panel overlaps, and every declared adjacency that is realised as a
+  //     shared edge in the authored layout must still share an edge.
+  //     Sizes that pass keep the existing behaviour exactly (e.g. the
+  //     rigid parts layout at smaller sizes). Sizes that fail produce an
+  //     explicit unsupported-size result (code "unsupported-size") naming
+  //     the failed check — never a silently wrong net. No flap, adjacency,
+  //     glue or allowance value is invented in any case.
+  const OPPOSITE_EDGE: Record<EdgeName, EdgeName> = {
+    top: "bottom",
+    bottom: "top",
+    left: "right",
+    right: "left",
+  }
+  const edgeLength = (panel: DielineGeometry["panels"][FaceId], edge: EdgeName): number =>
+    edge === "top" || edge === "bottom" ? panel.w : panel.h
+  const isPlacementFold = (decl: DielineGeometry["panels"][FaceId]["edges"][EdgeName]): boolean =>
+    !!decl && decl.class === "fold" && !!decl.to && decl.to !== "glue_flap" && decl.to !== "none"
+  const physicalFaces = faces.filter((faceId) => !faceId.startsWith("inside_"))
+  const DIMS_TOLERANCE = 1e-6
+
+  // The blueprint's authored size, when its panel sizes agree on one.
+  const authoredDims = ((): { length: number; width: number; height: number } | undefined => {
+    const axes: Record<"length" | "width" | "height", number[]> = { length: [], width: [], height: [] }
+    for (const faceId of physicalFaces) {
+      const raw = blueprint.panels[faceId]
+      if (faceId === "front" || faceId === "back") { axes.length.push(raw.w); axes.height.push(raw.h) }
+      if (faceId === "left" || faceId === "right") { axes.width.push(raw.w); axes.height.push(raw.h) }
+      if (faceId === "top" || faceId === "bottom") { axes.length.push(raw.w); axes.width.push(raw.h) }
+    }
+    const pick = (values: number[]): number | undefined =>
+      values.length > 0 && values.every((v) => Math.abs(v - values[0]) <= DIMS_TOLERANCE) ? values[0] : undefined
+    const length = pick(axes.length)
+    const width = pick(axes.width)
+    const height = pick(axes.height)
+    return length !== undefined && width !== undefined && height !== undefined ? { length, width, height } : undefined
+  })()
+  const atAuthoredSize =
+    authoredDims !== undefined &&
+    Math.abs(dims.length - authoredDims.length) <= DIMS_TOLERANCE &&
+    Math.abs(dims.width - authoredDims.width) <= DIMS_TOLERANCE &&
+    Math.abs(dims.height - authoredDims.height) <= DIMS_TOLERANCE
+
+  if (!atAuthoredSize) {
+    // Topology sufficiency: a specific reason string, or null when the
+    // declared fold relationships can position every physical panel.
+    let topologyFailure: string | undefined
+    for (const faceId of physicalFaces) {
+      if (topologyFailure) break
+      const panel = panels[faceId]
+      for (const edge of EDGE_ORDER) {
+        const decl = panel.edges[edge]
+        if (!isPlacementFold(decl)) continue
+        const to = decl!.to as FaceId
+        if (!physicalFaces.includes(to)) {
+          topologyFailure = `blueprint fold ${faceId}.${edge} targets ${to}, which is not a physical panel`
+          break
+        }
+        const back = panels[to].edges[OPPOSITE_EDGE[edge]]
+        if (!isPlacementFold(back) || back!.to !== faceId) {
+          topologyFailure =
+            `blueprint fold adjacency is not reciprocal: ${faceId}.${edge} declares a fold to ${to}, ` +
+            `but ${to}.${OPPOSITE_EDGE[edge]} does not declare a fold back`
+          break
+        }
+        if (Math.abs(edgeLength(panel, edge) - edgeLength(panels[to], OPPOSITE_EDGE[edge])) > EPSILON) {
+          topologyFailure =
+            `blueprint fold edge length mismatch: ${faceId}.${edge} is ${edgeLength(panel, edge)}mm but ` +
+            `${to}.${OPPOSITE_EDGE[edge]} is ${edgeLength(panels[to], OPPOSITE_EDGE[edge])}mm (partial-edge contact)`
+          break
+        }
+      }
+    }
+
+    if (!topologyFailure) {
+      // (b) Derive positions from the fold relationships.
+      const root: FaceId = physicalFaces.includes("front")
+        ? "front"
+        : (physicalFaces.find((faceId) => blueprint.faceOrder.includes(faceId)) ?? physicalFaces[0])
+      const placed = new Map<FaceId, { x: number; y: number }>()
+      placed.set(root, { x: blueprint.panels[root].x, y: blueprint.panels[root].y })
+      const queue: FaceId[] = [root]
+      while (queue.length > 0 && !topologyFailure) {
+        const current = queue.shift() as FaceId
+        const currentPos = placed.get(current) as { x: number; y: number }
+        const currentPanel = panels[current]
+        for (const edge of EDGE_ORDER) {
+          const decl = currentPanel.edges[edge]
+          if (!isPlacementFold(decl)) continue
+          const to = decl!.to as FaceId
+          const targetPanel = panels[to]
+          let nx = currentPos.x
+          let ny = currentPos.y
+          if (edge === "right") nx = currentPos.x + currentPanel.w
+          if (edge === "left") nx = currentPos.x - targetPanel.w
+          if (edge === "bottom") ny = currentPos.y + currentPanel.h
+          if (edge === "top") ny = currentPos.y - targetPanel.h
+          const existing = placed.get(to)
+          if (existing) {
+            if (Math.abs(existing.x - nx) > EPSILON || Math.abs(existing.y - ny) > EPSILON) {
+              topologyFailure = `blueprint fold layout is inconsistent: ${to} is placed at (${existing.x}, ${existing.y}) and (${nx}, ${ny}) by different fold paths`
+              break
+            }
+          } else {
+            placed.set(to, { x: nx, y: ny })
+            queue.push(to)
+          }
+        }
+      }
+      const unplaced = physicalFaces.filter((faceId) => !placed.has(faceId))
+      if (!topologyFailure && unplaced.length > 0) {
+        topologyFailure = `blueprint panels are not connected by fold relationships: ${unplaced.join(", ")} cannot be positioned from the declared topology`
+      }
+      if (!topologyFailure) {
+        for (const faceId of faces) {
+          if (faceId.startsWith("inside_")) {
+            const base = faceId.slice("inside_".length) as FaceId
+            const basePos = placed.get(base)
+            if (!basePos) {
+              topologyFailure = `inside panel ${faceId} has no placed base panel ${base}`
+              break
+            }
+            panels[faceId].x = basePos.x
+            panels[faceId].y = basePos.y
+          } else {
+            const pos = placed.get(faceId) as { x: number; y: number }
+            panels[faceId].x = pos.x
+            panels[faceId].y = pos.y
+          }
+        }
+      }
+      if (!topologyFailure) {
+        for (let i = 0; i < physicalFaces.length && !topologyFailure; i += 1) {
+          for (let j = i + 1; j < physicalFaces.length; j += 1) {
+            if (aabbOverlap(panels[physicalFaces[i]], panels[physicalFaces[j]])) {
+              topologyFailure = `derived fold layout overlaps panels ${physicalFaces[i]} and ${physicalFaces[j]}`
+              break
+            }
+          }
+        }
+      }
+    }
+
+    if (topologyFailure) {
+      // (c) Validate the legacy layout (panels still carry authored
+      // positions at this point) before keeping it.
+      let incoherence: string | undefined
+      for (let i = 0; i < physicalFaces.length && !incoherence; i += 1) {
+        for (let j = i + 1; j < physicalFaces.length; j += 1) {
+          if (aabbOverlap(panels[physicalFaces[i]], panels[physicalFaces[j]])) {
+            incoherence = `panels ${physicalFaces[i]} and ${physicalFaces[j]} overlap`
+            break
+          }
+        }
+      }
+      if (!incoherence && authoredDims) {
+        // Declared adjacencies realised as shared edges at the authored
+        // size must still share an edge at this size.
+        const authoredPanels = {} as DielineGeometry["panels"]
+        for (const faceId of faces) {
+          const raw = blueprint.panels[faceId]
+          authoredPanels[faceId] = { faceId, x: raw.x, y: raw.y, w: raw.w, h: raw.h, rotation: raw.rotation, edges: raw.edges }
+        }
+        const sharesEdge = (
+          set: DielineGeometry["panels"],
+          a: FaceId,
+          b: FaceId
+        ): boolean => {
+          for (const ea of EDGE_ORDER) {
+            const [a1, a2] = edgePoints(set[a], ea)
+            for (const eb of EDGE_ORDER) {
+              const [b1, b2] = edgePoints(set[b], eb)
+              const aHoriz = Math.abs(a1.y - a2.y) <= EPSILON
+              const bHoriz = Math.abs(b1.y - b2.y) <= EPSILON
+              if (aHoriz !== bHoriz) continue
+              if (aHoriz) {
+                if (Math.abs(a1.y - b1.y) > EPSILON) continue
+                if (Math.min(a2.x, b2.x) - Math.max(a1.x, b1.x) > EPSILON) return true
+              } else {
+                if (Math.abs(a1.x - b1.x) > EPSILON) continue
+                if (Math.min(a2.y, b2.y) - Math.max(a1.y, b1.y) > EPSILON) return true
+              }
+            }
+          }
+          return false
+        }
+        const declaredPairs = new Set<string>()
+        for (const faceId of physicalFaces) {
+          for (const edge of EDGE_ORDER) {
+            const decl = blueprint.panels[faceId].edges[edge]
+            if (!decl || !decl.to || decl.to === "glue_flap" || decl.to === "none") continue
+            const to = decl.to as FaceId
+            if (!physicalFaces.includes(to) || to === faceId) continue
+            declaredPairs.add(faceId < to ? `${faceId}|${to}` : `${to}|${faceId}`)
+          }
+        }
+        for (const pair of declaredPairs) {
+          const [a, b] = pair.split("|") as [FaceId, FaceId]
+          if (sharesEdge(authoredPanels, a, b) && !sharesEdge(panels, a, b)) {
+            incoherence = `declared adjacency ${a}~${b} shares an edge at the authored size but not at ${dims.length}x${dims.width}x${dims.height}mm`
+            break
+          }
+        }
+      }
+      if (incoherence) {
+        throw new DielineResolutionError(
+          `Unsupported size ${dims.length}x${dims.width}x${dims.height}mm for blueprint "${blueprint.boxType}": ${incoherence}. ` +
+            `Topology: ${topologyFailure}. The blueprint resolves at its authored size` +
+            (authoredDims ? ` ${authoredDims.length}x${authoredDims.width}x${authoredDims.height}mm` : "") +
+            ` and at sizes where its declared layout stays coherent; no layout is generated for this size.`,
+          "unsupported-size"
+        )
+      }
+      // Coherent legacy layout: keep the authored positions as they are.
     }
   }
 
@@ -269,4 +517,18 @@ export function physicalFaceIds(geometry: DielineGeometry): FaceId[] {
   return Object.keys(geometry.panels).filter(
     (id): id is FaceId => !id.startsWith("inside_")
   )
+}
+
+/** Canonical deep equality for geometry snapshots (key-order insensitive). */
+export function canonicalGeometryEquals(a: DielineGeometry, b: DielineGeometry): boolean {
+  const canon = (value: unknown): string =>
+    JSON.stringify(value, (_key, v: unknown) => {
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        return Object.fromEntries(
+          Object.entries(v as Record<string, unknown>).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
+        )
+      }
+      return v
+    })
+  return canon(a) === canon(b)
 }

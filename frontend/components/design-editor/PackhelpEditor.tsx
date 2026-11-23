@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
-import { resolveDieline } from "@/lib/editor/geometry/resolve-dieline"
+import { resolveDieline, selectEffectiveDieline } from "@/lib/editor/geometry/resolve-dieline"
 import { DesignCanvas2D } from "@/components/editor/canvas/DesignCanvas2D"
 import { DesignCanvas3D } from "@/components/editor/canvas/DesignCanvas3D"
 import { DielineCanvas } from "@/components/editor/canvas/DielineCanvas"
@@ -52,15 +52,25 @@ export function PackhelpEditor({
   const applyCoreState = useDesignStore((s) => s.applyCoreState)
   const product = useDesignStore((s) => s.product)
   const dimensions = useDesignStore((s) => s.model.dimensions)
+  const storedSnapshot = useDesignStore((s) => s.storedDielineSnapshot)
 
   // M8-D: SINGLE canonical geometry resolution point. The blueprint (M8-B
   // passthrough) + mm dimensions become DielineGeometry exactly once here;
   // DielineCanvas consumes the result and never resolves again. Products
   // without a blueprint yield { ok:false, reason:"no-blueprint" }, which
   // DielineView routes to the frozen M7DielineFallback.
+  // The fresh resolution passes through the shared effective-geometry
+  // selector: for a restored design whose geometry inputs are unchanged,
+  // the saved snapshot is the effective geometry (source:"stored"), so
+  // the dieline tab displays — and exports — exactly what was saved.
   const dielineResolution = useMemo(
-    () => resolveDieline(product?.dieline, dimensions),
-    [product?.dieline, dimensions.length, dimensions.width, dimensions.height]
+    () =>
+      selectEffectiveDieline(resolveDieline(product?.dieline, dimensions), {
+        productId: product?.id,
+        dims: dimensions,
+        stored: storedSnapshot,
+      }),
+    [product?.dieline, product?.id, dimensions.length, dimensions.width, dimensions.height, storedSnapshot]
   )
 
   // Track editor opened

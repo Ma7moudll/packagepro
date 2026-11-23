@@ -18,8 +18,29 @@ import type {
   FaceId,
   LineClass,
 } from "../../../../shared/types/index.ts"
+import { flatBounds } from "../geometry/dieline.ts"
 
 const CLASS_ORDER: LineClass[] = ["cut", "fold", "score", "glue", "perf"]
+
+/**
+ * Version of the canonical SVG serialization format. Version 1 is the
+ * pre-origin-fix form (a "0 0" viewBox that clipped non-zero-origin
+ * geometry); version 2 starts the viewBox at the real bounds origin.
+ *
+ * The version is deliberately NOT stamped into the SVG bytes: for
+ * zero-origin geometry the v2 bytes must stay identical to v1 (the
+ * certified F42 mailer's recorded geometry hash and the backend's byte
+ * comparisons depend on that identity). The version is recorded where
+ * records live — on the design record when a snapshot is written
+ * (dielineSerializerVersion) and on the certified delivery receipt.
+ *
+ * Explicit gap: a version record identifies which serializer a SAVE or
+ * a DELIVERY was produced under. It does not prove that a previously
+ * delivered artifact's bytes are unchanged, and it is not evidence of
+ * certification for historical artifacts — that recertification question
+ * is open and intentionally not settled here.
+ */
+export const DIELINE_SERIALIZER_VERSION = 2
 
 const CLASS_STYLE: Record<LineClass, string> = {
   cut: "stroke:#000000;fill:none;stroke-width:0.5",
@@ -55,24 +76,21 @@ export function serializeSVG(geometry: DielineGeometry): string {
     geometry.faceRelationships.length > 0
       ? geometry.faceRelationships.map((r) => r.faceId)
       : faces
-  let x0 = Infinity
-  let y0 = Infinity
-  let x1 = -Infinity
-  let y1 = -Infinity
-  for (const faceId of faces) {
-    const p = geometry.panels[faceId]
-    x0 = Math.min(x0, p.x)
-    y0 = Math.min(y0, p.y)
-    x1 = Math.max(x1, p.x + p.w)
-    y1 = Math.max(y1, p.y + p.h)
-  }
+  // Single shared bounds helper — the same flatBounds the dieline view
+  // uses — so every canonical consumer agrees on the real origin.
+  const { x0, y0, x1, y1 } = flatBounds(geometry)
   const width = x1 - x0
   const height = y1 - y0
 
   const renderPath = (path: DielinePath): string =>
     `<path d="${toPathData(path)}" data-path-id="${path.id}" class="dieline-${path.class}" style="${CLASS_STYLE[path.class]}" />`
 
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(width)}" height="${fmt(height)}" viewBox="0 0 ${fmt(width)} ${fmt(height)}">`
+  // The viewBox must start at the geometry's real bounds origin: panel
+  // positions are absolute (authored layouts sit away from zero, and
+  // derived layouts anchor on the root panel), so a "0 0" viewBox clips
+  // every point outside the bounds size. Points keep their absolute
+  // coordinates; a zero-origin layout serializes exactly as before.
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(width)}" height="${fmt(height)}" viewBox="${fmt(x0)} ${fmt(y0)} ${fmt(width)} ${fmt(height)}">`
   for (const faceId of ordered) {
     const owned: DielinePath[] = []
     for (const cls of CLASS_ORDER) {
