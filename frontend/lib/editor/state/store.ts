@@ -146,6 +146,9 @@ export interface DesignStore extends DesignState {
   toggleBoxOpen: () => void
   addLayer: (partial: Partial<Layer>) => string
   updateLayer: (id: string, updater: (layer: Layer) => Layer) => void
+  beginLayerGesture: (id: string, stop?: () => void) => void
+  previewLayerGesture: (id: string, updater: (layer: Layer) => Layer) => void
+  finishLayerGesture: (cancel?: boolean) => void
   removeLayer: (id: string) => void
   clearLayers: () => void
   setSelectedLayers: (ids: string[]) => void
@@ -180,7 +183,28 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     rightSidebarOpen: liveUi.rightSidebarOpen,
   })
 
+  // Transaction metadata is ephemeral: never saved in design JSON/history.
+  let gesture: {id:string; before:DesignCoreState; stop?:()=>void}|undefined
+  let finishingGesture=false
+  const finishLayerGesture = (cancel=false) => {
+    const active=gesture
+    if(!active||finishingGesture)return
+    // Capture the final Fabric transform while previews still belong to this
+    // transaction. The re-entry guard prevents its modified event committing twice.
+    finishingGesture=true
+    try{active.stop?.()}finally{gesture=undefined;finishingGesture=false}
+    set(state=>{
+      const changed=JSON.stringify(active.before.layers)!==JSON.stringify(state.history.present.layers)
+      if(cancel||!changed){
+        const core={...state.history.present,layers:active.before.layers}
+        return {...core,ui:withPreservedLiveUi(core,state.ui),history:{...state.history,present:core}}
+      }
+      return {history:{past:[...state.history.past,active.before],present:state.history.present,future:[]}}
+    })
+  }
+
   const pushToHistory = (nextCore: DesignCoreState) => {
+    finishLayerGesture()
     set((state) => {
       return {
         history: {
@@ -206,6 +230,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     },
 
     setSelectedFace: (faceId) => {
+      finishLayerGesture()
       set((state) => {
         const core = state.history.present
 
@@ -273,6 +298,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     },
 
     setViewMode: (mode) => {
+      finishLayerGesture()
       set((state) => ({
         ui: { ...state.ui, viewMode: mode },
         history: state.history,
@@ -294,6 +320,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     },
 
     addLayer: (partial) => {
+      finishLayerGesture()
       const id = partial.id ?? nanoid()
       const core = get().history.present
       const faceId: FaceId = partial.faceId ?? core.ui.selectedFace
@@ -325,7 +352,23 @@ export const useDesignStore = create<DesignStore>((set, get) => {
       return id
     },
 
+    beginLayerGesture: (id, stop) => {
+      finishLayerGesture()
+      const state=get()
+      if(!state.layers.some(layer=>layer.id===id))return
+      gesture={id,before:{...state.history.present,selectedLayerIds:state.selectedLayerIds,ui:{...state.history.present.ui,...state.ui}},stop}
+    },
+    previewLayerGesture: (id, updater) => {
+      if(gesture?.id!==id){get().updateLayer(id,updater);return}
+      set(state=>{
+        const core={...state.history.present,layers:state.layers.map(layer=>layer.id===id?updater(layer):layer),selectedLayerIds:state.selectedLayerIds}
+        return {...core,ui:withPreservedLiveUi(core,state.ui),history:{...state.history,present:core}}
+      })
+    },
+    finishLayerGesture,
+
     updateLayer: (id, updater) => {
+      finishLayerGesture()
       const core = get().history.present
       const nextLayers = core.layers.map((layer) => (layer.id === id ? updater(layer) : layer))
       const nextCore: DesignCoreState = {
@@ -339,6 +382,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     },
 
     removeLayer: (id) => {
+      finishLayerGesture()
       const core = get().history.present
       const nextLayers = core.layers.filter((layer) => layer.id !== id)
       const nextSelected = core.selectedLayerIds.filter((lid) => lid !== id)
@@ -351,12 +395,14 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     },
 
     clearLayers: () => {
+      finishLayerGesture()
       const core = get().history.present
       const nextCore: DesignCoreState = { ...core, layers: [], selectedLayerIds: [] }
       pushToHistory(nextCore)
     },
 
     setSelectedLayers: (ids) => {
+      if(JSON.stringify(ids)!==JSON.stringify(get().selectedLayerIds))finishLayerGesture()
       set((state) => ({
         selectedLayerIds: ids,
         history: state.history,
@@ -364,6 +410,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     },
 
     reorderLayers: (idsInOrder) => {
+      finishLayerGesture()
       const core = get().history.present
       const layerById = new Map(core.layers.map((l) => [l.id, l]))
       const nextLayers: Layer[] = []
@@ -379,6 +426,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     },
 
     applyCoreState: (updater) => {
+      finishLayerGesture()
       const core = get().history.present
       let nextCore = updater(core)
       nextCore = {...nextCore, model:withPrintCoverageFaces(nextCore.model, nextCore.layers)}
@@ -424,6 +472,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     },
 
     initFromEditorConfig: (config, options) => {
+      finishLayerGesture()
       const current = get().history.present
       const dims = config.variant.dimensions
       const length = Number(dims.length) || 200
@@ -531,6 +580,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     },
 
     undo: () => {
+      finishLayerGesture()
       set((state) => {
         const { past, present, future } = state.history
         if (past.length === 0) return state
@@ -539,6 +589,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
         return {
           ...state,
           ...previous,
+          ui: withPreservedLiveUi(previous,state.ui),
           history: {
             past: newPast,
             present: previous,
@@ -549,6 +600,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     },
 
     redo: () => {
+      finishLayerGesture()
       set((state) => {
         const { past, present, future } = state.history
         if (future.length === 0) return state
@@ -557,6 +609,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
         return {
           ...state,
           ...next,
+          ui: withPreservedLiveUi(next,state.ui),
           history: {
             past: [...past, present],
             present: next,

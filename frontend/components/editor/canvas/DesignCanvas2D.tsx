@@ -166,6 +166,7 @@ export function DesignCanvas2D() {
   const { language } = useLanguage()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null)
+  const gestureLayerRef=useRef<string|null>(null)
 
   const viewportRef=useRef<HTMLDivElement>(null)
   // Display-only fit: keep Fabric's logical artwork/export coordinates intact.
@@ -247,12 +248,36 @@ export function DesignCanvas2D() {
         setSelectedLayers([])
       })
 
+      let stopping=false
+      const finish=(cancel=false)=>useDesignStore.getState().finishLayerGesture(cancel)
+      canvas.on("before:transform", ({transform})=>{
+        const id=(transform.target as any).layerId
+        if(!id)return // ActiveSelection remains outside this single-layer slice.
+        gestureLayerRef.current=id
+        useDesignStore.getState().beginLayerGesture(id,()=>{
+          if(!(canvas as any)._currentTransform){gestureLayerRef.current=null;return}
+          if(transform.actionPerformed)syncFabricObjectToLayer(transform.target,id)
+          stopping=true
+          try{canvas.endCurrentTransform()}finally{stopping=false;gestureLayerRef.current=null}
+        })
+      })
+      canvas.on("mouse:up",()=>finish())
+      const interrupt=()=>finish()
+      const cancel=()=>finish(true)
+      const visibility=()=>{if(document.hidden)finish()}
+      document.addEventListener("visibilitychange",visibility)
+      window.addEventListener("blur",interrupt)
+      window.addEventListener("pointercancel",cancel,true)
+      window.addEventListener("touchcancel",cancel,true)
+
       // Handle object modifications
       canvas.on("object:modified", (e) => {
+        if(stopping)return
         const fabricObj = e.target as any
         const layerId = fabricObj.layerId
         if (layerId && fabricObj) {
           syncFabricObjectToLayer(fabricObj, layerId)
+          finish()
         }
       })
 
@@ -260,7 +285,7 @@ export function DesignCanvas2D() {
         const fabricObj = e.target as any
         const layerId = fabricObj.layerId
         if (layerId && fabricObj) {
-          updateLayer(layerId, (layer) => ({
+          useDesignStore.getState().previewLayerGesture(layerId, (layer) => ({
             ...layer,
             position: { x: fabricObj.left || 0, y: fabricObj.top || 0 },
           }))
@@ -271,7 +296,7 @@ export function DesignCanvas2D() {
         const fabricObj = e.target as any
         const layerId = fabricObj.layerId
         if (layerId && fabricObj) {
-          updateLayer(layerId, (layer) => ({
+          useDesignStore.getState().previewLayerGesture(layerId, (layer) => ({
             ...layer,
             scale: { x: fabricObj.scaleX || 1, y: fabricObj.scaleY || 1 },
           }))
@@ -282,7 +307,7 @@ export function DesignCanvas2D() {
         const fabricObj = e.target as any
         const layerId = fabricObj.layerId
         if (layerId && fabricObj) {
-          updateLayer(layerId, (layer) => ({
+          useDesignStore.getState().previewLayerGesture(layerId, (layer) => ({
             ...layer,
             rotation: (fabricObj.angle || 0) * (Math.PI / 180),
           }))
@@ -290,6 +315,11 @@ export function DesignCanvas2D() {
       })
 
       return () => {
+        finish()
+        document.removeEventListener("visibilitychange",visibility)
+        window.removeEventListener("blur",interrupt)
+        window.removeEventListener("pointercancel",cancel,true)
+        window.removeEventListener("touchcancel",cancel,true)
         if ((window as any).__fabricCanvas === canvas) (window as any).__fabricCanvas = null
         canvas.dispose()
         fabricCanvasRef.current = null
@@ -382,10 +412,18 @@ export function DesignCanvas2D() {
       // current layer, not the initial empty layers closure, when persisting.
       const layer = useDesignStore.getState().layers.find((l) => l.id === layerId)
       if (!layer) return
+      if(gestureLayerRef.current===layerId){
+        useDesignStore.getState().previewLayerGesture(layerId,l=>({...l,
+          position:{x:fabricObj.left??0,y:fabricObj.top??0},
+          rotation:(fabricObj.angle??0)*(Math.PI/180),
+          scale:{x:fabricObj.scaleX??1,y:fabricObj.scaleY??1},
+        }))
+        return
+      }
 
       if (layer.type === "text" && fabricObj instanceof fabric.Text) {
         const fabShadow = fabricObj.shadow as any
-        updateLayer(layerId, (l) => ({
+        useDesignStore.getState().previewLayerGesture(layerId, (l) => ({
           ...l,
           position: { x: fabricObj.left || 0, y: fabricObj.top || 0 },
           rotation: (fabricObj.angle || 0) * (Math.PI / 180),
@@ -417,14 +455,14 @@ export function DesignCanvas2D() {
           },
         }))
       } else if (fabricObj instanceof fabric.Group) {
-        updateLayer(layerId, (l) => ({
+        useDesignStore.getState().previewLayerGesture(layerId, (l) => ({
           ...l,
           position: { x: fabricObj.left || 0, y: fabricObj.top || 0 },
           rotation: (fabricObj.angle || 0) * (Math.PI / 180),
           scale: { x: fabricObj.scaleX || 1, y: fabricObj.scaleY || 1 },
         }))
       } else if (layer.type === "image" && fabricObj instanceof fabric.Image) {
-        updateLayer(layerId, (l) => ({
+        useDesignStore.getState().previewLayerGesture(layerId, (l) => ({
           ...l,
           position: { x: fabricObj.left || 0, y: fabricObj.top || 0 },
           rotation: (fabricObj.angle || 0) * (Math.PI / 180),
@@ -435,7 +473,7 @@ export function DesignCanvas2D() {
           },
         }))
       } else if (layer.type === "shape") {
-        updateLayer(layerId, (l) => ({
+        useDesignStore.getState().previewLayerGesture(layerId, (l) => ({
           ...l,
           position: { x: fabricObj.left || 0, y: fabricObj.top || 0 },
           rotation: (fabricObj.angle || 0) * (Math.PI / 180),
@@ -631,6 +669,9 @@ export function DesignCanvas2D() {
       }
     }
 
+    // History restore changes the transform programmatically; refresh hit areas
+    // and selection handles as well as artwork pixels.
+    fabricObj.setCoords()
     fabricCanvasRef.current?.renderAll()
   }, [])
 
