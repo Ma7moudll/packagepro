@@ -20,5 +20,5 @@ export function reframeOpeningCamera(position:readonly number[],target:readonly 
  return {position:nextPosition,target:nextTarget}
 }
 
-/** Menu sheets are centered on Y=0; other existing constructions retain their grounded target. */
-export function productCameraTargetHeight(type:string|undefined,height:number){return type?.replace(/-/g,'_')==='menu_card'?0:height/200}
+/** Qualified menu and thank-you sheets are centered on Y=0; other constructions retain their existing target. */
+export function productCameraTargetHeight(type:string|undefined,height:number){return ['menu_card','thank_you_card'].includes(type?.replace(/-/g,'_')??'')?0:height/200}

@@ -19,7 +19,7 @@ test('opening then closing retains manual pan and relative zoom around the targe
  for(let i=0;i<3;i++){assert.ok(Math.abs(b.position[i]-position[i])<1e-12);assert.ok(Math.abs(b.target[i]-target[i])<1e-12)}
 })
 
-test('only menu-card centered geometry targets Y0; existing products retain grounded center',()=>{
- assert.equal(productCameraTargetHeight('menu_card',297),0);assert.equal(productCameraTargetHeight('menu-card',360),0)
+test('only qualified menu/thank-you geometry targets Y0; existing products retain grounded center',()=>{
+ assert.equal(productCameraTargetHeight('menu_card',297),0);assert.equal(productCameraTargetHeight('menu-card',360),0);assert.equal(productCameraTargetHeight('thank_you_card',150),0);assert.equal(productCameraTargetHeight('thank-you-card',210),0)
  for(const type of ['business_card','loyalty_card','frosted_ziplock_bag','mailer_box',undefined])assert.equal(productCameraTargetHeight(type,297),297/200)
 })
