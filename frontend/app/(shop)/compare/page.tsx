@@ -153,7 +153,7 @@ export default function ComparePage() {
                     className="w-full h-40 object-cover rounded-lg mb-4"
                   />
                   <CardTitle className="text-lg">{product.name}</CardTitle>
-                  <div className="text-2xl font-bold text-emerald-600">${product.price.toFixed(2)}</div>
+                  <div className="text-2xl font-bold text-emerald-600">EGP {product.price.toFixed(2)}</div>
                   <Badge variant="secondary">{product.category}</Badge>
                 </CardHeader>
                 <CardContent>

@@ -85,7 +85,7 @@ export default function CheckoutPage() {
     setStep("payment")
   }
 
-  const currency = cart?.currency || "USD"
+  const currency = cart?.currency || "EGP"
   const formatMoney = (n: number) =>
     `${n.toFixed(2)} ${currency}`
 

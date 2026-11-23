@@ -102,7 +102,7 @@ export default function APIDocsPage() {
             <div className="bg-slate-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-x-auto">
               <code>
                 curl -X GET https://api.packagepro.com/v1/products \<br />
-                &nbsp;&nbsp;&nbsp;&nbsp;-H "Authorization: Bearer YOUR_API_KEY"
+                &nbsp;&nbsp;&nbsp;&nbsp;-H &quot;Authorization: Bearer YOUR_API_KEY&quot;
               </code>
             </div>
           </div>

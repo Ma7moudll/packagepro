@@ -14,7 +14,7 @@ export const marketingWorker = redis && isRedisEnabled() ? new Worker(
 
     try {
       switch (type) {
-        case 'post-purchase-thank-you':
+        case 'post-purchase-thank-you': {
           const order = await prisma.order.findUnique({
             where: { id: data.orderId },
             include: {
@@ -29,8 +29,9 @@ export const marketingWorker = redis && isRedisEnabled() ? new Worker(
             await emailService.sendOrderConfirmation(order);
           }
           break;
+        }
 
-        case 'review-request':
+        case 'review-request': {
           const orderForReview = await prisma.order.findUnique({
             where: { id: data.orderId },
             include: {
@@ -54,6 +55,7 @@ export const marketingWorker = redis && isRedisEnabled() ? new Worker(
             });
           }
           break;
+        }
 
         case 'retention-2weeks':
         case 'retention-30days':

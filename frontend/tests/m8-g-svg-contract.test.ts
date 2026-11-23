@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
+import { readFileSync, existsSync } from "node:fs"
 import { resolve } from "node:path"
 import type { DielineBlueprint, DielineGeometry, DielinePoint } from "../../shared/types/index.ts"
 import { buildDieline, flatBounds } from "../lib/editor/geometry/dieline.ts"
@@ -425,8 +425,11 @@ test("K: export implementation fabricates no panels/edges/geometry; single seria
     "serializeSVG(geometry) called exactly once",
   )
 
-  const dialog = read("components/design-editor/export/ExportDialog.tsx")
-  assert.equal(dialog.includes("serializeSVG("), false, "ExportDialog is not a dieline exporter")
-  assert.equal(dialog.includes("DielineGeometry"), false)
-  assert.equal(dialog.includes("data-face-id"), false, "dialog does not fake FaceId geometry")
+  // The legacy parallel-implementation export dialog was deleted; what remains
+  // must not exist at all rather than merely avoid dieline export.
+  assert.equal(
+    existsSync(resolve(process.cwd(), "components/design-editor/export/ExportDialog.tsx")),
+    false,
+    "legacy design-editor ExportDialog is gone",
+  )
 })

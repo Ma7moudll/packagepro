@@ -44,27 +44,17 @@ export interface Template {
   tags: string[]
   closureType?: ClosureType
   cardboardColor?: CardboardColor
-  avgRating: number
-  ratingsCount: number
+  /** Backend catalog identity: which product (and therefore which die-cut,
+   * 2D faces and 3D model) this template belongs to. */
+  productType?: string
+  boxType?: string
   createdAt: string
   updatedAt: string
-}
-
-export interface TemplateRating {
-  id: string
-  templateId: string
-  userId: string
-  userName?: string
-  userAvatar?: string
-  rating: number // 1-5
-  comment?: string
-  createdAt: string
 }
 
 export interface TemplateSearchFilters {
   category?: TemplateCategory
   style?: TemplateStyle
-  minRating?: number
   tags?: string[]
   searchQuery?: string
 }

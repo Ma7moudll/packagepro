@@ -8,52 +8,49 @@ export interface ProductTemplate {
   image: string
   dimensions: { length: number; width: number; height: number }
   minQuantity: number
-  price: number
+  // No price field: real prices come from the backend rate cards on the
+  // product pages; hardcoded template prices were unverifiable.
 }
 
 export const PRODUCT_TEMPLATES: ProductTemplate[] = [
   {
     id: "mailer-box-natural",
-    name: "Eco-Mailer (Natural Kraft)",
+    name: "Mailer (Natural Kraft)",
     category: "box",
     type: "mailer_box",
-    description: "Our signature sustainable mailing box. Made from 100% recycled natural kraft cardboard.",
+    description: "Mailing box in natural kraft cardboard.",
     image: "/images/templates/mailer-box-f23.png",
     dimensions: { length: 200, width: 150, height: 80 },
-    minQuantity: 30,
-    price: 1.20
+    minQuantity: 30
   },
   {
     id: "rigid-box-luxury",
-    name: "Luxury Rigid (Smooth White)",
+    name: "Rigid Box (Smooth White)",
     category: "box",
     type: "rigid_box",
-    description: "Premium rigid setup box with a smooth, luxurious finish. Perfect for retail branding.",
+    description: "Two-piece rigid setup box with a smooth white finish.",
     image: "/images/templates/product-box.png",
     dimensions: { length: 150, width: 150, height: 100 },
-    minQuantity: 50,
-    price: 4.50
+    minQuantity: 50
   },
   {
     id: "stand-up-pouch-eco",
     name: "Stand-Up Pouch (Matte Black)",
     category: "pouch",
     type: "pouch",
-    description: "High-barrier flexible packaging with a professional matte finish.",
+    description: "Stand-up pouch with a matte finish.",
     image: "/images/templates/stand-up-pouch.png",
     dimensions: { length: 150, width: 60, height: 230 },
-    minQuantity: 100,
-    price: 0.45
+    minQuantity: 100
   },
   {
     id: "mailer-box-white",
-    name: "Premium Mailer (Pure White)",
+    name: "Mailer (Pure White)",
     category: "box",
     type: "mailer_box",
-    description: "Clean, professional white cardboard for high-impact brand colors.",
+    description: "White cardboard mailer for full-colour branding.",
     image: "/images/templates/mailer-box-m.png",
     dimensions: { length: 300, width: 250, height: 100 },
-    minQuantity: 30,
-    price: 1.35
+    minQuantity: 30
   }
 ]
