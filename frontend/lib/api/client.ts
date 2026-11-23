@@ -106,7 +106,7 @@ export async function apiClient<T>(
     const newToken = await refreshAccessToken()
     if (newToken) {
       headers['Authorization'] = `Bearer ${newToken}`
-      res = await fetch(url, { ...fetchOptions, headers })
+      res = await fetch(url, { ...fetchOptions, headers: { ...(fetchOptions.headers as Record<string,string>), Authorization: `Bearer ${newToken}` } })
     } else {
       if (typeof window !== 'undefined') {
         window.location.href = '/login'

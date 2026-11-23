@@ -448,12 +448,22 @@ export interface CheckoutRequest {
 }
 
 export interface CheckoutResponse {
+  currency?: string
   orderId: string
   orderNumber: string
   total: number
   status: OrderStatus
-  clientSecret: string
-  paymentIntentId: string
+  clientSecret?: string
+  paymentIntentId?: string
+  attemptId?: string
+  orderState?: string
+  localPaymentState?: string|null
+  attemptState?: string
+  provider?: string
+  providerRef?: string
+  paymentState?: 'pending'|'succeeded'|'failed'|'canceled'
+  recoveryRequired?: boolean
+  cartChanged?: boolean
 }
 
 export interface ApiResponse<T> {

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
+import {corsOptions} from './utils/cors-options';
 import rateLimit from '@fastify/rate-limit';
 import { connectRedis, isRedisEnabled, getRedisClient } from './lib/redis';
 import { logger } from './utils/logger';
@@ -36,34 +37,7 @@ async function registerPlugins() {
   // CORS
   // Production reflects only the configured frontend origin; the localhost
   // frontend origin is a development convenience and is never allowed in prod.
-  const isProduction = process.env.NODE_ENV === 'production';
-  const allowedOrigins = [
-    process.env.FRONTEND_URL,
-    ...(isProduction ? [] : ['http://localhost:3001']),
-  ].filter((origin): origin is string => Boolean(origin));
-
-  if (isProduction && !process.env.FRONTEND_URL) {
-    console.warn('⚠️  FRONTEND_URL is not set: all cross-origin browser requests will be rejected.');
-  }
-
-  await server.register(cors, {
-    origin: (origin, cb) => {
-      // Requests with no Origin header (server-to-server, webhooks, curl,
-      // same-origin navigation) are not subject to CORS. In production we
-      // still only allow them through un-reflected (no CORS headers granted).
-      if (!origin) {
-        cb(null, !isProduction);
-        return;
-      }
-
-      if (allowedOrigins.includes(origin)) {
-        cb(null, true);
-      } else {
-        cb(new Error('Not allowed by CORS'), false);
-      }
-    },
-    credentials: true,
-  });
+  await server.register(cors, corsOptions());
 
   // Rate limiting — per-IP (per-user when authenticated), Redis-backed when available.
   // With Redis the bucket is shared across all server instances; without it the
