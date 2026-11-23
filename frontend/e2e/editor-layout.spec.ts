@@ -44,7 +44,7 @@ for (const language of ['en', 'ar']) {
         await page.getByRole('menuitem', { name: language === 'ar' ? 'معاينة Mockup' : 'Mockup Preview' }).click();
         const dialog = page.getByRole('dialog');
         await expect(dialog).toBeVisible();
-        await expect(dialog.getByRole('status')).toContainText(language === 'ar' ? 'تصدير Mockup غير متاح' : 'Mockup export is not available');
+        await expect(dialog.getByRole('status')).toContainText(language === 'ar' ? 'لقطة RGB محلية' : 'Local RGB snapshot');
         const close = dialog.locator('[data-slot=dialog-close]');
         const closeBox = await close.boundingBox();
         expect(closeBox!.x).toBeGreaterThanOrEqual(0);

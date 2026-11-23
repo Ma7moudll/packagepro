@@ -15,6 +15,7 @@ export function ProductOpeningCamera({family,dimensions,open,camDist}:{camDist:n
   const c=controls.current
   if(!c)return
   progress.current=productOpeningStep(progress.current,open,delta,reduced.current)
+  c.object.userData.openingCamera = {target:open,progress:progress.current}
   const allowance=productOpeningFraming(family,dimensions,progress.current)
   const viewportScale=Math.max(1,size.height/Math.max(1,size.width))
   const next={scale:allowance.scale*viewportScale,lift:dimensions.height/200+allowance.lift}

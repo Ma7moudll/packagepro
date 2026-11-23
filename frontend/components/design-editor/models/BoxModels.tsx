@@ -107,6 +107,7 @@ function resolveFaceMaterial(
     const finishArtwork = () => {
       ctx.drawImage(img, 0, 0, composite.width, composite.height)
       texture.needsUpdate = true
+      faceMat.userData.artworkReady = true
       // Ink is a separate optical layer from the liner. Keep the glossy stock
       // reflection around artwork, but do not let a white clearcoat reflection
       // replace the ink colour at the lid's open angle. This is an illustrative
@@ -136,6 +137,7 @@ function resolveFaceMaterial(
     img.onload = finishArtwork
     img.src = dataUrl
     mat = fallback.clone()
+    mat.userData = {...mat.userData, artworkReady: false}
     const faceMat = mat
     mat.setValues({
       map: texture,

@@ -22,11 +22,9 @@ for (const language of ['en','ar']) for (const width of [320,1100,1280]) {
     await dialog.locator('[data-slot=dialog-close]').click();
     await openAction(ar?'معاينة Mockup':'Mockup Preview');
     dialog=page.getByRole('dialog');
-    await expect(dialog.getByRole('status')).toContainText(ar?'تصدير Mockup غير متاح':'Mockup export is not available');
-    await expect(dialog.getByRole('button',{name:ar?'تصدير Mockup':'Export Mockup',exact:true})).toHaveCount(0);
+    await expect(dialog.getByRole('status')).toContainText(ar?'لقطة RGB محلية':'Local RGB snapshot');
+    await expect(dialog.getByRole('button',{name:ar?'تنزيل PNG للمشهد':'Download scene PNG',exact:true})).toBeDisabled();
     await expect(dialog.getByRole('combobox')).toHaveCount(0);
-    await dialog.getByRole('button',{name:ar?'استوديو داكن':'Studio Dark',exact:true}).click();
-    await expect(dialog.getByRole('status')).toBeVisible();
     await page.screenshot({animations:'disabled',path:info.outputPath(`action-mockup-${language}-${width}.png`)});
     await dialog.locator('[data-slot=dialog-close]').click();
     await expect(dialog).toBeHidden();
