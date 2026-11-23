@@ -1,5 +1,6 @@
 import {unsupportedStandUpPouchArtwork,unsupportedPouchOutputMessage} from "../../../backend/src/modules/catalog/pouch-preview-contract.ts"
 import {unsupportedZiplockArtwork,unsupportedZiplockOutputMessage} from "../../../backend/src/modules/catalog/ziplock-preview.ts"
+import {unsupportedMenuArtwork,unsupportedMenuOutputMessage} from "../../../backend/src/modules/catalog/menu-preview.ts"
 import { isTwoFaceSheet } from "./geometry/units.ts"
 
 /**
@@ -16,7 +17,9 @@ export function unsupportedSheetArtwork(
   faces: readonly { id: string }[] | undefined,
   layers: readonly { faceId: string }[] | undefined,
   modelType?: string
-): { faces: string[]; layerCount: number; product?: "stand_up_pouch" | "frosted_ziplock_bag" } | null {
+): { faces: string[]; layerCount: number; product?: "stand_up_pouch" | "frosted_ziplock_bag" | "menu_card" } | null {
+  const menu=unsupportedMenuArtwork(modelType,layers)
+  if(menu)return menu
   const pouch=unsupportedStandUpPouchArtwork(modelType,layers)
   if(pouch)return pouch
   const ziplock=unsupportedZiplockArtwork(modelType,layers)
@@ -36,7 +39,8 @@ export function unsupportedSheetArtwork(
  * download, the certified export, and (mirrored in the backend) proof
  * generation. The message names exactly what is blocked.
  */
-export function unsupportedArtworkOutputMessage(unsupported: { faces: string[]; layerCount: number; product?: "stand_up_pouch" | "frosted_ziplock_bag" }): string {
+export function unsupportedArtworkOutputMessage(unsupported: { faces: string[]; layerCount: number; product?: "stand_up_pouch" | "frosted_ziplock_bag" | "menu_card" }): string {
+  if(unsupported.product==='menu_card')return unsupportedMenuOutputMessage(unsupported)
   if(unsupported.product==='stand_up_pouch')return unsupportedPouchOutputMessage(unsupported)
   if(unsupported.product==='frosted_ziplock_bag')return unsupportedZiplockOutputMessage(unsupported)
   return `This card design has ${unsupported.layerCount} artwork layer(s) on inside faces (${unsupported.faces.join(", ")}), which this preview does not support. The artwork is preserved in the design and the design still saves, but every design output is blocked until you move or remove that artwork: PDF, SVG, PNG and JPEG export, the current-face PNG reference, the artwork review download, certified export and proof generation.`

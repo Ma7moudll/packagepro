@@ -1,5 +1,6 @@
 import {unsupportedStandUpPouchArtwork,unsupportedPouchOutputMessage} from '../../modules/catalog/pouch-preview-contract';
 import {unsupportedZiplockArtwork,unsupportedZiplockOutputMessage} from '../../modules/catalog/ziplock-preview';
+import {unsupportedMenuArtwork,unsupportedMenuOutputMessage} from '../../modules/catalog/menu-preview';
 // Shared output boundary for two-face sheet designs (the business card)
 // that carry artwork on inside faces. The truth is derived from the saved
 // design data itself — the layers' faceIds against the sheet's faces —
@@ -10,7 +11,7 @@ import {unsupportedZiplockArtwork,unsupportedZiplockOutputMessage} from '../../m
 export interface UnsupportedArtwork {
   faces: string[];
   layerCount: number;
-  product?: 'stand_up_pouch' | 'frosted_ziplock_bag';
+  product?: 'stand_up_pouch' | 'frosted_ziplock_bag' | 'menu_card';
 }
 
 const SHEET_FACE_IDS = ['front', 'back', 'inside_front', 'inside_back'] as const;
@@ -20,8 +21,16 @@ export function deriveUnsupportedArtwork(designData: unknown): UnsupportedArtwor
     model?: { type?:unknown; faces?: Array<{ id?: unknown }> };
     product?: {id?:unknown;boxType?:unknown};
     layers?: Array<{ faceId?: unknown }>;
-    manifest?: { product?:{id?:unknown;boxType?:unknown}; unsupportedArtwork?: { faces?: string[]; layerCount?: number; product?:'stand_up_pouch' | 'frosted_ziplock_bag' } };
+    manifest?: { product?:{id?:unknown;boxType?:unknown}; unsupportedArtwork?: { faces?: string[]; layerCount?: number; product?:'stand_up_pouch' | 'frosted_ziplock_bag' | 'menu_card' } };
   };
+
+  const layers=Array.isArray(d.layers)?d.layers:undefined;
+  const menu=unsupportedMenuArtwork(d.model?.type,layers)
+    ??unsupportedMenuArtwork(d.product?.boxType,layers)
+    ??unsupportedMenuArtwork(d.product?.id==='prod-menu-card'?'menu_card':undefined,layers)
+    ??unsupportedMenuArtwork(d.manifest?.product?.boxType,layers)
+    ??unsupportedMenuArtwork(d.manifest?.product?.id==='prod-menu-card'?'menu_card':undefined,layers);
+  if(menu)return menu;
 
   const pouch=unsupportedStandUpPouchArtwork(d.model?.type,Array.isArray(d.layers)?d.layers:undefined)
     ??unsupportedStandUpPouchArtwork(d.product?.boxType,Array.isArray(d.layers)?d.layers:undefined)
@@ -62,13 +71,14 @@ export function deriveUnsupportedArtwork(designData: unknown): UnsupportedArtwor
   // persisted, so a flagged design is never treated as clean.
   const flag = d?.manifest?.unsupportedArtwork;
   if (flag && (flag.layerCount ?? 0) > 0) {
-    return { faces: flag.faces ?? [], layerCount: flag.layerCount ?? 0,...(flag.product==='stand_up_pouch'||flag.product==='frosted_ziplock_bag'?{product:flag.product}:{}) };
+    return { faces: flag.faces ?? [], layerCount: flag.layerCount ?? 0,...(flag.product==='stand_up_pouch'||flag.product==='frosted_ziplock_bag'||flag.product==='menu_card'?{product:flag.product}:{}) };
   }
   return undefined;
 }
 
 /** The same honest, recoverable wording the frontend boundary uses. */
 export function unsupportedArtworkOutputMessage(unsupported: UnsupportedArtwork): string {
+  if(unsupported.product==='menu_card')return unsupportedMenuOutputMessage(unsupported);
   if(unsupported.product==='stand_up_pouch')return unsupportedPouchOutputMessage(unsupported);
   if(unsupported.product==='frosted_ziplock_bag')return unsupportedZiplockOutputMessage(unsupported);
   return `This card design has ${unsupported.layerCount} artwork layer(s) on inside faces (${unsupported.faces.join(', ')}), which this preview does not support. The artwork is preserved in the design and the design still saves, but every design output is blocked until you move or remove that artwork: PDF, SVG, PNG and JPEG export, the current-face PNG reference, the artwork review download, certified export and proof generation.`;

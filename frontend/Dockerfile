@@ -30,6 +30,9 @@ COPY backend/src/modules/catalog/pouch-preview-contract.ts /app/backend/src/modu
 # Pure frosted ziplock artwork surface safety contract.
 COPY backend/src/modules/catalog/ziplock-preview.ts /app/backend/src/modules/catalog/ziplock-preview.ts
 
+# Pure menu-card preview and unsupported-artwork contract.
+COPY backend/src/modules/catalog/menu-preview.ts /app/backend/src/modules/catalog/menu-preview.ts
+
 # Set build-time environment variables
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3000}

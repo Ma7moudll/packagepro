@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {productOpeningFraming,reframeOpeningCamera} from '../lib/editor/geometry/product-opening-camera.ts'
+import {productOpeningFraming,reframeOpeningCamera,productCameraTargetHeight} from '../lib/editor/geometry/product-opening-camera.ts'
 const dims={length:250,width:200,height:180}
 test('only opening constructions change framing, never a film flap or open-top carrier',()=>{
  for(const family of ['mailer-bag','bag','cup','pouch','flat','label',undefined] as const)assert.deepEqual(productOpeningFraming(family,dims,1),{scale:1,lift:0})
@@ -17,4 +17,9 @@ test('opening then closing retains manual pan and relative zoom around the targe
  assert.deepEqual(a.target,[2,1.6,-4]);assert.ok(Math.abs((a.position[0]-a.target[0])/(position[0]-target[0])-1.4)<1e-12)
  const b=reframeOpeningCamera(a.position,a.target,open,closed)
  for(let i=0;i<3;i++){assert.ok(Math.abs(b.position[i]-position[i])<1e-12);assert.ok(Math.abs(b.target[i]-target[i])<1e-12)}
+})
+
+test('only menu-card centered geometry targets Y0; existing products retain grounded center',()=>{
+ assert.equal(productCameraTargetHeight('menu_card',297),0);assert.equal(productCameraTargetHeight('menu-card',360),0)
+ for(const type of ['business_card','loyalty_card','frosted_ziplock_bag','mailer_box',undefined])assert.equal(productCameraTargetHeight(type,297),297/200)
 })

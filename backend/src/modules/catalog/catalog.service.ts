@@ -1,3 +1,4 @@
+import {menuPreviewStockColour} from './menu-preview';
 import {loyaltyPreviewStockColour} from './loyalty-preview'
 import {thankYouPreviewStockColour} from './thank-you-preview';
 import {ziplockPreviewStockColour} from './ziplock-preview';
@@ -243,7 +244,7 @@ export class CatalogService {
 
     const dims = variant.dimensions as any;
     const materialCode = variant.materialCode ?? 'cardboard-kraft';
-    const materialHex = loyaltyPreviewStockColour(product.boxType ?? '',materialCode) ?? thankYouPreviewStockColour(product.boxType ?? '', materialCode) ?? ziplockPreviewStockColour(product.boxType ?? '', materialCode) ?? (materialRecord?.metadata
+    const materialHex = menuPreviewStockColour(product.boxType ?? '',materialCode) ?? loyaltyPreviewStockColour(product.boxType ?? '',materialCode) ?? thankYouPreviewStockColour(product.boxType ?? '', materialCode) ?? ziplockPreviewStockColour(product.boxType ?? '', materialCode) ?? (materialRecord?.metadata
       ? ((materialRecord.metadata as any).hex ?? MATERIAL_HEX[materialCode] ?? '#b8936a')
       : MATERIAL_HEX[materialCode] ?? '#b8936a');
 

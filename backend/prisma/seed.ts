@@ -1,3 +1,4 @@
+import {menuPreviewStructure} from '../src/modules/catalog/menu-preview';
 import {loyaltyPreviewStructure} from '../src/modules/catalog/loyalty-preview';
 import {thankYouPreviewStructure} from '../src/modules/catalog/thank-you-preview';
 import {ziplockPreviewStructure} from '../src/modules/catalog/ziplock-preview';
@@ -1626,6 +1627,7 @@ async function main() {
         boxType: entry.boxType,
         // Explicitly qualified card slices receive two-face previews.
         // No production blueprint, rates or sibling support is inferred.
+        ...(entry.id === 'menu_card' ? {structure: menuPreviewStructure(entry.defaultDimensions)} : {}),
         ...(entry.id === 'loyalty_card' ? {structure: loyaltyPreviewStructure(entry.defaultDimensions)} : {}),
         ...(entry.id === 'thank_you_card' ? {structure: thankYouPreviewStructure(entry.defaultDimensions)} : {}),
         // Frosted ziplock bag: a two-film-face preview structure only —

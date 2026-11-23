@@ -150,3 +150,24 @@ describe('frosted ziplock bag preview-surface boundary',()=>{
   await expect(composeProofPdf(Buffer.alloc(0),{orderNumber:'ZIPLOCK-TEST',items:[],manifest:readManifest(data)})).rejects.toThrow(/Proof blocked: This frosted ziplock bag/)
  })
 })
+
+describe('menu card preview-surface boundary',()=>{
+ const data={schemaVersion:2,model:{type:'menu_card',faces:[{id:'front'},{id:'back'}]},product:{id:'prod-menu-card',boxType:'menu-card'},layers:[{faceId:'front'},{faceId:'inside_front'}],manifest:{faces:{front:{w:200,h:300},back:{w:200,h:300}}}}
+ it('derives unsupported saved artwork from the design data with no manifest flag',()=>{
+  expect(deriveUnsupportedArtwork(data)).toEqual({faces:['inside_front'],layerCount:1,product:'menu_card'})
+  expect(deriveUnsupportedArtwork({...data,layers:[{faceId:'front'},{faceId:'back'}]})).toBeUndefined()
+  expect(deriveUnsupportedArtwork({...data,model:{...data.model,type:undefined},product:{id:'prod-menu-card'}})).toMatchObject({product:'menu_card',faces:['inside_front']})
+  expect(deriveUnsupportedArtwork({...data,model:{...data.model,type:undefined},product:{boxType:'menu-card'}})).toMatchObject({product:'menu_card'})
+  expect(deriveUnsupportedArtwork({...data,model:{...data.model,type:'poly_mailer_bag',faces:['front','back','left','right','top','bottom'].map(id=>({id}))},product:{id:'prod-poly-mailer',boxType:'poly-mailer-bag'}})).toBeUndefined()
+ })
+ it('matches legacy missing-face migration but never discards explicit unsupported artwork',()=>{
+  expect(deriveUnsupportedArtwork({...data,layers:[{}, {faceId:undefined}, {faceId:''}]})).toBeUndefined()
+  expect(deriveUnsupportedArtwork({...data,layers:[{}, {faceId:'top'}]})).toMatchObject({faces:['top'],layerCount:1,product:'menu_card'})
+ })
+ it('honors a persisted menu manifest flag on a non-sheet shape',()=>{
+  expect(deriveUnsupportedArtwork({manifest:{unsupportedArtwork:{faces:['top'],layerCount:1,product:'menu_card'}},layers:[]})).toEqual({faces:['top'],layerCount:1,product:'menu_card'})
+ })
+ it('blocks actual proof generation for a flagless menu design instead of omitting the unrepresented artwork',async()=>{
+  await expect(composeProofPdf(Buffer.alloc(0),{orderNumber:'MENU-TEST',items:[],manifest:readManifest(data)})).rejects.toThrow(/Proof blocked: This menu card/)
+ })
+})

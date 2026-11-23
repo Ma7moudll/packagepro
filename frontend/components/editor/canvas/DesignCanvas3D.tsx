@@ -509,7 +509,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
           </SpinBox>
         </Suspense>
 
-        <ProductOpeningCamera family={productPreviewCoverage(model.type).family} dimensions={model.dimensions} open={boxOpenState} camDist={camDist}/>
+        <ProductOpeningCamera key={model.type==='menu_card'?'menu-card':'existing'} productType={model.type} family={productPreviewCoverage(model.type).family} dimensions={model.dimensions} open={boxOpenState} camDist={camDist}/>
       </Canvas>
     </div>
   )

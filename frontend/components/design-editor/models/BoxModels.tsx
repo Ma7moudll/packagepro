@@ -1,4 +1,5 @@
 "use client"
+import {menuPreviewStockColour} from '../../../../backend/src/modules/catalog/menu-preview';
 import {loyaltyPreviewStockColour} from '../../../../backend/src/modules/catalog/loyalty-preview'
 
 import { useRef, useMemo, type ReactNode } from "react"
@@ -884,7 +885,7 @@ function useProductStock({boardSpecification:requestedBoard, material:requestedM
   // Non-paper families use a neutral illustrative film surface until their own
   // material selector is prepared. A saved kraft box material is not film.
   const material=requestedMaterial
-  const cardStockColour=loyaltyPreviewStockColour(type,material??"")??thankYouPreviewStockColour(type,material??"")
+  const cardStockColour=menuPreviewStockColour(type,material??"")??loyaltyPreviewStockColour(type,material??"")??thankYouPreviewStockColour(type,material??"")
   const filmColour=material?.includes("black")?"#242424":"#eeeeec"
   const polyFilm=material?.startsWith("poly-")||material==="bio-poly"
   const legacy = useMemo(() => boardLook(material), [material])

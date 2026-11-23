@@ -44,7 +44,7 @@ export interface ProofManifestInput {
   prepress?: { bleedMm?: number; safeMm?: number; dpiMin?: number };
   dieline?: unknown;
   /** Set on two-face sheet designs carrying unsupported inside-face artwork. */
-  unsupportedArtwork?: { faces?: string[]; layerCount?: number; product?: 'stand_up_pouch' | 'frosted_ziplock_bag' };
+  unsupportedArtwork?: { faces?: string[]; layerCount?: number; product?: 'stand_up_pouch' | 'frosted_ziplock_bag' | 'menu_card' };
 }
 
 const A4_W = 595.28;
