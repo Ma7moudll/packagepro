@@ -91,7 +91,7 @@ export default function BriefPage() {
           Need something else? Send us a brief
         </h1>
         <p className="text-xl text-slate-600 max-w-3xl mx-auto">
-          Can't find what you're looking for? Fill out our brief form and our team will help you create the perfect
+          Can&apos;t find what you&apos;re looking for? Fill out our brief form and our team will help you create the perfect
           custom packaging solution.
         </p>
       </div>

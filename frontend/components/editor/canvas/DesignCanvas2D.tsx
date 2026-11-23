@@ -1,9 +1,10 @@
 "use client"
 
 import { useRef, useEffect, useCallback, useState } from "react"
-import { fabric } from "fabric"
+import * as fabric from "fabric"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { BLEED_MM, SAFE_MM } from "@/lib/editor/geometry/units"
+import { unsupportedArtworkOutputMessage, unsupportedSheetArtwork } from "@/lib/editor/print-coverage"
 import { useLanguage } from "@/providers/language-provider"
 import { TextProperties, ImageFilterConfig, DEFAULT_IMAGE_FILTERS } from "@/lib/editor/state/types"
 import { Button } from "@/components/ui/button"
@@ -114,43 +115,43 @@ function applyImageFilters(img: any, config?: ImageFilterConfig) {
   const cfg = config ?? DEFAULT_IMAGE_FILTERS
 
   if (cfg.brightness !== 100) {
-    filters.push(new (fabric.Image.filters as any).Brightness({
+    filters.push(new (fabric.filters as any).Brightness({
       brightness: (cfg.brightness - 100) / 100,
     }))
   }
 
   if (cfg.contrast !== 100) {
-    filters.push(new (fabric.Image.filters as any).Contrast({
+    filters.push(new (fabric.filters as any).Contrast({
       contrast: (cfg.contrast - 100) / 100,
     }))
   }
 
   if (cfg.saturation !== 100) {
-    filters.push(new (fabric.Image.filters as any).Saturation({
+    filters.push(new (fabric.filters as any).Saturation({
       saturation: (cfg.saturation - 100) / 100,
     }))
   }
 
   if (cfg.blur > 0) {
-    filters.push(new (fabric.Image.filters as any).Blur({
+    filters.push(new (fabric.filters as any).Blur({
       blur: cfg.blur * 0.05,
     }))
   }
 
   if (cfg.grayscale > 50) {
-    filters.push(new (fabric.Image.filters as any).Grayscale())
+    filters.push(new (fabric.filters as any).Grayscale())
   }
 
   if (cfg.sepia > 50) {
-    filters.push(new (fabric.Image.filters as any).Sepia())
+    filters.push(new (fabric.filters as any).Sepia())
   }
 
   if (cfg.invert > 50) {
-    filters.push(new (fabric.Image.filters as any).Invert())
+    filters.push(new (fabric.filters as any).Invert())
   }
 
   if (cfg.hueRotate !== 0) {
-    filters.push(new (fabric.Image.filters as any).HueRotation({
+    filters.push(new (fabric.filters as any).HueRotation({
       rotation: cfg.hueRotate / 360,
     }))
   }
@@ -166,6 +167,9 @@ export function DesignCanvas2D() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null)
 
+  const viewportRef=useRef<HTMLDivElement>(null)
+  const loyaltySheet=useDesignStore(s=>s.model.type==='loyalty_card')
+  const [sheetScale,setSheetScale]=useState(1)
   const layers = useDesignStore((s) => s.layers)
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds)
   const selectedFace = useDesignStore((s) => s.ui.selectedFace)
@@ -181,10 +185,18 @@ export function DesignCanvas2D() {
   const guidesVisible = useDesignStore((s) => s.ui.guidesVisible)
   const toggleGuides = useDesignStore((s) => s.toggleGuides)
   
+  useEffect(()=>{
+    const viewport=viewportRef.current
+    if(!viewport||!loyaltySheet){setSheetScale(1);return}
+    const fit=()=>setSheetScale(Math.min(1,Math.max(1,viewport.clientWidth-48)/(canvasState.width+24),Math.max(1,viewport.clientHeight-48)/(canvasState.height+24)))
+    const observer=new ResizeObserver(fit);observer.observe(viewport);fit();return()=>observer.disconnect()
+  },[loyaltySheet,canvasState.width,canvasState.height])
+
   // Zone visibility state
   const [showBleed, setShowBleed] = useState(true)
   const [showSafeZone, setShowSafeZone] = useState(true)
   const [canvasReady, setCanvasReady] = useState(false)
+  const [exportNotice, setExportNotice] = useState("")
 
   // Smart Guides hook - uses canvasReady state to ensure canvas is initialized
   useSmartGuides({
@@ -287,9 +299,8 @@ export function DesignCanvas2D() {
   // Handle background color changes
   useEffect(() => {
     if (fabricCanvasRef.current) {
-      fabricCanvasRef.current.setBackgroundColor(canvasState.backgroundColor, () => {
-        fabricCanvasRef.current?.renderAll()
-      })
+      fabricCanvasRef.current.backgroundColor = canvasState.backgroundColor
+      fabricCanvasRef.current.renderAll()
     }
   }, [canvasState.backgroundColor])
 
@@ -366,7 +377,9 @@ export function DesignCanvas2D() {
 
   const syncFabricObjectToLayer = useCallback(
     (fabricObj: any, layerId: string) => {
-      const layer = layers.find((l) => l.id === layerId)
+      // Canvas listeners outlive the render that registered them. Read the
+      // current layer, not the initial empty layers closure, when persisting.
+      const layer = useDesignStore.getState().layers.find((l) => l.id === layerId)
       if (!layer) return
 
       if (layer.type === "text" && fabricObj instanceof fabric.Text) {
@@ -467,7 +480,7 @@ export function DesignCanvas2D() {
 
         applyTextPropertiesToFabric(fabricObj as fabric.Text, props, layer.opacity)
       } else if (layer.type === "image" && layer.imageProperties) {
-        fabric.Image.fromURL(layer.imageProperties.src, (img) => {
+        fabric.Image.fromURL(layer.imageProperties.src).then((img) => {
           img.set({
             left: layer.position.x,
             top: layer.position.y,
@@ -491,6 +504,8 @@ export function DesignCanvas2D() {
             fabricCanvasRef.current?.add(img)
           }
           fabricCanvasRef.current?.renderAll()
+        }).catch((error) => {
+          console.warn("Could not load editor image", error)
         })
         return
     } else if (layer.type === "shape" && layer.shapeProperties) {
@@ -631,6 +646,16 @@ export function DesignCanvas2D() {
   }
 
   const exportDesign = () => {
+    // Shared output boundary (this button is a current-face PNG reference,
+    // not a full-design export): a two-face sheet carrying inside-face
+    // artwork must not produce a file that silently omits that artwork.
+    const storeState = useDesignStore.getState()
+    const unsupported = unsupportedSheetArtwork(storeState.model.faces, storeState.layers, storeState.model.type)
+    if (unsupported) {
+      setExportNotice(language === "ar" ? "التنزيل محظور: راجع تنبيه التصميم أعلاه." : "Download blocked. See the artwork warning above.")
+      return
+    }
+    setExportNotice("")
     if (fabricCanvasRef.current) {
       const dataURL = fabricCanvasRef.current.toDataURL({
         format: "png",
@@ -819,8 +844,8 @@ export function DesignCanvas2D() {
   return (
     <div className="relative w-full h-full flex flex-col bg-white">
       {/* 2D Canvas Toolbar */}
-      <div className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between">
-        <div className="flex items-center gap-2 bg-white/95 backdrop-blur-sm rounded-lg border p-2">
+      <div className="relative z-10 w-full min-w-0 shrink-0 p-2">
+        <div className="flex max-w-full min-w-0 items-center gap-2 overflow-x-auto bg-white/95 backdrop-blur-sm rounded-lg border p-2 [&>button]:shrink-0">
           <Button size="sm" variant="outline" onClick={() => handleZoom(0.1)}>
             <ZoomIn className="h-4 w-4" />
           </Button>
@@ -837,15 +862,18 @@ export function DesignCanvas2D() {
             <Magnet className="h-4 w-4" />
           </Button>
           <ZoneSettings />
-          <Button size="sm" variant="outline" onClick={exportDesign} title={language === "ar" ? "تحميل" : "Download"}>
+          <Button size="sm" variant="outline" onClick={exportDesign} title={language === "ar" ? "تنزيل الوجه الحالي (مرجع PNG)" : "Download current face (PNG reference)"}>
             <Download className="h-4 w-4" />
           </Button>
+
         </div>
+        {exportNotice && <p role="alert" className="bg-white px-2 py-1 text-xs text-red-700">{exportNotice}</p>}
       </div>
 
       {/* 2D Canvas */}
-      <div className="flex-1 flex items-center justify-center bg-slate-50 overflow-auto p-8">
-        <div className="relative" style={{ padding: showBleed ? "12px" : 0 }}>
+      <div ref={viewportRef} data-sheet-viewport className="min-h-0 min-w-0 flex-1 flex items-center justify-center bg-slate-50 overflow-auto p-8">
+        <div dir={loyaltySheet?"ltr":undefined} style={loyaltySheet?{width:(canvasState.width+(showBleed?24:0))*sheetScale,height:(canvasState.height+(showBleed?24:0))*sheetScale,flexShrink:0}:undefined}>
+        <div data-sheet-surface className="relative" style={{ padding: showBleed ? "12px" : 0,...(loyaltySheet?{width:canvasState.width+(showBleed?24:0),transform:`scale(${sheetScale})`,transformOrigin:"top left"}: {}) }}>
           {/* Zone Overlays */}
           <ZoneOverlays
             canvasWidth={canvasState.width}
@@ -855,19 +883,23 @@ export function DesignCanvas2D() {
             showBleed={showBleed}
             showSafeZone={showSafeZone}
           />
-          {gridVisible && (
-            <div
-              className="absolute inset-0 pointer-events-none opacity-20 z-0"
-              style={{
-                backgroundImage: `
-                  linear-gradient(to right, #94a3b8 1px, transparent 1px),
-                  linear-gradient(to bottom, #94a3b8 1px, transparent 1px)
-                `,
-                backgroundSize: "20px 20px",
-              }}
-            />
-          )}
-          <canvas ref={canvasRef} className="shadow-xl border border-slate-300 bg-white relative z-0" />
+          {/* Grid overlay: always mounted, visibility toggled via display.
+              Fabric wraps <canvas> in its own container on init, so React
+              inserting/removing this div (with the canvas as anchor) crashes
+              with insertBefore NotFoundError. */}
+          <div
+            className="absolute inset-0 pointer-events-none opacity-20 z-0"
+            style={{
+              display: gridVisible ? "block" : "none",
+              backgroundImage: `
+                linear-gradient(to right, #94a3b8 1px, transparent 1px),
+                linear-gradient(to bottom, #94a3b8 1px, transparent 1px)
+              `,
+              backgroundSize: "20px 20px",
+            }}
+          />
+          <canvas ref={canvasRef} className="shadow-xl border border-slate-300 relative z-0" />
+        </div>
         </div>
       </div>
     </div>

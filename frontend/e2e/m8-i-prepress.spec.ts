@@ -1,3 +1,6 @@
+import {readFileSync} from 'node:fs'
+import {createHash} from 'node:crypto'
+import {approvalContentHash} from '../../backend/src/modules/orders/approval-snapshot'
 import { test, expect } from "@playwright/test"
 import http from "node:http"
 import path from "node:path"
@@ -18,14 +21,15 @@ const require_ = createRequire(path.join(backendDir, "noop.js"))
  *      row (idempotent parity).
  *   C  Raw-SQL read-back proves the row leaked nowhere and carries the
  *      proof-time auto-fix (sub-bleed edge → extend_to_bleed).
- *   D  Proof DesignFile read-back — gated on object storage (S3_ENDPOINT):
- *      where R2/MinIO is configured, request-approval generates a PDF proof
+ *   D  Proof DesignFile read-back using local test storage:
+ *      an explicit admin request generates a bound PDF proof
  *      and registers a DesignFile of fileType 'proof' for the order's design.
  */
 test.describe.serial("M8-I Prepress certification (real Postgres)", () => {
   let orderId = ""
   let designId = ""
   let sessionId = ""
+  let ownerToken = ""
   let server: http.Server
   let jpegUrl = ""
   let previewUrl = ""
@@ -110,6 +114,7 @@ test.describe.serial("M8-I Prepress certification (real Postgres)", () => {
       [crypto.randomUUID(), email]
     ) as { id: string }
     userIds.push(userId)
+    ownerToken=require_('jsonwebtoken').sign({userId,email,role:'CUSTOMER',type:'access'},process.env.JWT_SECRET,{issuer:'packagepro-auth',audience:'packagepro-api',subject:userId,expiresIn:'15m'});
     const { id: customerId } = await dbSingle<{ id: string }>(
       `INSERT INTO "customers" ("id", "userId", "createdAt", "updatedAt") VALUES ($1, $2, now(), now()) RETURNING "id"`,
       [crypto.randomUUID(), userId]
@@ -142,6 +147,10 @@ test.describe.serial("M8-I Prepress certification (real Postgres)", () => {
     }
   })
 
+  test.beforeEach(async({page})=>{
+    // Retired analytics transport is unrelated to this storage/approval test.
+    await page.addInitScript(()=>{const original=window.fetch;window.fetch=(input,init)=>new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.origin).pathname==='/api/packagepro/analytics/batch'?Promise.resolve(new Response(null,{status:204})):original.call(window,input,init)})
+  })
   test.afterAll(async () => {
     try {
       server?.close()
@@ -154,6 +163,7 @@ test.describe.serial("M8-I Prepress certification (real Postgres)", () => {
 
   test("A/B/C — authoritative check over HTTP, results parity, raw-SQL read-back", async ({ page }) => {
     await loginViaApi(page)
+    await page.evaluate(token=>localStorage.setItem("accessToken",token),ownerToken)
     const qa = attachQaListeners(page)
 
     const check = await page.evaluate(
@@ -219,12 +229,18 @@ test.describe.serial("M8-I Prepress certification (real Postgres)", () => {
     assertNoCriticalErrors(qa)
   })
 
-  test("D — proof DesignFile read-back (requires object storage)", async ({ page }) => {
-    test.skip(!process.env.S3_ENDPOINT, "S3/R2/MinIO not configured — proof upload cannot run here")
+  test("D — selected current proof DesignFile read-back in local test storage", async ({ page }) => {
+
     await loginViaApi(page)
 
+    // Test-only admin fixture, real HTTP role gate, no production storage/provider.
+    const {randomUUID}=require_('crypto');const adminId=randomUUID();userIds.push(adminId);
+    await dbQuery(`INSERT INTO users(id,email,"passwordHash",role,"emailVerified","createdAt","updatedAt") VALUES($1,$2,'unused','ADMIN',true,now(),now())`,[adminId,`m8i-admin-${adminId}@test.local`]);
+    const jwt=require_('jsonwebtoken');const adminToken=jwt.sign({userId:adminId,email:`m8i-admin-${adminId}@test.local`,role:'ADMIN',type:'access'},process.env.JWT_SECRET,{issuer:'packagepro-auth',audience:'packagepro-api',subject:adminId,expiresIn:'15m'});
+    const design=await dbSingle<any>('SELECT * FROM designs WHERE id=$1',[designId]);const hash=approvalContentHash(design);
+    const file=await dbSingle<any>(`SELECT id FROM design_files WHERE "designId"=$1 AND "fileType"='print_file'`,[designId]);await dbQuery('UPDATE design_files SET metadata=$1::jsonb WHERE id=$2',[JSON.stringify({approvalContentHash:hash}),file!.id]);
     const res = await page.request.post(`${BACKEND}/orders/${orderId}/request-approval`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` },
+      headers: { Authorization: `Bearer ${adminToken}` },data:{printFileId:file!.id,dielineFileId:null},
     })
     expect(res.ok()).toBe(true)
 
@@ -233,6 +249,10 @@ test.describe.serial("M8-I Prepress certification (real Postgres)", () => {
       [designId]
     )
     expect(proofs.length).toBeGreaterThanOrEqual(1)
-    expect(proofs[0].fileUrl).toContain("/proofs/")
+    expect(proofs[0].fileUrl).toContain("/approval-snapshots/")
+    const request=await dbSingle<any>(`SELECT * FROM approval_requests WHERE "orderId"=$1`,[orderId]);expect(request.proofUrl).toBe(proofs[0].fileUrl);const selected=await dbSingle<any>('SELECT "fileUrl" FROM design_files WHERE id=$1',[file!.id]);
+    const selectedResponse=await page.request.get(selected!.fileUrl);expect(selectedResponse.status()).toBe(200);const selectedBytes=await selectedResponse.body();
+    expect(request.printSha256).toBe(createHash('sha256').update(selectedBytes).digest('hex'));
+    const frozenPath=path.join(backendDir,'.data/uploads',request.printSnapshotUrl.replace('/api/files/',''));expect(readFileSync(frozenPath)).toEqual(selectedBytes)
   })
 })

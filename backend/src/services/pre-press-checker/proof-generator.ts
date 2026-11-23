@@ -13,10 +13,9 @@
 // The endpoint contract (ProofResult / upload / DesignFile record / approval
 // token) is unchanged.
 
+import {verifyApprovalToken} from './approval-tokens';
 import { prisma } from '../../lib/prisma';
-import { NotFoundError } from '../../utils/errors';
-import { fileUploadService } from '../file-upload/upload.service';
-import axios from 'axios';
+import { AppError } from '../../utils/errors';
 import {
   PDFDocument,
   StandardFonts,
@@ -27,6 +26,7 @@ import {
 } from 'pdf-lib';
 import sharp from 'sharp';
 import { detectFileKind } from './validators/file-kind';
+import { deriveUnsupportedArtwork, unsupportedArtworkOutputMessage } from './unsupported-artwork';
 
 export interface ProofResult {
   proofUrl: string;
@@ -43,6 +43,8 @@ export interface ProofManifestInput {
   faces?: Record<string, ProofFace>;
   prepress?: { bleedMm?: number; safeMm?: number; dpiMin?: number };
   dieline?: unknown;
+  /** Set on two-face sheet designs carrying unsupported inside-face artwork. */
+  unsupportedArtwork?: { faces?: string[]; layerCount?: number; product?: 'stand_up_pouch' };
 }
 
 const A4_W = 595.28;
@@ -58,13 +60,17 @@ interface DielinePathLike {
   points?: Array<{ x: number; y: number }>;
 }
 
-function readManifest(designData: unknown): ProofManifestInput {
+export function readManifest(designData: unknown): ProofManifestInput {
   const d = (designData ?? {}) as any;
   const manifest = d?.manifest ?? {};
   return {
     faces: manifest?.faces ?? {},
     prepress: manifest?.prepress ?? undefined,
     dieline: manifest?.dieline ?? undefined,
+    // Derived from the saved layers and structure at this output boundary
+    // (deriveUnsupportedArtwork) — the optional manifest flag alone is
+    // never trusted, so a design whose flag was stripped still refuses.
+    unsupportedArtwork: deriveUnsupportedArtwork(d),
   };
 }
 
@@ -87,6 +93,15 @@ export async function composeProofPdf(
 
   const { kind } = detectFileKind(sourceBuffer);
   const manifest = meta.manifest ?? readManifest(undefined);
+  // Never emit a proof that looks complete for a design carrying artwork
+  // its product cannot represent (inside-face artwork on a two-face card).
+  // The artwork stays in the design data; the proof is refused, with the
+  // reason, until the user moves or removes that artwork and re-saves.
+  if (manifest.unsupportedArtwork) {
+    throw new Error(
+      `Proof blocked: ${unsupportedArtworkOutputMessage({ faces: manifest.unsupportedArtwork.faces ?? [], layerCount: manifest.unsupportedArtwork.layerCount ?? 0, product: manifest.unsupportedArtwork.product })}`
+    );
+  }
   const faces = manifest.faces ?? {};
   const bleedMm = manifest.prepress?.bleedMm ?? DEFAULT_BLEED_MM;
   const safeMm = manifest.prepress?.safeMm ?? DEFAULT_SAFE_MM;
@@ -477,133 +492,17 @@ async function addArtworkSection(
 }
 
 export class ProofGeneratorService {
-  async generateProof(orderId: string): Promise<ProofResult> {
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      include: {
-        design: {
-          include: {
-            files: true,
-          },
-        },
-        items: true,
-        customer: {
-          include: {
-            user: true,
-          },
-        },
-      },
-    });
-
-    if (!order || !order.design) {
-      throw new NotFoundError('Order or design not found');
-    }
-
-    const printFile = order.design.files.find((f) => f.fileType === 'print_file');
-    if (!printFile) {
-      throw new NotFoundError('Print file not found');
-    }
-
-    const response = await axios.get(printFile.fileUrl, {
-      responseType: 'arraybuffer',
-    });
-    const fileBuffer = Buffer.from(response.data);
-
-    const proofBuffer = await composeProofPdf(fileBuffer, {
-      orderNumber: order.orderNumber,
-      items: order.items.map((it) => ({ description: it.productType, quantity: it.quantity })),
-      manifest: readManifest(order.design.designData),
-    });
-
-    const proofUpload = await fileUploadService.uploadFile(
-      proofBuffer,
-      `proof-${order.orderNumber}.pdf`,
-      'application/pdf',
-      `proofs/${orderId}`
-    );
-
-    await prisma.designFile.create({
-      data: {
-        designId: order.design.id,
-        fileType: 'proof',
-        fileName: proofUpload.fileName,
-        fileUrl: proofUpload.fileUrl,
-        fileSize: proofUpload.fileSize,
-        mimeType: proofUpload.mimeType,
-      },
-    });
-
-    const approvalToken = this.generateApprovalToken(orderId);
-
-    const redis = require('../../lib/redis').getRedisClient();
-    if (redis) {
-      try {
-        await redis.setex(
-          `approval:token:${approvalToken}`,
-          7 * 24 * 60 * 60,
-          JSON.stringify({
-            orderId,
-            createdAt: new Date().toISOString(),
-          })
-        );
-      } catch (error) {
-        // Redis not available - continue without it
-      }
-    }
-
-    return {
-      proofUrl: proofUpload.fileUrl,
-      approvalToken,
-    };
+  // Proof generation with capability minting belongs solely to ApprovalService.
+  async generateProof(_orderId: string): Promise<ProofResult> {
+    throw new AppError(409, 'Use an admin snapshot-bound approval request');
   }
-
-  private generateApprovalToken(_orderId: string): string {
-    const crypto = require('crypto');
-    return crypto.randomBytes(32).toString('hex');
-  }
-
-  async getProof(orderId: string): Promise<ProofResult | null> {
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      include: {
-        design: {
-          include: {
-            files: {
-              where: { fileType: 'proof' },
-            },
-          },
-        },
-      },
-    });
-
-    if (!order || !order.design || order.design.files.length === 0) {
-      return null;
-    }
-
-    const proofFile = order.design.files[0];
-    const approvalToken = this.generateApprovalToken(orderId);
-
-    return {
-      proofUrl: proofFile.fileUrl,
-      approvalToken,
-    };
+  async getProof(orderId: string): Promise<{proofUrl:string}|null> {
+    const request=await prisma.approvalRequest.findFirst({where:{orderId,status:{in:['pending','approved']}},orderBy:{createdAt:'desc'}});
+    return request?.proofUrl ? {proofUrl:request.proofUrl}:null;
   }
 
   async verifyApprovalToken(token: string): Promise<{ orderId: string } | null> {
-    const redis = require('../../lib/redis').getRedisClient();
-    if (!redis) {
-      return null;
-    }
-
-    try {
-      const data = await redis.get(`approval:token:${token}`);
-      if (!data) {
-        return null;
-      }
-      return JSON.parse(data);
-    } catch (error) {
-      return null;
-    }
+    return verifyApprovalToken(token);
   }
 }
 

@@ -54,11 +54,13 @@ vi.mock('stripe', async (importOriginal) => {
 
 // Controllable, Stripe-authoritative PaymentIntent state per test.
 function retrieveReturns(status: string): void {
-  stripeMock.retrieveImpl = (piId: string) => ({
+  stripeMock.retrieveImpl = async (piId: string) => ({
     id: piId,
     object: 'payment_intent',
     status,
     amount: 2000,
+    amount_received: status === 'succeeded' ? 2000 : 0,
+    metadata: { orderId: (await prisma.payment.findUnique({ where: { stripePaymentIntentId: piId } }))?.orderId },
     currency: 'usd',
   });
 }

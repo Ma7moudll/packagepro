@@ -191,7 +191,7 @@ export default function DashboardPage() {
                         )}
                       </td>
                       <td className="py-3 px-4 text-sm text-right font-medium">
-                        {order.total.toFixed(2)} SAR
+                        {order.total.toFixed(2)} EGP
                       </td>
                       <td className="py-3 px-4 text-right">
                         <Link href={`/orders/${order.id}`}>

@@ -38,11 +38,11 @@ export function CustomerSidebar() {
 
   return (
     <aside className={cn(
-      "w-64 bg-white border-l border-gray-200 flex flex-col h-screen sticky top-0",
+      "w-full shrink-0 bg-white border-gray-200 flex flex-col md:w-64 md:h-screen md:sticky md:top-0",
       isRTL ? "border-l" : "border-r"
     )}>
       {/* Logo */}
-      <div className="p-6 border-b border-gray-200">
+      <div className="p-4 md:p-6 border-b border-gray-200">
         <div className="flex items-center justify-between gap-2">
           <Link href="/dashboard" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
@@ -56,14 +56,14 @@ export function CustomerSidebar() {
 
       {/* User Info */}
       {user && (
-        <div className="px-6 py-4 border-b border-gray-100">
+        <div className="hidden md:block px-6 py-4 border-b border-gray-100">
           <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
           <p className="text-xs text-gray-500 truncate">{user.email}</p>
         </div>
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
+      <nav aria-label={language === "ar" ? "حساب العميل" : "Customer account"} className="grid grid-cols-2 gap-1 p-2 md:block md:flex-1 md:p-4 md:space-y-1">
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
           return (
@@ -78,7 +78,7 @@ export function CustomerSidebar() {
               )}
             >
               <item.icon className={cn("h-4 w-4", isActive ? "text-emerald-600" : "text-gray-400")} />
-              <span className="flex-1">{language === "ar" ? item.labelAr : item.labelEn}</span>
+              <span className="min-w-0 flex-1">{language === "ar" ? item.labelAr : item.labelEn}</span>
               {isActive && <ChevronRight className={cn("h-4 w-4", isRTL && "rotate-180")} />}
             </Link>
           )
@@ -86,7 +86,7 @@ export function CustomerSidebar() {
       </nav>
 
       {/* Logout */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-2 md:p-4 border-t border-gray-200">
         <Button
           variant="ghost"
           className="w-full justify-start text-gray-600 hover:text-red-600 hover:bg-red-50"

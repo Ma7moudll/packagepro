@@ -1,20 +1,20 @@
-## Architecture — Service Structure (NestJS + Next.js + Three.js)
+## Architecture — Service Structure (Fastify + Next.js + Three.js)
 
 ### Purpose
-This file explains **how the system components are divided** and how they communicate: Backend (NestJS) + Frontend (Next.js) + 3D Layer (Three.js via React Three Fiber) + texture generation and product data services.
+This file explains **how the system components are divided** and how they communicate: Backend (Fastify) + Frontend (Next.js) + 3D Layer (Three.js via React Three Fiber) + texture generation and product data services.
 
 ---
 
 ## 1) Monorepo Overview
 
-- **`backend/` (NestJS)**: API + Business logic + Integrations + Jobs/Workers.
+- **`backend/` (Fastify)**: API + Business logic + Integrations + Jobs/Workers.
 - **`frontend/` (Next.js)**: User interface + 2D/3D Design editor + Product display + State management.
 - **`shared/`**: Shared Types/definitions between frontend and backend as needed.
 - **`docs/`**: Additional documentation (already exists).
 
 ---
 
-## 2) Backend (NestJS) — Layers and Services
+## 2) Backend (Fastify) — Layers and Services
 
 ### General Structure (based on existing code)
 Inside `backend/src/` you will typically find:
@@ -27,7 +27,7 @@ Inside `backend/src/` you will typically find:
 - **`utils/` / `lib/`**: Helpers and Utilities.
 
 ### Request Flow Model
-Client (Next.js) → API (NestJS Controller) → Service (Business Logic) → DB/Prisma/Integrations → Response
+Client (Next.js) → API (Fastify route + controller) → Service (Business Logic) → DB/Prisma/Integrations → Response
 
 ### Key Rules
 - **Controller**: Thin (Validation + call service).

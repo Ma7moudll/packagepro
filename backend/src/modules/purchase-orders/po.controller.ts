@@ -26,7 +26,7 @@ export class POController {
   async getPO(request: FastifyRequest, reply: FastifyReply) {
     await authenticate(request, reply);
     const poId = (request.params as { id: string }).id;
-    const po = await poService.getPO(poId);
+    const po = await poService.getPO(poId, (request as AuthenticatedRequest).user);
 
     return reply.send({
       success: true,

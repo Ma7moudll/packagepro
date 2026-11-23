@@ -9,6 +9,7 @@ import {
   Dimensions,
   PricingBreakdown,
   MaterialCost,
+  getConfiguredTaxRate,
 } from './calculations';
 
 export interface PricingRequest {
@@ -28,6 +29,9 @@ export interface PricingResponse {
     code: string;
     name: string;
     unitPrice: number;
+    /** ISO currency of the material rate card; lets clients label the price
+     *  instead of hardcoding one. */
+    currency: string;
   };
   productType: string;
   quantity: number;
@@ -134,6 +138,11 @@ export class PricingService {
     const rules = await prisma.pricingRule.findMany({
       where: {
         productType,
+        // Generic callers have no product/variant identity. Never let a newer
+        // scoped conversion/discount rule shadow the global margin rule.
+        scope: 'productType',
+        scopeId: null,
+        ruleType: 'margin',
         isActive: true,
         validFrom: { lte: new Date() },
         OR: [
@@ -199,6 +208,10 @@ export class PricingService {
       material = materials[0];
     }
 
+    if (material.currency !== 'EGP') {
+      throw new ValidationError('Material rate card is not EGP. Review and run the explicit EGP pricing bootstrap before quoting.');
+    }
+
     // Get margin from pricing rules
     const marginPercent = await this.getPricingRule(
       request.productType,
@@ -213,7 +226,7 @@ export class PricingService {
       material,
       marginPercent,
       request.complexity || 'medium',
-      request.taxRate || 0.0,
+      request.taxRate ?? getConfiguredTaxRate(),
       request.weightPerUnit
     );
 
@@ -224,6 +237,7 @@ export class PricingService {
         code: material.code,
         name: material.name,
         unitPrice: material.unitPrice,
+        currency: material.currency,
       },
       productType: request.productType,
       quantity: request.quantity,
@@ -339,6 +353,7 @@ export class PricingService {
     if (!product.isActive) {
       throw new ValidationError(`Product "${product.name}" is not available`);
     }
+    if(product.editorDefaults?.readiness?.pricing==='quote_required')throw new ValidationError('QUOTE_REQUIRED: No product-specific rates exist for this product');
     if (request.quantity < product.moq) {
       throw new ValidationError(
         `Minimum order quantity for "${product.name}" is ${product.moq}`
@@ -491,6 +506,9 @@ export class PricingService {
     // 8. Unit economics
     const productType = product.productType as 'box' | 'bag' | 'label';
     const surfaceArea = calculateSurfaceArea(dimensions, productType);
+    if (material.currency !== 'EGP') {
+      throw new ValidationError('Material rate card is not EGP. Review and run the explicit EGP pricing bootstrap before quoting.');
+    }
     const materialCostPerUnit = surfaceArea * material.unitPrice;
 
     // Option upcharges (per_unit adds flat; percent scales material cost; fixed amortizes)
@@ -541,7 +559,7 @@ export class PricingService {
     const discountApplied = rawUnitCost * quantity * (1 - discountFactor);
     const marginAmount = lineCost * margin;
     const subtotal = lineCost + marginAmount;
-    const tax = calculateTax(subtotal, request.taxRate ?? 0);
+    const tax = calculateTax(subtotal, request.taxRate ?? getConfiguredTaxRate());
     const shippingEstimate = estimateShippingCost(
       dimensions,
       quantity,

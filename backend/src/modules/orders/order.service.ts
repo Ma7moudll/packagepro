@@ -1,3 +1,5 @@
+import {approvalContentHash} from './approval-snapshot';
+import { assertSpecificationPriced } from "../../utils/production-specification";
 import { prisma } from '../../lib/prisma';
 import {
   AuthorizationError,
@@ -13,6 +15,9 @@ import {
   assertAllowedOrderStatusTransition,
 } from './order-status-transitions';
 import { randomUUID } from 'crypto';
+
+const round2 = (value: number): number => Math.round(value * 100) / 100;
+const ORDER_PRICING_CONTRACT = 'tax-exclusive-v1';
 
 /**
  * Map Prisma Payment.status → shared PaymentStatus union the FE renders.
@@ -37,11 +42,16 @@ export function serializeOrder<T extends Record<string, any>>(order: T): T {
   const rawPaymentStatus = order.payment?.status as string | undefined;
   return {
     ...order,
+    currentApprovalRequest: (()=>{
+      const r=order.approvalRequests?.[0];
+      return r ? {id:r.id,status:r.status,contentHash:r.contentHash,proofFileId:r.proofFileId,proofUrl:r.proofUrl,expiresAt:r.expiresAt,deliveryState:r.deliveryState,current:!!order.design&&approvalContentHash(order.design)===r.contentHash} : null;
+    })(),
+    approvalRequests: undefined,
     paymentStatus: rawPaymentStatus
       ? (PAYMENT_STATUS_MAP[rawPaymentStatus] ?? rawPaymentStatus)
       : 'pending',
     paymentMethod: 'stripe',
-    currency: order.payment?.currency || 'USD',
+    currency: order.payment?.currency || 'EGP',
     shipping: order.shippingCost ?? 0,
     trackingNumber:
       order.shipment?.dhlTrackingNumber ??
@@ -127,6 +137,17 @@ export class OrderService {
     // productType lines fall back to the legacy heuristic.
     const orderItems = await Promise.all(
       data.items.map(async (item) => {
+        // Check every design reference, including the order-level session.
+        // An explicit item ID must not hide an unpriced order-level design.
+        const references = [
+          ...(item.designId ? [{id: item.designId}] : []),
+          ...Array.from(new Set([item.sessionId, data.designSessionId].filter(Boolean))).map(sessionId => ({sessionId})),
+        ];
+        for (const where of references) {
+          const design = await prisma.design.findUnique({where, select: {designData: true}});
+          if (!design) throw new NotFoundError('Design');
+          assertSpecificationPriced(design.designData);
+        }
         const isCatalog = Boolean(item.variantId) && Boolean(item.productId);
         const pricing = isCatalog
           ? await pricingService.quoteCatalog({
@@ -143,10 +164,9 @@ export class OrderService {
               materialCode: item.materialCode,
             });
 
-        // Line total EXCLUDES shipping; shipping is aggregated separately so
-        // it is not double-counted in the order total.
-        const lineTotal =
-          pricing.breakdown.subtotal + pricing.breakdown.tax;
+        // New-order line amounts exclude tax and shipping, like the cart.
+        // The quote subtotal already includes its discounts and adjustments.
+        const lineTotal = round2(pricing.breakdown.subtotal);
 
         return {
           productType: item.productType,
@@ -155,7 +175,7 @@ export class OrderService {
           material: item.materialCode,
           color: item.color,
           finish: item.finish,
-          unitPrice: lineTotal / item.quantity,
+          unitPrice: round2(lineTotal / item.quantity),
           totalPrice: lineTotal,
           tax: pricing.breakdown.tax,
           shippingEstimate: pricing.breakdown.shippingEstimate,
@@ -171,13 +191,13 @@ export class OrderService {
     );
 
     // Calculate totals
-    const subtotal = orderItems.reduce((sum, item) => sum + item.totalPrice, 0);
-    const tax = orderItems.reduce((sum, item) => sum + item.tax, 0);
-    const shippingCost = orderItems.reduce(
+    const subtotal = round2(orderItems.reduce((sum, item) => sum + item.totalPrice, 0));
+    const tax = round2(orderItems.reduce((sum, item) => sum + item.tax, 0));
+    const shippingCost = round2(orderItems.reduce(
       (sum, item) => sum + item.shippingEstimate,
       0
-    );
-    const total = subtotal + tax + shippingCost;
+    ));
+    const total = round2(subtotal + tax + shippingCost);
 
     // 4c: persist the per-group shipping split (one group per productType,
     // the same grouping multi-vendor POs use) so order views can show
@@ -206,7 +226,12 @@ export class OrderService {
         notes: data.notes,
         // 4c: stored under metadata; approval.service spreads-and-extends
         // this object, so the breakdown survives the approval transition.
-        metadata: { shippingBreakdown },
+        metadata: {
+          shippingBreakdown,
+          // Prospective convention only. Unmarked historical orders are not
+          // reinterpreted, repriced or migrated by this write-time correction.
+          pricingContract: ORDER_PRICING_CONTRACT,
+        },
         items: {
           create: orderItems.map((item) => ({
             productType: item.productType,
@@ -259,7 +284,7 @@ export class OrderService {
     // Link design if session ID provided
     if (data.designSessionId) {
       await prisma.design.updateMany({
-        where: { sessionId: data.designSessionId },
+        where: { sessionId: data.designSessionId, orderId:null, ownerId: customer.userId, lifecycleStatus:'DRAFT' },
         data: { orderId: order.id },
       });
     }
@@ -274,6 +299,7 @@ export class OrderService {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
+        approvalRequests: {orderBy:{createdAt:'desc'},take:1},
         items: true,
         design: {
           include: {

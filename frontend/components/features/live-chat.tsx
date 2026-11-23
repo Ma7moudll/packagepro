@@ -1,5 +1,6 @@
 "use client"
 
+import { usePathname } from "next/navigation"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,6 +9,8 @@ import { MessageCircle, X, Send, Phone, Mail } from "lucide-react"
 import { useLanguage } from "@/providers/language-provider"
 
 export function LiveChat() {
+  const pathname = usePathname()
+  const editor = pathname === "/editor" || pathname.startsWith("/editor/")
   const [isOpen, setIsOpen] = useState(false)
   const [message, setMessage] = useState("")
   const [messages, setMessages] = useState<Array<{ text: string; sender: "user" | "agent"; time: string }>>([])
@@ -42,7 +45,8 @@ export function LiveChat() {
     return (
       <Button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-4 right-4 z-50 rounded-full w-14 h-14 shadow-lg"
+        aria-label={isRTL ? "فتح الدعم" : "Open support"}
+        className={`fixed ${editor ? "bottom-16 lg:right-80" : "bottom-4"} right-4 z-40 rounded-full w-14 h-14 shadow-lg`}
         size="icon"
       >
         <MessageCircle className="h-6 w-6" />
