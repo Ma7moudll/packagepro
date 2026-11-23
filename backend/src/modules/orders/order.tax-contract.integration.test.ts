@@ -1,7 +1,7 @@
 // Synthetic fixtures in the isolated test database only. No checkout/provider,
 // real PO, payout, commercial rate or historical-order migration is exercised.
 import {afterAll,beforeAll,beforeEach,describe,expect,it,vi} from 'vitest';
-import {inflateSync} from 'node:zlib';
+import {invoicePdfText} from './invoice-pdf.test-helper';
 import {writeFile} from 'node:fs/promises';
 import {prisma} from '../../lib/prisma';
 
@@ -25,16 +25,6 @@ function item(quantity=2,catalog=false,productType:'box'|'bag'='box'){
 async function create(items:any[]){return orderService.createOrder({customerId,items,shippingAddress:address});}
 async function stored(id:string){return prisma.order.findUniqueOrThrow({where:{id},include:{items:true,payment:true,purchaseOrders:true}});}
 function amounts(order:any){return {subtotal:Number(order.subtotal),tax:Number(order.tax),shipping:Number(order.shippingCost),total:Number(order.total)};}
-function pdfText(pdf:Buffer):string{
- const raw=pdf.toString('latin1');let text='';
- for(const match of raw.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)){
-  try{
-   const content=inflateSync(Buffer.from(match[1],'latin1')).toString('latin1');
-   for(const hex of content.matchAll(/<([a-fA-F0-9]+)>/g))text+=Buffer.from(hex[1],'hex').toString('latin1');
-  }catch{/* Non-deflated non-text streams are not money evidence. */}
- }
- return text;
-}
 
 beforeAll(async()=>{
  const url=new URL(process.env.DATABASE_URL||'');
@@ -79,7 +69,7 @@ describe('prospective order tax persistence and consumers',()=>{
  });
  it('projects stored invoice amounts without adding tax or reconstructing line totals',async()=>{
   const created=await create([item()]);const invoice=await invoiceService.getOrderForCustomer(created.id,userId);
-  const pdf=await invoiceService.generateInvoice(invoice);const text=pdfText(pdf);
+  const pdf=await invoiceService.generateInvoice(invoice);const text=await invoicePdfText(pdf);
   expect(pdf.subarray(0,4).toString()).toBe('%PDF');
   for(const expected of ['EGP 100.00','Subtotal: EGP 100.00','Tax: EGP 10.00','Shipping: EGP 5.00','Total: EGP 115.00'])expect(text).toContain(expected);
   expect(text).not.toContain('EGP 125.00');
