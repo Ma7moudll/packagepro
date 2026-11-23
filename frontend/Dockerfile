@@ -27,6 +27,9 @@ COPY backend/src/modules/catalog/loyalty-preview.ts /app/backend/src/modules/cat
 # Pure stand-up-pouch artwork surface safety contract.
 COPY backend/src/modules/catalog/pouch-preview-contract.ts /app/backend/src/modules/catalog/pouch-preview-contract.ts
 
+# Pure frosted ziplock artwork surface safety contract.
+COPY backend/src/modules/catalog/ziplock-preview.ts /app/backend/src/modules/catalog/ziplock-preview.ts
+
 # Set build-time environment variables
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3000}
