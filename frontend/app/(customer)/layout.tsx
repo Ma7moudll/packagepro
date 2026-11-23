@@ -3,9 +3,9 @@ import { CustomerSidebar } from "@/components/customer/sidebar"
 
 export default function CustomerLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50 md:flex-row">
       <CustomerSidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="min-w-0 flex-1">
         {children}
       </main>
     </div>

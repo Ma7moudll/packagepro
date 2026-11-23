@@ -138,6 +138,11 @@ export class PricingService {
     const rules = await prisma.pricingRule.findMany({
       where: {
         productType,
+        // Generic callers have no product/variant identity. Never let a newer
+        // scoped conversion/discount rule shadow the global margin rule.
+        scope: 'productType',
+        scopeId: null,
+        ruleType: 'margin',
         isActive: true,
         validFrom: { lte: new Date() },
         OR: [

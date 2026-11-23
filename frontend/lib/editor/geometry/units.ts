@@ -55,3 +55,29 @@ export const facePanel = (
       return { w: dims.length, h: dims.height }
   }
 }
+
+/**
+ * A product whose printable face set is the two sides of one flat sheet —
+ * front and back — as seeded for the business card's structure. This is
+ * THE rule shared by print-coverage normalization, the store's canvas
+ * resync, and the saved dieline manifest.
+ *
+ * The rule is coverage-tolerant: inside_front / inside_back entries —
+ * which coverage handling can append to a restored or crafted face list —
+ * do not change what the product is; the sheet's outside faces are still
+ * exactly front and back. Box products never match: their outside face
+ * set is the six box faces, with or without inside coverage faces, and
+ * flat-labelled products on six-face editor defaults do not match either.
+ */
+export const isTwoFaceSheet = (
+  faces: readonly { id: string }[] | undefined
+): boolean => {
+  if (!faces || faces.length === 0) return false
+  const ids = new Set(faces.map((f) => f.id))
+  for (const id of ids) {
+    if (id !== "front" && id !== "back" && id !== "inside_front" && id !== "inside_back") {
+      return false
+    }
+  }
+  return ids.has("front") && ids.has("back")
+}

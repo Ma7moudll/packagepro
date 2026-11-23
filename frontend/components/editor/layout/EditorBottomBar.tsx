@@ -89,7 +89,7 @@ export function EditorBottomBar() {
 
   return (
     <TooltipProvider>
-      <footer className="h-12 bg-white border-t border-slate-200 flex items-center px-3 gap-2">
+      <footer data-editor-bottom-controls className="h-12 min-h-12 w-full min-w-0 shrink-0 overflow-x-auto bg-white border-t border-slate-200 flex items-center px-3 gap-2 [&>div]:shrink-0">
         {/* View Mode */}
         <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg">
           <Tooltip>
@@ -266,7 +266,7 @@ export function EditorBottomBar() {
 
         {/* Face Switcher - Center (not in 3D: faces are picked on the box) */}
         {viewMode !== "3d" && (
-        <div className="flex-1 flex items-center justify-center gap-2">
+        <div className="min-w-max flex-1 flex items-center justify-center gap-2">
           {/* Inside/Outside Toggle */}
           {(model.printCoverage === "inside" || model.printCoverage === "both") && (
             <div className="flex bg-slate-100 p-0.5 rounded-lg">
@@ -300,6 +300,8 @@ export function EditorBottomBar() {
             {currentFaces.map((face) => (
               <Button
                 key={face.id}
+                aria-pressed={selectedFace===face.id}
+                style={model.type==='loyalty_card'?{backgroundColor:selectedFace===face.id?'#0f172a':'#ffffff',color:selectedFace===face.id?'#ffffff':'#475569',border:selectedFace===face.id?'2px solid #0f172a':'2px solid transparent'}:undefined}
                 variant="ghost"
                 size="sm"
                 onClick={() => setSelectedFace(face.id as any)}

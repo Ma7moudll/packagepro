@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useQuery } from "@tanstack/react-query"
@@ -59,6 +59,18 @@ export default function ProductsPage() {
   const [sort, setSort] = useState<"price-asc" | "price-desc" | "name">("price-asc")
 
   const categories = useMemo(() => data ?? [], [data])
+
+  // Honour ?category=<slug> and ?search=<text> links (e.g. from the homepage).
+  // A category is applied only if it matches a real catalogue category slug.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const q = params.get("search")
+    if (q) setSearch(q)
+  }, [])
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("category")
+    if (wanted && categories.some((c) => c.slug === wanted)) setCategory(wanted)
+  }, [categories])
 
   const products = useMemo<FlattenedProduct[]>(() => {
     const flat: FlattenedProduct[] = []

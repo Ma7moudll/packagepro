@@ -1,5 +1,7 @@
 "use client"
 
+import { installSceneCapture, sceneRevision } from "@/lib/editor/services/scene-capture"
+import { assertPreviewLayers, previewFacePlan } from "@/lib/editor/services/preview-export-contract"
 import { BoardStudioEnvironment } from "./BoardStudioEnvironment"
 import {ProductOpeningCamera} from "./ProductOpeningCamera"
 import { Canvas, useThree, useFrame } from "@react-three/fiber"
@@ -244,6 +246,60 @@ function CameraFillLight({ intensity, layer }: { intensity: number; layer?: numb
   )
 }
 
+function SceneCaptureBridge({revision, ready}: {revision: string; ready: boolean}) {
+  const {gl, scene, camera} = useThree()
+  const stableCamera=useRef({matrix:"",frames:0})
+  useFrame(()=>{camera.updateMatrixWorld();const matrix=camera.matrixWorld.elements.join(",")+camera.projectionMatrix.elements.join(",");const previous=stableCamera.current;stableCamera.current={matrix,frames:matrix===previous.matrix?previous.frames+1:0}})
+  useEffect(() => installSceneCapture(async () => {
+    const state = useDesignStore.getState()
+    if (productPreviewCoverage(state.model.type).family !== "mailer") throw new Error("Scene capture currently supports the mailer model only.")
+    if (!ready || sceneRevision(state.model,state.layers,state.canvas,state.ui.boxOpenState) !== revision) throw new Error("Wait for the current artwork to finish rendering.")
+    assertPreviewLayers(state.layers.filter(l => l.visible))
+    previewFacePlan(state.model.dimensions,state.model.faces,72)
+    if (state.canvas.backgroundImage) throw new Error("Scene capture does not support canvas background images.")
+    if(state.layers.some(l => l.visible && !state.model.faces.some(f => f.id === l.faceId))) throw new Error("Artwork refers to a missing face.")
+    await document.fonts.ready
+    await generateTextureFromLayers(state.layers,state.model,{scale:4,strictAssets:true,backgroundColor:state.canvas.backgroundColor})
+    const validated = useDesignStore.getState()
+    if (sceneRevision(validated.model,validated.layers,validated.canvas,validated.ui.boxOpenState) !== revision) throw new Error("The design changed during capture. Capture again.")
+    if (gl.getContext().isContextLost()) throw new Error("The 3D renderer is unavailable. Reopen the editor.")
+    const width=gl.domElement.width, height=gl.domElement.height
+    let surfaces = 0
+    const outlines: THREE.Object3D[] = []
+    scene.traverse(o => {
+      if ((o as any).__m7dFaceOutline && o.visible) outlines.push(o)
+      const mesh = o as THREE.Mesh
+      if (!mesh.isMesh) return
+      if (mesh.userData.faceId) surfaces++
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      if (materials.some(m => m?.userData.artworkReady === false)) throw new Error("Wait for the printed material to finish loading.")
+    })
+    const pose=scene.getObjectByName("mailer-construction")?.userData.openingPose
+    const framing=camera.userData.openingCamera
+    if(!pose || !framing || pose.target!==state.ui.boxOpenState || pose.progress!==pose.target || framing.target!==state.ui.boxOpenState || framing.progress!==framing.target || stableCamera.current.frames<2) throw new Error("Wait for the lid and camera to stop moving before capturing.")
+    if (!surfaces) throw new Error("The product model is not ready.")
+    const element = gl.domElement
+    if (element.width < 16 || element.height < 16 || element.width * element.height > 16000000) throw new Error("The current 3D viewport size cannot be captured.")
+    let blob: Blob
+    try {
+      outlines.forEach(o => {o.visible = false})
+      gl.render(scene,camera)
+      const encoded = element.toDataURL("image/png")
+      if (!encoded.startsWith("data:image/png;base64,")) throw new Error("The scene image could not be encoded.")
+      const bytes=Uint8Array.from(atob(encoded.split(",")[1]),c=>c.charCodeAt(0))
+      if(bytes.length<24) throw new Error("The scene image is empty.")
+      blob=new Blob([bytes],{type:"image/png"})
+    } finally {
+      outlines.forEach(o => {o.visible = true})
+    }
+    const now = useDesignStore.getState()
+    if (sceneRevision(now.model,now.layers,now.canvas,now.ui.boxOpenState) !== revision) throw new Error("The design changed during capture. Capture again.")
+    if(element.width!==width || element.height!==height) throw new Error("The viewport changed during capture. Capture again.")
+    return {blob,url:URL.createObjectURL(blob),width,height,revision}
+  }),[gl,scene,camera,ready,revision])
+  return null
+}
+
 export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
   const model = useDesignStore((s) => s.model)
   const layers = useDesignStore((s) => s.layers)
@@ -277,6 +333,8 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
 
   const reliefMasks = useMemo(() => generateReliefMasks(layers, model), [layers, model])
   const [faceTextures, setFaceTextures] = useState<Record<string, string>>({})
+  const revision = sceneRevision(model,layers,canvas,boxOpenState)
+  const [textureRevision, setTextureRevision] = useState("")
 
   // Generate textures for each face — keyed by the SAME stable Face IDs used on
   // the 3D meshes, so 2D artwork maps deterministically onto picked faces.
@@ -291,6 +349,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         })
         if (active) {
           setFaceTextures(textures)
+          setTextureRevision(revision)
         }
       } catch (error) {
         console.error("Error generating textures:", error)
@@ -302,7 +361,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
     return () => {
       active = false
     }
-  }, [layers, model, canvas.backgroundColor])
+  }, [layers, model, canvas, boxOpenState, revision])
 
   const type = model.type.replace(/_/g, "-")
   const BoxModel = getBoxModel(type)
@@ -364,6 +423,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
         {/* خلفية رمادية فاتحة */}
         <color attach="background" args={["#f8f8f8"]} />
 
+        <SceneCaptureBridge revision={revision} ready={textureRevision === revision} />
         <PickBridge />
         <FaceHighlight selectedFace={selectedFace} />
 
@@ -449,7 +509,7 @@ export function DesignCanvas3D({ productType }: DesignCanvas3DProps) {
           </SpinBox>
         </Suspense>
 
-        <ProductOpeningCamera family={productPreviewCoverage(model.type).family} dimensions={model.dimensions} open={boxOpenState} camDist={camDist}/>
+        <ProductOpeningCamera key={model.type==='menu_card'?'menu-card':'existing'} productType={model.type} family={productPreviewCoverage(model.type).family} dimensions={model.dimensions} open={boxOpenState} camDist={camDist}/>
       </Canvas>
     </div>
   )

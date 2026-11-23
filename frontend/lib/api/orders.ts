@@ -21,8 +21,10 @@ export const ordersApi = {
   updateStatus: (id: string, status: string) =>
     apiPatch<Order>(`/orders/${id}/status`, { status }),
 
-  requestApproval: (id: string) =>
-    apiPost<{ message: string }>(`/orders/${id}/request-approval`),
+  reopenApproval:(id:string,reason:string)=>apiPost<{message:string}>(`/orders/${id}/reopen-approval`,{reason}),
+
+  requestApproval: (id: string, selection: {printFileId:string;dielineFileId:string|null;renew?:boolean}) =>
+    apiPost<{ requestId:string;deliveryState:string;reused:boolean }>(`/orders/${id}/request-approval`, selection),
 
   approve: (id: string, token: string) =>
     apiPost<{ message: string }>(`/orders/${id}/approve`, { token }),

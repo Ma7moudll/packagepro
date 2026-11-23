@@ -1,5 +1,8 @@
 # 📊 Quick Summary - PackagePro Project Review
 
+> Historical document. Claims, completion checklists, architecture versions and test counts below are not current status. Use [current capability boundaries](CURRENT_CAPABILITIES.md) and the exact revision's source/test evidence instead. This report is not a launch or manufacturing approval.
+
+
 **Date:** December 24, 2025
 
 > **Historical document (Dec 24, 2025).** Counts and gaps below are a snapshot and are stale: the repo now has backend and frontend unit tests and Playwright E2E specs under `frontend/e2e`, and the backend has more than 17 modules. Do not use this file as current status.
