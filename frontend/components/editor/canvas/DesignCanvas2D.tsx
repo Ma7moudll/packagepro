@@ -168,7 +168,8 @@ export function DesignCanvas2D() {
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null)
 
   const viewportRef=useRef<HTMLDivElement>(null)
-  const loyaltySheet=useDesignStore(s=>s.model.type==='loyalty_card')
+  // Display-only fit: keep Fabric's logical artwork/export coordinates intact.
+  const fitSheet=useDesignStore(s=>s.model.type==='loyalty_card'||s.model.type==='stand_up_pouch')
   const [sheetScale,setSheetScale]=useState(1)
   const layers = useDesignStore((s) => s.layers)
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds)
@@ -187,10 +188,10 @@ export function DesignCanvas2D() {
   
   useEffect(()=>{
     const viewport=viewportRef.current
-    if(!viewport||!loyaltySheet){setSheetScale(1);return}
+    if(!viewport||!fitSheet){setSheetScale(1);return}
     const fit=()=>setSheetScale(Math.min(1,Math.max(1,viewport.clientWidth-48)/(canvasState.width+24),Math.max(1,viewport.clientHeight-48)/(canvasState.height+24)))
     const observer=new ResizeObserver(fit);observer.observe(viewport);fit();return()=>observer.disconnect()
-  },[loyaltySheet,canvasState.width,canvasState.height])
+  },[fitSheet,canvasState.width,canvasState.height])
 
   // Zone visibility state
   const [showBleed, setShowBleed] = useState(true)
@@ -872,8 +873,8 @@ export function DesignCanvas2D() {
 
       {/* 2D Canvas */}
       <div ref={viewportRef} data-sheet-viewport className="min-h-0 min-w-0 flex-1 flex items-center justify-center bg-slate-50 overflow-auto p-8">
-        <div dir={loyaltySheet?"ltr":undefined} style={loyaltySheet?{width:(canvasState.width+(showBleed?24:0))*sheetScale,height:(canvasState.height+(showBleed?24:0))*sheetScale,flexShrink:0}:undefined}>
-        <div data-sheet-surface className="relative" style={{ padding: showBleed ? "12px" : 0,...(loyaltySheet?{width:canvasState.width+(showBleed?24:0),transform:`scale(${sheetScale})`,transformOrigin:"top left"}: {}) }}>
+        <div dir={fitSheet?"ltr":undefined} style={fitSheet?{width:(canvasState.width+(showBleed?24:0))*sheetScale,height:(canvasState.height+(showBleed?24:0))*sheetScale,flexShrink:0}:undefined}>
+        <div data-sheet-surface className="relative" style={{ padding: showBleed ? "12px" : 0,...(fitSheet?{width:canvasState.width+(showBleed?24:0),transform:`scale(${sheetScale})`,transformOrigin:"top left"}: {}) }}>
           {/* Zone Overlays */}
           <ZoneOverlays
             canvasWidth={canvasState.width}
