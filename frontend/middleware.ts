@@ -13,8 +13,30 @@ import { NextRequest, NextResponse } from 'next/server';
  *  - production: every /api/* request gets 410 Gone (same retirement style as
  *    SEC-03d) unless ENABLE_FRONTEND_MOCK_API=true is set explicitly.
  *  - development: requests pass through so the mock layer keeps working.
+ *
+ * Single exception: GET /api/stats is allowlisted in production. That route
+ * is not mock-backed — it proxies the real backend's GET /api/public/stats
+ * (live database aggregates) and the homepage is its real UI consumer.
+ * The entry is an exact method + exact path match: no prefix matching, so
+ * /api/stats/<anything>, other methods on /api/stats, and every nested
+ * legacy path (e.g. /api/payments/webhook) stay 410 in production.
  */
+const PRODUCTION_ALLOWLIST: ReadonlyArray<{ method: string; pathname: string }> = [
+  { method: 'GET', pathname: '/api/stats' },
+];
+
+function isProductionAllowlisted(request: NextRequest): boolean {
+  return PRODUCTION_ALLOWLIST.some(
+    (entry) =>
+      entry.method === request.method && entry.pathname === request.nextUrl.pathname
+  );
+}
+
 export function middleware(request: NextRequest) {
+  if (isProductionAllowlisted(request)) {
+    return NextResponse.next();
+  }
+
   const mockApiEnabled = process.env.ENABLE_FRONTEND_MOCK_API === 'true';
 
   if (process.env.NODE_ENV === 'production' && !mockApiEnabled) {

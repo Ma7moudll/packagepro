@@ -2,7 +2,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
 import { constants as fsConstants } from 'fs';
-import { mkdir, open, readFile, realpath, writeFile } from 'fs/promises';
+import { mkdir, open, readFile, realpath, writeFile, unlink } from 'fs/promises';
 import path from 'path';
 import { ValidationError } from '../../utils/errors';
 
@@ -40,6 +40,36 @@ export interface UploadResult {
 }
 
 export class FileUploadService {
+  // Local-only until an isolated private S3 policy is independently verified.
+  // An object ACL cannot override a bucket-wide public-read policy.
+  private requireLocalReviews(): void {
+    if (isS3Configured()) throw new ValidationError('S3 artwork reviews are disabled pending verified private storage policy');
+  }
+
+  async writePrivateReview(buffer: Buffer, designId: string): Promise<string> {
+    this.requireLocalReviews();
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(designId)) throw new ValidationError('Invalid review design');
+    if (buffer.length > 10 * 1024 * 1024) throw new ValidationError('Review PDF exceeds 10MB');
+    const key = `private-artwork-reviews/${designId}/${randomUUID()}.pdf`;
+    const dest = path.join(LOCAL_UPLOAD_DIR, '..', key);
+    await mkdir(path.dirname(dest), { recursive: true, mode: 0o700 });
+    await writeFile(dest, buffer, { flag: 'wx', mode: 0o600 });
+    return key;
+  }
+
+  async readPrivateReview(key: string): Promise<Buffer> {
+    this.requireLocalReviews();
+    if (!/^private-artwork-reviews\/[a-zA-Z0-9_-]{1,100}\/[a-f0-9-]{36}\.pdf$/.test(key)) throw new ValidationError('Invalid review storage key');
+    const bytes = await readFile(path.join(LOCAL_UPLOAD_DIR, '..', key));
+    if (bytes.length > 10 * 1024 * 1024) throw new ValidationError('Review PDF exceeds 10MB');
+    return bytes;
+  }
+
+  async deletePrivateReview(key: string): Promise<void> {
+    this.requireLocalReviews();
+    if (!/^private-artwork-reviews\/[a-zA-Z0-9_-]{1,100}\/[a-f0-9-]{36}\.pdf$/.test(key)) throw new ValidationError('Invalid review storage key');
+    await unlink(path.join(LOCAL_UPLOAD_DIR, '..', key));
+  }
   /**
    * Generate presigned URL for direct upload from client
    */

@@ -29,7 +29,8 @@
 // layer (M8-C/D/E, resolve-dieline.ts) is the single source of resolved geometry.
 
 import { resolveDieline } from "../geometry/resolve-dieline.ts"
-import { BLEED_MM, DPI_MIN, SAFE_MM, facePanel, mmToPx } from "../geometry/units.ts"
+import { BLEED_MM, DPI_MIN, SAFE_MM, facePanel, isTwoFaceSheet, mmToPx } from "../geometry/units.ts"
+import { unsupportedSheetArtwork } from "../print-coverage.ts"
 import type { DielineGeometry, FaceId } from "../../../../shared/types/index.ts"
 import type { DesignCoreState, FaceZone } from "../state/types.ts"
 
@@ -68,6 +69,13 @@ export interface DesignManifest {
   prepress: DesignManifestPrepress
   /** Full resolved dieline snapshot — paths + faceRelationships. Absent when legacy migration cannot reconstruct. */
   dieline?: DielineGeometry
+  /**
+   * Set when a two-face sheet design carries artwork on inside faces its
+   * preview does not support. The artwork stays in the saved design data;
+   * this flag is what stops a proof or export from looking complete —
+   * proof generation refuses flagged designs until the user resolves it.
+   */
+  unsupportedArtwork?: { faces: string[]; layerCount: number; product?: "stand_up_pouch" }
 }
 
 export interface DesignDataV2 {
@@ -117,7 +125,19 @@ function resolveFaces(state: DesignCoreState): Record<string, { w: number; h: nu
   }
   // best_effort reconstruction from the canonical face↔axis mapping (mm) — no
   // blueprint present, so this is an approximation, never historical exactness.
-  for (const faceId of CANONICAL_FACE_IDS) {
+  // Scope exception: a two-face sheet (isTwoFaceSheet — the business
+  // card's seeded structure, coverage-tolerant) persists exactly front
+  // and back, even if a restored face list still carries inside_front /
+  // inside_back entries that coverage normalization has not stripped
+  // faces — inventing the remaining box faces would persist degenerate
+  // 1mm panels for it. EVERY other no-blueprint product keeps the
+  // canonical 12-face manifest exactly as before, including boxes
+  // carrying a six-face editor list: proof/prepress consumers iterate
+  // these keys into plates, so the saved format for boxes does not change.
+  const faceIds = isTwoFaceSheet(state.model.faces)
+    ? ["front", "back"]
+    : CANONICAL_FACE_IDS
+  for (const faceId of faceIds) {
     const { w, h } = facePanel(state.model.dimensions, faceId)
     faces[faceId] = { w, h }
   }
@@ -142,6 +162,7 @@ export function serializeDesignData(state: DesignCoreState): DesignDataV2 {
   delete stateBody.manifestMetadata
 
   const dims = state.model.dimensions
+  const unsupportedArtwork = unsupportedSheetArtwork(state.model.faces, state.layers, state.model.type)
   const manifest: DesignManifest = {
     product: {
       id: state.product?.id ?? "",
@@ -157,6 +178,10 @@ export function serializeDesignData(state: DesignCoreState): DesignDataV2 {
     zones: state.zones ?? {},
     prepress: { bleedMm: BLEED_MM, safeMm: SAFE_MM, dpiMin: DPI_MIN, ...(state.product?.prepress ?? {}) },
     ...(resolution.ok ? { dieline: resolution.geometry } : {}),
+    // Inside-face artwork on a two-face sheet is preserved in the saved
+    // state body above; flag it on the manifest so no consumer (proof,
+    // export) can present this design as complete while it is unresolved.
+    ...(unsupportedArtwork ? { unsupportedArtwork } : {}),
   }
 
   return {

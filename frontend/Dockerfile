@@ -16,6 +16,16 @@ COPY --from=deps /app/frontend/node_modules ./node_modules
 COPY frontend/ ./
 # The unified catalogue is shared source outside the frontend directory.
 COPY shared/ /app/shared/
+# Pure F42 review validator imported by the browser export module.
+COPY backend/src/modules/designs/artwork-review-contract.ts /app/backend/src/modules/designs/artwork-review-contract.ts
+# Pure scoped thank-you-card preview contract, no database/service imports.
+COPY backend/src/modules/catalog/thank-you-preview.ts /app/backend/src/modules/catalog/thank-you-preview.ts
+
+# Pure loyalty-card preview contract, no database/service imports.
+COPY backend/src/modules/catalog/loyalty-preview.ts /app/backend/src/modules/catalog/loyalty-preview.ts
+
+# Pure stand-up-pouch artwork surface safety contract.
+COPY backend/src/modules/catalog/pouch-preview-contract.ts /app/backend/src/modules/catalog/pouch-preview-contract.ts
 
 # Set build-time environment variables
 ARG NEXT_PUBLIC_API_URL

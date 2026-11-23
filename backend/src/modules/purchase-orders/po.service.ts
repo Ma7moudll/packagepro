@@ -1,3 +1,5 @@
+import {approvalService} from '../orders/approval.service';
+import {approvalContentHash} from '../orders/approval-snapshot';
 import { prisma } from '../../lib/prisma';
 import {
   AuthorizationError,
@@ -138,8 +140,13 @@ export class POService {
 
     // Production files are shared across the POs of one order (there is a
     // single design at launch; per-group file split is a later piece).
-    const printFile = order.design?.files.find((f) => f.fileType === 'print_file');
-    const dielineFile = order.design?.files.find((f) => f.fileType === 'dieline');
+    const approval=await prisma.approvalRequest.findFirst({where:{orderId},orderBy:{createdAt:'desc'}});
+    if(!approval||approval.status!=='approved'||!order.design||order.design.id!==approval.designId||approvalContentHash(order.design)!==approval.contentHash)throw new ConflictError('No current snapshot-bound approval. Legacy orders require explicit admin review');
+    if(order.items.some(i=>i.designId&&i.designId!==approval.designId))throw new ConflictError('Multiple design inputs need separate approvals; routing refused');
+    await approvalService.verifyBytes(approval);
+    const printFile={fileUrl:approval.printSnapshotUrl};
+    const dielineFile=approval.dielineSnapshotUrl?{fileUrl:approval.dielineSnapshotUrl}:null;
+    if(existing.some(po=>po.printFileUrl!==printFile.fileUrl||po.dielineFileUrl!==(dielineFile?.fileUrl??null)))throw new ConflictError('Existing PO attachments do not match approved snapshot; manual reconciliation required');
 
     if (existing.length === 0) {
       const groups = groupOrderItemsByProductType(order.items);
@@ -170,6 +177,10 @@ export class POService {
               'Order is not ready for routing (status changed concurrently)'
             );
           }
+          await tx.$queryRaw`SELECT id FROM designs WHERE id = ${approval.designId} FOR UPDATE`;
+          const bound=await tx.design.findUniqueOrThrow({where:{id:approval.designId}});
+          const current=await tx.approvalRequest.findUniqueOrThrow({where:{id:approval.id}});
+          if(current.status!=='approved'||approvalContentHash(bound)!==approval.contentHash)throw new ConflictError('Approved design changed before routing');
           const already = await tx.purchaseOrder.count({ where: { orderId } });
           if (already > 0) {
             throw new ConflictError(

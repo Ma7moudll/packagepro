@@ -15,6 +15,8 @@
 // products (count: `M7DielineFallback`) keep the frozen M7 rendering.
 
 import { useRef, useEffect, useState, useMemo } from "react"
+import { useDesignStore } from "@/lib/editor/state/store"
+import { unsupportedSheetArtwork, unsupportedArtworkOutputMessage } from "@/lib/editor/print-coverage"
 import { useLanguage } from "@/providers/language-provider"
 import { flatBounds } from "@/lib/editor/geometry/dieline"
 import { serializeSVG } from "@/lib/editor/services/dieline-service"
@@ -64,6 +66,7 @@ export function DielineView({
   selectedFace,
   onSelectFace,
 }: DielineViewProps) {
+  const [outputNotice, setOutputNotice] = useState("")
   const { language } = useLanguage()
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -137,6 +140,13 @@ export function DielineView({
   }
 
   const handleExport = () => {
+    const live = useDesignStore.getState()
+    const unsupported = unsupportedSheetArtwork(live.model.faces, live.layers, live.model.type)
+    if (unsupported) {
+      setOutputNotice(`Export blocked: ${unsupportedArtworkOutputMessage(unsupported)}`)
+      return
+    }
+    setOutputNotice("")
     if (!geometry) return
     const svg = serializeSVG(geometry)
     const blob = new Blob([svg], { type: "image/svg+xml" })
@@ -155,6 +165,7 @@ export function DielineView({
 
   return (
     <div className="flex flex-col h-full bg-slate-100">
+      {outputNotice && <p role="alert" className="text-xs text-red-700 p-2">{outputNotice}</p>}
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-y-2 px-4 py-2 bg-white border-b">
         <div className="flex items-center gap-2">

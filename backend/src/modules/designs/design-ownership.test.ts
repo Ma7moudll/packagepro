@@ -19,8 +19,10 @@ const db = vi.hoisted(() => {
 vi.mock('../../lib/redis', () => ({ getRedisClient: () => null }));
 vi.mock('../../services/file-upload/upload.service', () => ({ fileUploadService: {} }));
 vi.mock('../../services/pre-press-checker/prepress.service', () => ({ prePressCheckService: {} }));
-vi.mock('../../lib/prisma', () => ({
-  prisma: {
+vi.mock('../../lib/prisma', () => {
+  const client:any = {
+    $queryRaw:async()=>[],
+    $executeRaw:async()=>0,
     order: { findUnique: async ({ where }: any) => db.orders[where.id] ?? null },
     design: {
       findUnique: async ({ where }: any) => {
@@ -50,8 +52,10 @@ vi.mock('../../lib/prisma', () => ({
         return { count: hits.length };
       },
     },
-  },
-}));
+  };
+  client.$transaction=async(cb:any)=>cb(client);
+  return {prisma:client};
+});
 
 import { designService } from './design.service';
 import { isDesignOwner, designOwnerMatches } from '../../middleware/auth.middleware';
