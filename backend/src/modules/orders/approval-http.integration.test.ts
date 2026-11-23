@@ -7,6 +7,9 @@ import {jwtService} from '../auth/services/jwt.service';
 import {designService} from '../designs/design.service';
 import {fileUploadService} from '../../services/file-upload/upload.service';
 import {emailService} from '../../services/email/email.service';
+const priorFrontendUrl=process.env.FRONTEND_URL;
+beforeAll(()=>{process.env.FRONTEND_URL='http://localhost:3001'});
+afterAll(()=>{if(priorFrontendUrl===undefined)delete process.env.FRONTEND_URL;else process.env.FRONTEND_URL=priorFrontendUrl});
 vi.mock('../../services/email/email.service',()=>({emailService:{sendApprovalRequest:vi.fn().mockResolvedValue(undefined)}}));
 describe('HTTP approval boundary with real DB and storage',()=>{
  const app=Fastify();let owner:any,admin:any,order:any,design:any,file:any;let token='';

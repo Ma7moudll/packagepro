@@ -10,6 +10,9 @@ import {approvalService} from './approval.service';
 import {poService} from '../purchase-orders/po.service';
 import {vendorRouterService} from '../../services/vendor-router/router.service';
 import {approvalBytesHash,approvalContentHash} from './approval-snapshot';
+const priorFrontendUrl=process.env.FRONTEND_URL;
+beforeAll(()=>{process.env.FRONTEND_URL='http://localhost:3001'});
+afterAll(()=>{if(priorFrontendUrl===undefined)delete process.env.FRONTEND_URL;else process.env.FRONTEND_URL=priorFrontendUrl});
 vi.mock('../../services/email/email.service',()=>({emailService:{sendApprovalRequest:vi.fn().mockResolvedValue(undefined),sendEmail:vi.fn().mockResolvedValue(undefined)}}));
 describe('real saved-design approval snapshot contract',()=>{
  let userId:string,customerId:string;const orders:string[]=[];
