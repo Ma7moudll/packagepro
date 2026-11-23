@@ -173,7 +173,7 @@ export default function WishlistPage() {
               <CardContent className="p-6">
                 <CardTitle className="mb-2">{item.name}</CardTitle>
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-2xl font-bold text-emerald-600">${item.price.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-emerald-600">EGP {item.price.toFixed(2)}</span>
                   <Badge variant={item.inStock ? "default" : "destructive"}>
                     {item.inStock ? "In Stock" : "Out of Stock"}
                   </Badge>

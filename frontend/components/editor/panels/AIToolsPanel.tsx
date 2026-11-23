@@ -4,20 +4,14 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  Wand2,
   Image as ImageIcon,
-  Palette,
   Type,
   CheckCircle2,
   Loader2,
   Sparkles,
 } from "lucide-react"
 import { useLanguage } from "@/providers/language-provider"
-import { removeBackground } from "@/lib/editor/services/ai-background-removal"
-import { upscaleImage } from "@/lib/editor/services/ai-image-upscaling"
 import { generateColorPaletteFromImage, generatePaletteFromColor } from "@/lib/editor/services/ai-color-palette"
 import { getFontPairings } from "@/lib/editor/services/ai-font-pairing"
 import { checkDesignCompliance } from "@/lib/editor/services/ai-compliance-checker"
@@ -30,31 +24,10 @@ export function AIToolsPanel() {
   const layers = useDesignStore((s) => s.layers)
   const model = useDesignStore((s) => s.model)
 
-  const handleRemoveBackground = async (file: File) => {
-    setProcessing(true)
-    setResult(null)
-    try {
-      const result = await removeBackground(file)
-      setResult(result)
-    } catch (error: any) {
-      setResult({ error: error.message })
-    } finally {
-      setProcessing(false)
-    }
-  }
-
-  const handleUpscale = async (file: File, scale: 2 | 4 | 8) => {
-    setProcessing(true)
-    setResult(null)
-    try {
-      const result = await upscaleImage(file, scale)
-      setResult(result)
-    } catch (error: any) {
-      setResult({ error: error.message })
-    } finally {
-      setProcessing(false)
-    }
-  }
+  // Background removal and upscaling used to sit here, calling
+  // /api/packagepro/* routes that were never implemented. They were removed
+  // rather than left as buttons that always fail; reintroduce them when a
+  // real service exists.
 
   const handleGeneratePalette = async (file: File | null, color?: string) => {
     setProcessing(true)
@@ -98,81 +71,7 @@ export function AIToolsPanel() {
         </h3>
       </div>
 
-      <Tabs defaultValue="background" className="w-full">
-        <TabsList className="grid grid-cols-2 w-full">
-          <TabsTrigger value="background" className="text-xs">
-            {language === "ar" ? "خلفية" : "Background"}
-          </TabsTrigger>
-          <TabsTrigger value="upscale" className="text-xs">
-            {language === "ar" ? "تكبير" : "Upscale"}
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="background" className="space-y-3 mt-3">
-          <div>
-            <Label className="text-xs mb-2 block">
-              {language === "ar" ? "إزالة الخلفية" : "Remove Background"}
-            </Label>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              id="bg-remove-input"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) handleRemoveBackground(file)
-              }}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => document.getElementById("bg-remove-input")?.click()}
-              disabled={processing}
-            >
-              {processing ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Wand2 className="h-4 w-4 mr-2" />
-              )}
-              {language === "ar" ? "إزالة الخلفية" : "Remove Background"}
-            </Button>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="upscale" className="space-y-3 mt-3">
-          <div>
-            <Label className="text-xs mb-2 block">
-              {language === "ar" ? "تكبير الصورة" : "Upscale Image"}
-            </Label>
-            <Select
-              defaultValue="2"
-              onValueChange={(value) => {
-                const input = document.createElement("input")
-                input.type = "file"
-                input.accept = "image/*"
-                input.onchange = (e) => {
-                  const target = e.target as HTMLInputElement
-                  const file = target.files?.[0]
-                  if (file) handleUpscale(file, parseInt(value) as 2 | 4 | 8)
-                }
-                input.click()
-              }}
-            >
-              <SelectTrigger className="w-full text-xs">
-                <SelectValue placeholder="Select scale" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="2">2x</SelectItem>
-                <SelectItem value="4">4x</SelectItem>
-                <SelectItem value="8">8x</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      <div className="space-y-3 pt-3 border-t">
+      <div className="space-y-3">
         <div>
           <Label className="text-xs mb-2 block">
             {language === "ar" ? "لوحة الألوان" : "Color Palette"}

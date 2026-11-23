@@ -45,7 +45,7 @@ const LOYALTY_TIERS: LoyaltyTier[] = [
     minPoints: 0,
     maxPoints: 999,
     multiplier: 1,
-    benefits: ["نقطة واحدة لكل ريال", "خصم 5% على المنتجات المميزة", "دعم العملاء الأولوي"],
+    benefits: ["نقطة واحدة لكل جنيه", "خصم 5% على المنتجات المميزة", "دعم العملاء الأولوي"],
     badge: "🥉",
   },
   {
@@ -57,7 +57,7 @@ const LOYALTY_TIERS: LoyaltyTier[] = [
     minPoints: 1000,
     maxPoints: 4999,
     multiplier: 1.5,
-    benefits: ["1.5 نقطة لكل ريال", "خصم 10% على جميع المنتجات", "شحن مجاني", "وصول مبكر للعروض"],
+    benefits: ["1.5 نقطة لكل جنيه", "خصم 10% على جميع المنتجات", "شحن مجاني", "وصول مبكر للعروض"],
     badge: "🥈",
   },
   {
@@ -69,7 +69,7 @@ const LOYALTY_TIERS: LoyaltyTier[] = [
     minPoints: 5000,
     maxPoints: 14999,
     multiplier: 2,
-    benefits: ["نقطتان لكل ريال", "خصم 15% على جميع المنتجات", "شحن مجاني مع الأولوية", "هدايا شهرية", "حدث VIP سنوي"],
+    benefits: ["نقطتان لكل جنيه", "خصم 15% على جميع المنتجات", "شحن مجاني مع الأولوية", "هدايا شهرية", "حدث VIP سنوي"],
     badge: "🥇",
   },
   {
@@ -82,7 +82,7 @@ const LOYALTY_TIERS: LoyaltyTier[] = [
     maxPoints: Number.POSITIVE_INFINITY,
     multiplier: 3,
     benefits: [
-      "3 نقاط لكل ريال",
+      "3 نقاط لكل جنيه",
       "خصم 20% على جميع المنتجات",
       "شحن مجاني مع الأولوية العالية",
       "هدايا حصرية شهرية",
@@ -405,13 +405,13 @@ export default function LoyaltyPage() {
                   {[
                     {
                       points: 100,
-                      reward: language === "ar" ? "خصم 10 ريالات" : "10 SAR Discount",
+                      reward: language === "ar" ? "خصم 10 جنيه" : "10 EGP Discount",
                       description: language === "ar" ? "على أي طلب" : "On any order",
                     },
                     {
                       points: 250,
-                      reward: language === "ar" ? "خصم 30 ريالات" : "30 SAR Discount",
-                      description: language === "ar" ? "على الطلبات فوق 200 ريال" : "On orders over 200 SAR",
+                      reward: language === "ar" ? "خصم 30 جنيه" : "30 EGP Discount",
+                      description: language === "ar" ? "على الطلبات فوق 200 جنيه" : "On orders over 200 EGP",
                     },
                     {
                       points: 500,
@@ -420,8 +420,8 @@ export default function LoyaltyPage() {
                     },
                     {
                       points: 750,
-                      reward: language === "ar" ? "خصم 100 ريالات" : "100 SAR Discount",
-                      description: language === "ar" ? "على الطلبات فوق 500 ريال" : "On orders over 500 SAR",
+                      reward: language === "ar" ? "خصم 100 جنيه" : "100 EGP Discount",
+                      description: language === "ar" ? "على الطلبات فوق 500 جنيه" : "On orders over 500 EGP",
                     },
                     {
                       points: 1000,
@@ -430,8 +430,8 @@ export default function LoyaltyPage() {
                     },
                     {
                       points: 1500,
-                      reward: language === "ar" ? "خصم 250 ريالات" : "250 SAR Discount",
-                      description: language === "ar" ? "على الطلبات فوق 1000 ريال" : "On orders over 1000 SAR",
+                      reward: language === "ar" ? "خصم 250 جنيه" : "250 EGP Discount",
+                      description: language === "ar" ? "على الطلبات فوق 1000 جنيه" : "On orders over 1000 EGP",
                     },
                   ].map((item, idx) => (
                     <div

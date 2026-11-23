@@ -1,24 +1,8 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 
-// Mock database - would be shared with main templates route
-const templates: any[] = []
-
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ slug: string }> }
-) {
-  const { slug } = await params
-  try {
-    const template = templates.find((t) => t.slug === slug)
-
-    if (!template) {
-      return NextResponse.json({ error: "Template not found" }, { status: 404 })
-    }
-
-    return NextResponse.json(template)
-  } catch (error) {
-    console.error("Error fetching template:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
+// Retired in-memory template API. The real backend enforces ADMIN authoring.
+// This stays retired even in development or with the legacy mock override.
+function gone() {
+  return NextResponse.json({ success: false, error: "GONE", message: "Use the PackagePro backend template API" }, { status: 410 })
 }
-
+export { gone as GET, gone as POST, gone as PUT, gone as PATCH, gone as DELETE, gone as OPTIONS, gone as HEAD }

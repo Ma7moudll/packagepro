@@ -15,7 +15,7 @@ const addItemSchema = z.object({
   productId: z.string().optional(),
   variantId: z.string().optional(),
   sku: z.string().optional(),
-  config: z.record(z.string()).optional(),
+  config: z.record(z.string(), z.string()).optional(),
   quantity: z.number().int().positive(),
   dimensions: dimensionsSchema,
   materialCode: z.string().optional(),

@@ -11,6 +11,40 @@ import { parseSVG, svgToImageDataURL } from "./svg-processing"
 import { processImageClient, checkImageDPI } from "./image-processing"
 import { processEPSorAI } from "./pdf-processing"
 import { Layer } from "@/lib/editor/state/types"
+import { PX_PER_MM } from "@/lib/editor/geometry/units"
+import { useDesignStore } from "@/lib/editor/state/store"
+
+/**
+ * Default placement for an uploaded raster: centered on the target face and
+ * scaled to fit ~55% of that face (like Packhelp's placed-logo default).
+ * Without this, images drop at scale 1 (natural px) and overflow the face.
+ */
+function fitPlacement(
+  naturalW: number,
+  naturalH: number,
+  faceId: string
+): { position: { x: number; y: number }; scale: { x: number; y: number } } {
+  try {
+    const model = useDesignStore.getState().model
+    const { length, width, height } = model.dimensions
+    const id = faceId.replace("inside_", "")
+    const [fw, fh] =
+      id === "top" || id === "bottom"
+        ? [length, width]
+        : id === "left" || id === "right"
+          ? [width, height]
+          : [length, height]
+    const wMm = naturalW / PX_PER_MM
+    const hMm = naturalH / PX_PER_MM
+    const s = Math.min(1, (0.55 * fw) / wMm, (0.55 * fh) / hMm)
+    return {
+      position: { x: (fw * PX_PER_MM) / 2, y: (fh * PX_PER_MM) / 2 },
+      scale: { x: s, y: s },
+    }
+  } catch {
+    return { position: { x: 100, y: 100 }, scale: { x: 1, y: 1 } }
+  }
+}
 
 export interface ProcessedFileResult {
   layers: Partial<Layer>[]
@@ -76,9 +110,8 @@ export async function processFile(file: File, faceId: string): Promise<Processed
               locked: false,
               opacity: 1,
               blendMode: "normal",
-              position: { x: 100, y: 100 },
+              ...fitPlacement(result.width, result.height, faceId),
               rotation: 0,
-              scale: { x: 1, y: 1 },
               faceId: faceId as any,
               imageProperties: {
                 src: result.flattenedImageDataUrl,
@@ -108,9 +141,8 @@ export async function processFile(file: File, faceId: string): Promise<Processed
             locked: false,
             opacity: 1,
             blendMode: "normal",
-            position: { x: 100, y: 100 },
+            ...fitPlacement(result.width, result.height, faceId),
             rotation: 0,
-            scale: { x: 1, y: 1 },
             faceId: faceId as any,
             imageProperties: {
               src: imageDataUrl,
@@ -168,9 +200,8 @@ export async function processFile(file: File, faceId: string): Promise<Processed
             locked: false,
             opacity: 1,
             blendMode: "normal",
-            position: { x: 100, y: 100 },
+            ...fitPlacement(processed.width, processed.height, faceId),
             rotation: 0,
-            scale: { x: 1, y: 1 },
             faceId: faceId as any,
             imageProperties: {
               src: processed.dataUrl,

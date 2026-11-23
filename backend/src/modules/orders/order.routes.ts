@@ -22,6 +22,8 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
 export const approvalRoutes: FastifyPluginAsync = async (fastify) => {
   const { approvalController } = await import('./approval.controller');
 
+  fastify.post('/orders/:id/reopen-approval',async(request,reply)=>approvalController.reopenApproval(request,reply));
+
   fastify.post('/orders/:id/request-approval', async (request, reply) => {
     return approvalController.requestApproval(request, reply);
   });
