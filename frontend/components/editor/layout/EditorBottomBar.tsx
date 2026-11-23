@@ -21,6 +21,7 @@ import { useLanguage } from "@/providers/language-provider"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Slider } from "@/components/ui/slider"
 import { RepeatTool } from "@/components/editor/tools/RepeatTool"
+import {productConfiguration} from "@/lib/editor/product-configuration"
 import { cn } from "@/lib/utils"
 
 export function EditorBottomBar() {
@@ -163,7 +164,7 @@ export function EditorBottomBar() {
         <div className="w-px h-6 bg-slate-200" />
 
         {/* Box Open/Close - only in 3D mode */}
-        {viewMode === "3d" && (
+        {viewMode === "3d" && productConfiguration(model.type).opening && (
           <>
             <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
               <Tooltip>
@@ -213,7 +214,8 @@ export function EditorBottomBar() {
           </>
         )}
 
-        {/* Alignment Tools */}
+        {/* Alignment Tools — contextual: only with an active selection */}
+        {hasSelection && (
         <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -260,8 +262,10 @@ export function EditorBottomBar() {
             <TooltipContent>{language === "ar" ? "يمين" : "Right"}</TooltipContent>
           </Tooltip>
         </div>
+        )}
 
-        {/* Face Switcher - Center */}
+        {/* Face Switcher - Center (not in 3D: faces are picked on the box) */}
+        {viewMode !== "3d" && (
         <div className="flex-1 flex items-center justify-center gap-2">
           {/* Inside/Outside Toggle */}
           {(model.printCoverage === "inside" || model.printCoverage === "both") && (
@@ -311,8 +315,10 @@ export function EditorBottomBar() {
             ))}
           </div>
         </div>
+        )}
 
-        {/* Action Tools */}
+        {/* Action Tools — contextual: only with an active selection */}
+        {hasSelection && (
         <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -370,6 +376,7 @@ export function EditorBottomBar() {
             <TooltipContent>{language === "ar" ? "حذف" : "Delete"}</TooltipContent>
           </Tooltip>
         </div>
+        )}
       </footer>
     </TooltipProvider>
   )

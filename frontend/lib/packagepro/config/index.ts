@@ -250,5 +250,9 @@ export function resetConfig() {
 }
 
 // Export individual config sections for convenience
-export const config = getConfig()
+// Importing retired routes during a Next build must not require runtime secrets.
+// Actual use still validates the complete configuration, without dummy values.
+export const config = new Proxy({} as PackageProConfig, {
+  get(_target, key: keyof PackageProConfig) { return getConfig()[key] },
+})
 

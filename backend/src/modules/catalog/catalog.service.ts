@@ -4,6 +4,9 @@ import { pricingService, CatalogQuoteRequest, CatalogQuoteResult } from '../../s
 
 /** Material hex color lookup — seeded materials store hex in metadata. */
 const MATERIAL_HEX: Record<string, string> = {
+  'paper-coated-white':'#eeeeec', 'paper-white':'#eeeeec','paper-kraft':'#b8936a',
+  'poly-white':'#eeeeec','poly-black':'#242424','foil-matte':'#dddddd','foil-glossy':'#eeeeec',
+  'plastic-clear':'#eeeeee','cotton-natural':'#ddd5c2','cotton-white':'#eeeeec',
   'cardboard-kraft': '#b8936a',
   'cardboard-white': '#ffffff',
   'cardboard-coated': '#ffffff',
@@ -17,6 +20,7 @@ const MATERIAL_HEX: Record<string, string> = {
 // Shapes returned by the marketplace (frontend consumes these via /api/catalog).
 
 function toSummary(p: any) {
+  const editorDefaults = p.editorDefaults ?? undefined;
   return {
     id: p.id,
     slug: p.slug,
@@ -32,6 +36,17 @@ function toSummary(p: any) {
     gallery: p.gallery,
     ecoFlags: p.ecoFlags,
     editorDefaults: p.editorDefaults,
+    // Unified-catalogue readiness passthrough (additive; undefined on rows
+    // seeded before the unification).
+    editorType: editorDefaults?.editorType,
+    readiness: editorDefaults?.readiness,
+    support: editorDefaults?.support,
+    supportReason: editorDefaults?.supportReason,
+    // Grounded currency: the pricing engine rejects any material rate card
+    // whose currency is not EGP (pricing.service.ts), so every price this
+    // API serves is EGP by construction. Storefronts must format with this
+    // field, never assume another currency or convert rates.
+    currency: 'EGP',
   };
 }
 
@@ -181,7 +196,7 @@ export class CatalogService {
    * Returns the real product, default variant, resolved material, real
    * pricing, and the full ProductStructure stored in editorDefaults.
    */
-  async getEditorConfig(slug: string, quantity: number) {
+  async getEditorConfig(slug: string, requestedQuantity?: number) {
     const product = await prisma.product.findUnique({
       where: { slug },
       include: {
@@ -190,6 +205,7 @@ export class CatalogService {
           orderBy: [{ isDefault: 'desc' }, { sizeCode: 'asc' }],
           take: 1,
         },
+        options:{where:{key:'handle'},include:{values:{orderBy:{sortOrder:'asc'}}}},
       },
     });
 
@@ -197,6 +213,7 @@ export class CatalogService {
       throw new NotFoundError(`Product with slug "${slug}"`);
     }
 
+    const quantity=requestedQuantity??product.moq;
     const variant = product.variants[0];
     if (!variant) {
       throw new NotFoundError(`No active variant for product "${slug}"`);
@@ -206,7 +223,8 @@ export class CatalogService {
       ? await prisma.material.findFirst({ where: { code: variant.materialCode } })
       : null;
 
-    const quote = await pricingService.quoteCatalog({
+    const quoteRequired=(product.editorDefaults as any)?.readiness?.pricing==='quote_required';
+    const quote = quoteRequired?null:await pricingService.quoteCatalog({
       productId: product.id,
       variantId: variant.id,
       quantity,
@@ -229,6 +247,12 @@ export class CatalogService {
     const sizeUnit = (product.sizeUnit as string) ?? 'mm';
     const toMm = (v: number | undefined | null) =>
       typeof v === 'number' ? (sizeUnit === 'cm' ? Math.round(v * 10 * 10) / 10 : v) : 0;
+
+    // Original non-box variants store flat width/height/depth in L/W/H.
+    // Adapt their editor axes only. Stored variant dimensions and legacy rates
+    // stay untouched, including the quote above on their original dimensions.
+    const legacyFlatAxes=['prod-paper-bag','prod-poly-mailer','prod-sticker-label'].includes(product.id);
+    const editorDims={length:toMm(dims.length),width:toMm(legacyFlatAxes?dims.height:dims.width),height:toMm(legacyFlatAxes?dims.width:dims.height),unit:'mm'};
 
     // M7: The ProductStructure lives as a nested `structure` key inside
     // editorDefaults. Fall back to the whole blob for resilience.
@@ -257,6 +281,12 @@ export class CatalogService {
         prepress: isDeferred ? undefined : (editorDefaults?.prepress ?? undefined),
         support: editorDefaults?.support ?? undefined,
         supportReason: isDeferred ? (editorDefaults?.supportReason ?? undefined) : undefined,
+        // Unified-catalogue join fields (additive).
+        editorType: editorDefaults?.editorType ?? undefined,
+        readiness: editorDefaults?.readiness ?? undefined,
+        candidateMaterials: editorDefaults?.candidateMaterials ?? [],
+        candidateHandles: product.options.flatMap(o=>o.values.map(v=>v.value)),
+        defaultHandle: editorDefaults?.handle ?? undefined,
       },
       variant: {
         id: variant.id,
@@ -267,12 +297,7 @@ export class CatalogService {
         printMode: String(variant.printMode),
         printSides: variant.printSides === 'inside_outside' ? 2 : 1,
         finish: variant.finish ?? 'none',
-        dimensions: {
-          length: toMm(dims.length),
-          width: toMm(dims.width),
-          height: toMm(dims.height),
-          unit: 'mm',
-        },
+        dimensions: editorDims,
       },
       material: {
         code: materialCode,
@@ -282,9 +307,11 @@ export class CatalogService {
       },
       quantity,
       pricing: {
-        unitPrice: Number(quote.unitPrice),
-        totalPrice: Number(quote.totalPrice),
-        currency: quote.material?.currency ?? 'USD',
+        unitPrice: quote?Number(quote.unitPrice):null,
+        totalPrice: quote?Number(quote.totalPrice):null,
+        currency: quote?.material?.currency ?? 'EGP',
+        // Quote-only products never receive an unrelated generic estimate.
+        status: quoteRequired ? 'quote_required' : 'estimated',
       },
     };
   }

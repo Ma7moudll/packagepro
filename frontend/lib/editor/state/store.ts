@@ -1,5 +1,7 @@
 "use client"
 
+import {presetColourVariant} from "../preset-catalog-quote"
+
 import { create } from "zustand"
 import { nanoid } from "nanoid"
 import { mmToPx, facePanel } from "@/lib/editor/geometry/units"
@@ -17,12 +19,15 @@ import {
   CameraState,
   UIState,
 } from "./types"
+import {withPrintCoverageFaces} from "../print-coverage"
+import {productConfiguration} from "../product-configuration"
+import {CATALOGUE_CANDIDATE_MATERIALS,getCatalogueProduct,canonicalEditorType} from "../../../../shared/catalog/products"
 import type { DielineBlueprint } from "../../../../shared/types/index.ts"
 
 /** Minimal shape of EditorConfig consumed by the store (avoids circular import). */
 export interface EditorConfigLike {
   product: {
-    id: string; slug: string; name: string; type: string; boxType?: string
+    id: string; slug: string; name: string; type: string; boxType?: string; editorType?:string
     structure?: {
       type?: string
       boxType?: string
@@ -37,11 +42,14 @@ export interface EditorConfigLike {
     /** M8-J (spec §14): product-coverage support flag — `"deferred"` products never carry a dieline. */
     support?: 'supported' | 'deferred'
     supportReason?: string
+    candidateMaterials?: string[]
+    candidateHandles?: string[]
+    defaultHandle?: string
   }
   variant: { id: string; sku: string; sizeCode: string | null; materialCode: string | null; color?: string; printMode: string; printSides: number; finish: string; dimensions: { length: number; width: number; height: number; unit?: string } }
   material: { code: string; name: string; hex: string }
   quantity: number
-  pricing?: { unitPrice: number; totalPrice: number; currency?: string }
+  pricing?: { unitPrice: number|null; totalPrice: number|null; currency?: string }
   sessionId?: string
 }
 
@@ -93,7 +101,9 @@ function createInitialCoreState(): DesignCoreState {
   }
 
   const ui: UIState = {
-    leftSidebarOpen: true,
+    // Progressive disclosure: panels open on demand from the icon rails,
+    // so the editor's first screen is just the preview + product settings.
+    leftSidebarOpen: false,
     rightSidebarOpen: true,
     gridVisible: true,
     guidesVisible: true,
@@ -141,7 +151,7 @@ export interface DesignStore extends DesignState {
   setSelectedLayers: (ids: string[]) => void
   reorderLayers: (idsInOrder: string[]) => void
   applyCoreState: (updater: (core: DesignCoreState) => DesignCoreState) => void
-  initFromEditorConfig: (config: EditorConfigLike) => void
+  initFromEditorConfig: (config: EditorConfigLike, options?: {preserveHistory?:boolean;transform?:(core:DesignCoreState)=>DesignCoreState}) => void
   undo: () => void
   redo: () => void
   resetHistory: () => void
@@ -368,6 +378,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     applyCoreState: (updater) => {
       const core = get().history.present
       let nextCore = updater(core)
+      nextCore = {...nextCore, model:withPrintCoverageFaces(nextCore.model)}
       // M7-C: the view mode is a live client preference — never let a state
       // replacement (session restore, template load, editor re-init) revert it.
       nextCore = { ...nextCore, ui: { ...nextCore.ui, viewMode: get().ui.viewMode } }
@@ -384,7 +395,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
       pushToHistory(nextCore)
     },
 
-    initFromEditorConfig: (config) => {
+    initFromEditorConfig: (config, options) => {
       const current = get().history.present
       const dims = config.variant.dimensions
       const length = Number(dims.length) || 200
@@ -421,7 +432,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
       const faces = (config.variant.printSides >= 2 ? [...outsideFaces, ...insideFaces] : outsideFaces)
 
       // Canvas sized for the front face (length × height) via the canonical factor
-      const rawType = (config.product.boxType || config.product.type || "mailer_box").replace(/-/g, "_")
+      const rawType = canonicalEditorType(config.product.editorType || config.product.boxType || config.product.type || "mailer_box")
       const modelType = rawType as ModelState["type"]
       const canvas: CanvasState = {
         width: mmToPx(length),
@@ -429,17 +440,28 @@ export const useDesignStore = create<DesignStore>((set, get) => {
         backgroundColor: config.material.hex || "#d2b48c",
       }
 
+      const catalogue=getCatalogueProduct(modelType)
+      const policy=productConfiguration(modelType,config.product.candidateMaterials??CATALOGUE_CANDIDATE_MATERIALS[modelType]??[])
+      const candidate=policy.materials.includes(config.material.code)?config.material.code:policy.materials[0]
       const model: ModelState = {
         ...current.model,
         type: modelType,
-        category: "boxes",
+        category: (catalogue?.category??"boxes") as ModelState["category"],
         dimensions: { length, width, height },
-        material: config.material.code || "cardboard-kraft",
+        material: policy.boardStock?(config.material.code || "cardboard-kraft"):(candidate??config.material.code),
+        boardSpecification:policy.boardStock?current.model.boardSpecification:undefined,
+        printCoverage:config.variant.printSides>=2?"both":"outside",
+        // New preset initialization reflects its actual print mode. Session
+        // restoration uses applyCoreState and retains explicit saved requests.
+        ...(presetColourVariant(config.variant.printMode) ? {colorVariant:presetColourVariant(config.variant.printMode)!} : {}),
+        carrierHandle:modelType==='paper_bag'?(['none','twisted_paper','cotton_ropes','ribbon'].includes(config.product.defaultHandle??'')?config.product.defaultHandle:'none') as ModelState['carrierHandle']:undefined,
+        carrierHandleCandidates:modelType==='paper_bag'?config.product.candidateHandles:undefined,
+        materialSpecification:!policy.boardStock&&candidate?{version:1,productType:modelType,code:candidate,status:"requested",supplierConfirmed:false}:undefined,
         faces,
         quantity: config.quantity,
       }
 
-      const nextCore: DesignCoreState = {
+      let nextCore: DesignCoreState = {
         ...current,
         canvas,
         model,
@@ -459,7 +481,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
         zones: config.product.structure?.zones,
         productConfig: {
           selectedSize: config.variant.sizeCode ?? undefined,
-          selectedMaterial: config.material.code,
+          selectedMaterial: model.material,
           selectedFinish: config.variant.finish !== "none" ? config.variant.finish : undefined,
           quantity: config.quantity,
           variantId: config.variant.id,
@@ -470,6 +492,9 @@ export const useDesignStore = create<DesignStore>((set, get) => {
         manifestMetadata: undefined,
       }
 
+      if(options?.transform)nextCore=options.transform(nextCore)
+      // A picker change is undoable; first entry still starts a clean history.
+      if(options?.preserveHistory){get().applyCoreState(()=>nextCore);return}
       // Reset history so the EditorConfig init becomes the clean baseline
       set({
         ...nextCore,
@@ -541,25 +566,17 @@ export const useDesignStore = create<DesignStore>((set, get) => {
 
     submitDesign: async (designId: string) => {
       try {
-        const response = await fetch(`/api/designs/${designId}/submit`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("token") : ""}`,
-          },
-        })
-
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.error || "Failed to submit design")
-        }
-
-        const data = await response.json()
+        // Real backend via the shared client (auth + refresh + /api base);
+        // the previous relative fetch hit the Next.js origin, where no
+        // /api/designs routes exist, and read the wrong localStorage key.
+        const { designsApi } = await import("@/lib/api/designs")
+        const res = await designsApi.submit(designId)
+        const data = (res as any).data
         set({
-          lifecycleStatus: data.data.lifecycleStatus,
+          lifecycleStatus: data.lifecycleStatus,
         })
 
-        return data.data
+        return data
       } catch (error) {
         console.error("Submit design error:", error)
         throw error
@@ -568,25 +585,14 @@ export const useDesignStore = create<DesignStore>((set, get) => {
 
     recallDesign: async (designId: string) => {
       try {
-        const response = await fetch(`/api/designs/${designId}/recall`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("token") : ""}`,
-          },
-        })
-
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.error || "Failed to recall design")
-        }
-
-        const data = await response.json()
+        const { designsApi } = await import("@/lib/api/designs")
+        const res = await designsApi.recall(designId)
+        const data = (res as any).data
         set({
-          lifecycleStatus: data.data.lifecycleStatus,
+          lifecycleStatus: data.lifecycleStatus,
         })
 
-        return data.data
+        return data
       } catch (error) {
         console.error("Recall design error:", error)
         throw error

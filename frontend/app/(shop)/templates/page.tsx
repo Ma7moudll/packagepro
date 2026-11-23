@@ -9,16 +9,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Package, ShoppingBag, Coffee, Box } from "lucide-react"
 
+// Product categories the online editor can actually render. Everything else
+// (pouch, envelope, tissue, ...) falls back to a quote request.
+const EDITOR_SUPPORTED_CATEGORIES = new Set(["box", "carton", "cup", "bag", "tube"])
+
 export default function TemplatesPage() {
   const { language, isRTL } = useLanguage()
 
-  // Helper to format currency
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat(language === "ar" ? "ar-SA" : "en-US", {
-      style: "currency",
-      currency: "SAR",
-    }).format(price)
-  }
 
   const TemplateCard = ({ template }: { template: ProductTemplate }) => (
     <Card className="group h-full flex flex-col border-none bg-white shadow-md hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 rounded-2xl overflow-hidden ring-1 ring-slate-100">
@@ -41,11 +38,6 @@ export default function TemplatesPage() {
           </Badge>
         </div>
 
-        {template.price < 0.5 && (
-          <div className="absolute top-4 right-4 bg-slate-900 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-slate-900/20 uppercase">
-            {language === 'ar' ? 'الأكثر توفيراً' : 'Best Value'}
-          </div>
-        )}
       </div>
 
       <CardHeader className="pb-2">
@@ -75,10 +67,10 @@ export default function TemplatesPage() {
           </div>
           <div className={`flex-1 ${isRTL ? "text-left" : "text-right"}`}>
             <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">
-              {language === 'ar' ? 'يبدأ من' : 'Starting at'}
+              {language === 'ar' ? 'السعر' : 'Price'}
             </p>
             <p className="text-sm font-black text-slate-900">
-              {formatPrice(template.price)}
+              {language === 'ar' ? 'حسب المواصفات' : 'Priced on configure'}
             </p>
           </div>
         </div>

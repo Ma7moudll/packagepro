@@ -9,8 +9,10 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, ExternalLink, FileText, Palette } from "lucide-react"
 import { useLanguage } from "@/providers/language-provider"
 import { designsApi, type DesignRecord } from "@/lib/api/designs"
+import { ArtworkReviewDownload } from "@/components/editor/export/ArtworkReviewDownload"
 
 const FILE_LABELS: Record<string, { en: string; ar: string }> = {
+  artwork_review: { en: "RGB artwork review, not for production", ar: "مراجعة تصميم RGB، غير مخصصة للإنتاج" },
   preview: { en: "Preview", ar: "معاينة" },
   print_file: { en: "Print file", ar: "ملف الطباعة" },
   proof: { en: "Proof", ar: "نموذج" },
@@ -170,7 +172,7 @@ export default function DesignDetailPage() {
                         <FileText className="h-4 w-4 text-slate-400" />
                         {FILE_LABELS[f.fileType]?.[language === "ar" ? "ar" : "en"] || f.fileType}
                       </span>
-                      <a
+                      {f.fileType === "artwork_review" ? <ArtworkReviewDownload designId={designId} fileId={f.id} /> : <a
                         href={f.fileUrl}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -178,7 +180,7 @@ export default function DesignDetailPage() {
                       >
                         {t("Open", "فتح")}
                         <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
+                      </a>}
                     </li>
                   ))}
                 </ul>
