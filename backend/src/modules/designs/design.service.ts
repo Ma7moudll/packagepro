@@ -7,6 +7,7 @@ import { DesignLifecycleService, DesignLifecycleState } from '../../services/des
 import { isDesignOwner } from '../../middleware/auth.middleware';
 import { certifiedDielineReceipt } from './dieline-delivery';
 import { prePressCheckService } from '../../services/pre-press-checker/prepress.service';
+import { deriveUnsupportedArtwork, unsupportedArtworkOutputMessage } from '../../services/pre-press-checker/unsupported-artwork';
 
 export interface CreateDesignSessionData {
   orderId?: string;
@@ -501,6 +502,15 @@ export class DesignService {
     const isOwner = await isDesignOwner(userId, designId);
     if (!isOwner) {
       throw new AppError(403, 'Only the design owner can export');
+    }
+
+    // Shared output boundary, derived from the saved layers and structure
+    // (not the optional manifest flag alone): a two-face sheet carrying
+    // inside-face artwork gets no export of any format — including the
+    // certified dieline receipt below — until the user resolves it.
+    const unsupported = deriveUnsupportedArtwork(design.designData);
+    if (unsupported) {
+      throw new AppError(400, `Export blocked: ${unsupportedArtworkOutputMessage(unsupported)}`);
     }
 
     // Check if design can be exported

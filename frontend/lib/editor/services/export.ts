@@ -1,6 +1,7 @@
 "use client"
 
 import { useDesignStore } from "@/lib/editor/state/store"
+import { assertNoUnsupportedSheetArtwork } from "@/lib/editor/print-coverage"
 import type { Layer } from "@/lib/editor/state/types"
 import { generateTextureFromLayers } from "./texture-generator"
 import { assertPreviewLayers, isSolidPreviewColor, previewFacePlan, PREVIEW_MARGIN_MM, PREVIEW_HEADER_MM } from "./preview-export-contract"
@@ -39,6 +40,10 @@ export async function exportDesign(options: Partial<ExportOptions> = {}): Promis
   const single=opts.format==="png" || opts.format==="jpg"
   if(single && (opts.includeCropMarks || opts.includeDieLines)) throw new Error("Preview unavailable: image previews do not include reference guides")
   const state=useDesignStore.getState()
+  // Shared output boundary: a two-face sheet carrying inside-face artwork
+  // must not produce a file that omits it (outside coverage) or fabricates
+  // inside plates for it (both coverage). Refuse before rendering anything.
+  assertNoUnsupportedSheetArtwork(state.model.faces, state.layers)
   // Capture one immutable local preview, not a later live state or a claimed save.
   const model=structuredClone(state.model),canvas=structuredClone(state.canvas)
   const coverage=model.printCoverage ?? "outside"

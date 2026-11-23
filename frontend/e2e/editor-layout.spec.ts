@@ -92,3 +92,35 @@ test('failed local autosave stays failed, retains design, and allows retry', asy
   await save.click();
   await expect(save).toHaveAttribute('data-save-status', 'saved');
 });
+
+for (const language of ['en', 'ar']) test(`flagged card warning and refusal stay reachable ${language} 320`, async ({page}, info) => {
+  await page.setViewportSize({width:320,height:568})
+  await page.addInitScript(l=>localStorage.setItem('language',l),language)
+  await page.goto('/editor?editorDebug=1')
+  await page.waitForFunction(()=>!!(window as any).__editorStore)
+  await page.evaluate(()=>{
+    const st=(window as any).__editorStore
+    ;(window as any).__editorSetViewMode('2d')
+    st.getState().applyCoreState((s:any)=>({...s,model:{...s.model,type:'business_card',dimensions:{length:85,width:1,height:55},printCoverage:'both',faces:['front','back','inside_front','inside_back'].map(id=>({id,name:id}))},canvas:{...s.canvas,width:255,height:165},layers:[{id:'inside-regression',name:'Inside artwork',type:'text',faceId:'inside_front',visible:true,locked:false,opacity:1,blendMode:'normal',rotation:0,position:{x:60,y:50},scale:{x:1,y:1},textProperties:{content:'INSIDE',fontFamily:'Arial',fontSize:20,fontWeight:700,color:'#174e32',align:'center',letterSpacing:0,lineHeight:1}}]}))
+  })
+  const controls=page.locator('[data-editor-bottom-controls]')
+  for(const name of [language==='ar'?'داخلي':'Inside', 'inside_back',language==='ar'?'خارجي':'Outside','back']){
+    const button=controls.getByRole('button',{name,exact:true})
+    await button.scrollIntoViewIfNeeded();await button.click()
+  }
+  const warning=page.locator('[data-unsupported-artwork-warning]')
+  async function within(locator:any){const b=await locator.boundingBox();expect(b).not.toBeNull();expect(b!.x).toBeGreaterThanOrEqual(0);expect(b!.x+b!.width).toBeLessThanOrEqual(320.5)}
+  await within(page.locator('[data-editor-workspace]'));await within(warning)
+  const details=warning.getByRole('button',{name:'Details',exact:true});await within(details);await details.click()
+  const dialog=page.getByRole('dialog')
+  await expect.poll(()=>dialog.evaluate(e=>e.getAnimations({subtree:true}).every(a=>a.playState==='finished'||a.playState==='idle')&&getComputedStyle(e).opacity==='1')).toBe(true)
+  await within(dialog);await expect(dialog).toContainText('proof generation')
+  await page.screenshot({path:info.outputPath(`flagged-${language}-details.png`)})
+  await dialog.getByRole('button',{name:'Close',exact:true}).click();await expect(dialog).toBeHidden()
+  const dl=page.getByTitle(language==='ar'?'تنزيل الوجه الحالي (مرجع PNG)':'Download current face (PNG reference)',{exact:true})
+  await dl.scrollIntoViewIfNeeded();await within(dl)
+  let downloads=0;page.on('download',()=>downloads++);await dl.click()
+  await expect(page.getByRole('alert').filter({hasText:language==='ar'?'التنزيل محظور':'Download blocked'})).toBeVisible();expect(downloads).toBe(0)
+  await page.screenshot({path:info.outputPath(`flagged-${language}-refusal.png`)})
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+})

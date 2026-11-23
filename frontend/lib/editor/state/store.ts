@@ -4,7 +4,7 @@ import {presetColourVariant} from "../preset-catalog-quote"
 
 import { create } from "zustand"
 import { nanoid } from "nanoid"
-import { mmToPx, facePanel } from "@/lib/editor/geometry/units"
+import { mmToPx, facePanel, isTwoFaceSheet } from "@/lib/editor/geometry/units"
 import {
   DesignCoreState,
   DesignState,
@@ -378,7 +378,32 @@ export const useDesignStore = create<DesignStore>((set, get) => {
     applyCoreState: (updater) => {
       const core = get().history.present
       let nextCore = updater(core)
-      nextCore = {...nextCore, model:withPrintCoverageFaces(nextCore.model)}
+      nextCore = {...nextCore, model:withPrintCoverageFaces(nextCore.model, nextCore.layers)}
+      // Flat-sheet canvas resync — business card only. Dimension edits
+      // arrive through applyCoreState (right-sidebar inputs), and a
+      // two-face sheet's canvas must track the edited face or artwork
+      // stops mapping 1:1 onto it. This is deliberately scoped to
+      // products whose face list is exactly {front, back}: box products
+      // (mailer included) keep the baseline behavior exactly, so session
+      // restore / reopen flows that replace dimensions cannot gain a new
+      // canvas update from this code. The canvas-equality guard makes
+      // repeat calls no-ops — no new canvas object is created when the
+      // extent already matches.
+      const prevDims = core.model.dimensions
+      const nextDims = nextCore.model.dimensions
+      if (
+        isTwoFaceSheet(nextCore.model.faces) &&
+        (prevDims.length !== nextDims.length ||
+          prevDims.width !== nextDims.width ||
+          prevDims.height !== nextDims.height)
+      ) {
+        const panel = facePanel(nextDims, nextCore.ui.selectedFace)
+        const width = mmToPx(panel.w)
+        const height = mmToPx(panel.h)
+        if (nextCore.canvas.width !== width || nextCore.canvas.height !== height) {
+          nextCore = { ...nextCore, canvas: { ...nextCore.canvas, width, height } }
+        }
+      }
       // M7-C: the view mode is a live client preference — never let a state
       // replacement (session restore, template load, editor re-init) revert it.
       nextCore = { ...nextCore, ui: { ...nextCore.ui, viewMode: get().ui.viewMode } }

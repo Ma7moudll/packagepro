@@ -28,6 +28,7 @@ import {
 } from 'pdf-lib';
 import sharp from 'sharp';
 import { detectFileKind } from './validators/file-kind';
+import { deriveUnsupportedArtwork, unsupportedArtworkOutputMessage } from './unsupported-artwork';
 
 export interface ProofResult {
   proofUrl: string;
@@ -44,6 +45,8 @@ export interface ProofManifestInput {
   faces?: Record<string, ProofFace>;
   prepress?: { bleedMm?: number; safeMm?: number; dpiMin?: number };
   dieline?: unknown;
+  /** Set on two-face sheet designs carrying unsupported inside-face artwork. */
+  unsupportedArtwork?: { faces?: string[]; layerCount?: number };
 }
 
 const A4_W = 595.28;
@@ -59,13 +62,17 @@ interface DielinePathLike {
   points?: Array<{ x: number; y: number }>;
 }
 
-function readManifest(designData: unknown): ProofManifestInput {
+export function readManifest(designData: unknown): ProofManifestInput {
   const d = (designData ?? {}) as any;
   const manifest = d?.manifest ?? {};
   return {
     faces: manifest?.faces ?? {},
     prepress: manifest?.prepress ?? undefined,
     dieline: manifest?.dieline ?? undefined,
+    // Derived from the saved layers and structure at this output boundary
+    // (deriveUnsupportedArtwork) — the optional manifest flag alone is
+    // never trusted, so a design whose flag was stripped still refuses.
+    unsupportedArtwork: deriveUnsupportedArtwork(d),
   };
 }
 
@@ -88,6 +95,15 @@ export async function composeProofPdf(
 
   const { kind } = detectFileKind(sourceBuffer);
   const manifest = meta.manifest ?? readManifest(undefined);
+  // Never emit a proof that looks complete for a design carrying artwork
+  // its product cannot represent (inside-face artwork on a two-face card).
+  // The artwork stays in the design data; the proof is refused, with the
+  // reason, until the user moves or removes that artwork and re-saves.
+  if (manifest.unsupportedArtwork) {
+    throw new Error(
+      `Proof blocked: ${unsupportedArtworkOutputMessage({ faces: manifest.unsupportedArtwork.faces ?? [], layerCount: manifest.unsupportedArtwork.layerCount ?? 0 })}`
+    );
+  }
   const faces = manifest.faces ?? {};
   const bleedMm = manifest.prepress?.bleedMm ?? DEFAULT_BLEED_MM;
   const safeMm = manifest.prepress?.safeMm ?? DEFAULT_SAFE_MM;

@@ -4,6 +4,7 @@ import { useRef, useEffect, useCallback, useState } from "react"
 import * as fabric from "fabric"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { BLEED_MM, SAFE_MM } from "@/lib/editor/geometry/units"
+import { unsupportedArtworkOutputMessage, unsupportedSheetArtwork } from "@/lib/editor/print-coverage"
 import { useLanguage } from "@/providers/language-provider"
 import { TextProperties, ImageFilterConfig, DEFAULT_IMAGE_FILTERS } from "@/lib/editor/state/types"
 import { Button } from "@/components/ui/button"
@@ -185,6 +186,7 @@ export function DesignCanvas2D() {
   const [showBleed, setShowBleed] = useState(true)
   const [showSafeZone, setShowSafeZone] = useState(true)
   const [canvasReady, setCanvasReady] = useState(false)
+  const [exportNotice, setExportNotice] = useState("")
 
   // Smart Guides hook - uses canvasReady state to ensure canvas is initialized
   useSmartGuides({
@@ -634,6 +636,16 @@ export function DesignCanvas2D() {
   }
 
   const exportDesign = () => {
+    // Shared output boundary (this button is a current-face PNG reference,
+    // not a full-design export): a two-face sheet carrying inside-face
+    // artwork must not produce a file that silently omits that artwork.
+    const storeState = useDesignStore.getState()
+    const unsupported = unsupportedSheetArtwork(storeState.model.faces, storeState.layers)
+    if (unsupported) {
+      setExportNotice(language === "ar" ? "التنزيل محظور: راجع تنبيه التصميم أعلاه." : "Download blocked. See the artwork warning above.")
+      return
+    }
+    setExportNotice("")
     if (fabricCanvasRef.current) {
       const dataURL = fabricCanvasRef.current.toDataURL({
         format: "png",
@@ -822,8 +834,8 @@ export function DesignCanvas2D() {
   return (
     <div className="relative w-full h-full flex flex-col bg-white">
       {/* 2D Canvas Toolbar */}
-      <div className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between">
-        <div className="flex items-center gap-2 bg-white/95 backdrop-blur-sm rounded-lg border p-2">
+      <div className="relative z-10 w-full min-w-0 shrink-0 p-2">
+        <div className="flex max-w-full min-w-0 items-center gap-2 overflow-x-auto bg-white/95 backdrop-blur-sm rounded-lg border p-2 [&>button]:shrink-0">
           <Button size="sm" variant="outline" onClick={() => handleZoom(0.1)}>
             <ZoomIn className="h-4 w-4" />
           </Button>
@@ -840,14 +852,16 @@ export function DesignCanvas2D() {
             <Magnet className="h-4 w-4" />
           </Button>
           <ZoneSettings />
-          <Button size="sm" variant="outline" onClick={exportDesign} title={language === "ar" ? "تحميل" : "Download"}>
+          <Button size="sm" variant="outline" onClick={exportDesign} title={language === "ar" ? "تنزيل الوجه الحالي (مرجع PNG)" : "Download current face (PNG reference)"}>
             <Download className="h-4 w-4" />
           </Button>
+
         </div>
+        {exportNotice && <p role="alert" className="bg-white px-2 py-1 text-xs text-red-700">{exportNotice}</p>}
       </div>
 
       {/* 2D Canvas */}
-      <div className="flex-1 flex items-center justify-center bg-slate-50 overflow-auto p-8">
+      <div className="min-h-0 min-w-0 flex-1 flex items-center justify-center bg-slate-50 overflow-auto p-8">
         <div className="relative" style={{ padding: showBleed ? "12px" : 0 }}>
           {/* Zone Overlays */}
           <ZoneOverlays
