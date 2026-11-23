@@ -1,3 +1,4 @@
+import {thankYouPreviewStructure} from '../src/modules/catalog/thank-you-preview';
 import { Prisma, PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import EGP_RATES from '../src/services/pricing-bootstrap/egp-rates.json';
@@ -1621,6 +1622,9 @@ async function main() {
       filters: null,
       editorDefaults: {
         boxType: entry.boxType,
+        // Only the proven thank-you-card slice receives a two-face preview.
+        // No production blueprint, rates or sibling support is inferred.
+        ...(entry.id === 'thank_you_card' ? {structure: thankYouPreviewStructure(entry.defaultDimensions)} : {}),
         support: 'deferred',
         supportReason: entry.supportReason,
       },

@@ -27,8 +27,16 @@ for(const [language,width] of [['en',1280],['ar',320]] as const) test(`real scen
   await page.locator('[data-scene-body]').evaluate(e=>{e.scrollTop=0})
   await page.screenshot({path:info.outputPath('capture-dialog.png'),animations:'disabled'})
   await page.setViewportSize({width,height:568})
-  await expect(async()=>{await page.locator('[data-scene-body]').evaluate(e=>{e.scrollTop=e.scrollHeight});await expect(download).toBeInViewport({timeout:1000})}).toPass({timeout:5000})
-  await expect(download).toBeInViewport()
+  // Capture actions stay outside the scrolling preview. A resize can reset
+  // the body scroll offset after a prior scroll-to-bottom, so neither action
+  // may depend on that offset (or on repeated scrolling retries).
+  for (const bottom of [false, true, false]) {
+    await page.locator('[data-scene-body]').evaluate((e,bottom)=>{e.scrollTop=bottom?e.scrollHeight:0},bottom)
+    for (const action of [capture, download]) {
+      await expect(action).toBeInViewport()
+      expect(await action.evaluate(b=>{const r=b.getBoundingClientRect();return r.width>=24&&r.height>=24&&document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button')===b})).toBe(true)
+    }
+  }
   const closeBox=await close.boundingBox();const titleBox=await page.getByRole('dialog').getByRole('heading').boundingBox()
   expect(closeBox!.y).toBeGreaterThanOrEqual(0)
   expect(closeBox!.x+closeBox!.width).toBeLessThanOrEqual(titleBox!.x+40)

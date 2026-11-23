@@ -18,6 +18,8 @@ COPY frontend/ ./
 COPY shared/ /app/shared/
 # Pure F42 review validator imported by the browser export module.
 COPY backend/src/modules/designs/artwork-review-contract.ts /app/backend/src/modules/designs/artwork-review-contract.ts
+# Pure scoped thank-you-card preview contract, no database/service imports.
+COPY backend/src/modules/catalog/thank-you-preview.ts /app/backend/src/modules/catalog/thank-you-preview.ts
 
 # Set build-time environment variables
 ARG NEXT_PUBLIC_API_URL

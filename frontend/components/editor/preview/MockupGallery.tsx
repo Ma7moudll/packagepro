@@ -40,8 +40,9 @@ export function MockupGallery({open:controlledOpen,onOpenChange,hideTrigger=fals
         {image&&<><img data-scene-preview src={image.url} alt={ar?"لقطة فعلية للمشهد الحالي":"Captured current 3D scene"} className="w-full max-h-[45vh] object-contain rounded border bg-slate-50"/><p className="text-xs text-slate-500">{image.width} × {image.height} px. {ar?"نفس دقة مساحة العرض الحالية، دون تكبير مصطنع.":"Current viewport render size, no artificial upscaling."}</p></>}
         {stale&&<p role="alert">{ar?"تغير التصميم. التقط صورة جديدة قبل التنزيل.":"The design changed. Capture again before downloading."}</p>}
         {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
-        <div className="flex flex-wrap gap-2"><Button onClick={capture} disabled={busy}>{busy?(ar?"جارٍ الالتقاط...":"Capturing..."):(ar?"التقاط العرض الحالي":"Capture current view")}</Button><Button variant="outline" onClick={download} disabled={!image||stale||busy}>{ar?"تنزيل PNG للمشهد":"Download scene PNG"}</Button></div>
-      </div>
+        </div>
+      {/* Actions must not depend on scroll position after image decode/resize. */}
+      <div data-scene-actions className="shrink-0 flex flex-wrap gap-2"><Button onClick={capture} disabled={busy}>{busy?(ar?"جارٍ الالتقاط...":"Capturing..."):(ar?"التقاط العرض الحالي":"Capture current view")}</Button><Button variant="outline" onClick={download} disabled={!image||stale||busy}>{ar?"تنزيل PNG للمشهد":"Download scene PNG"}</Button></div>
     </DialogContent>
   </Dialog>
 }

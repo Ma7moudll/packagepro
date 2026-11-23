@@ -1,3 +1,4 @@
+import {thankYouPreviewStockColour} from './thank-you-preview';
 import { prisma } from '../../lib/prisma';
 import { NotFoundError } from '../../utils/errors';
 import { pricingService, CatalogQuoteRequest, CatalogQuoteResult } from '../../services/pricing-engine/pricing.service';
@@ -240,9 +241,9 @@ export class CatalogService {
 
     const dims = variant.dimensions as any;
     const materialCode = variant.materialCode ?? 'cardboard-kraft';
-    const materialHex = materialRecord?.metadata
+    const materialHex = thankYouPreviewStockColour(product.boxType ?? '', materialCode) ?? (materialRecord?.metadata
       ? ((materialRecord.metadata as any).hex ?? MATERIAL_HEX[materialCode] ?? '#b8936a')
-      : MATERIAL_HEX[materialCode] ?? '#b8936a';
+      : MATERIAL_HEX[materialCode] ?? '#b8936a');
 
     const sizeUnit = (product.sizeUnit as string) ?? 'mm';
     const toMm = (v: number | undefined | null) =>
