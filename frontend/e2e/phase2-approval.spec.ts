@@ -10,7 +10,6 @@ import {
   createOrderFixture,
   deleteOrderFixture,
   findCustomerByEmail,
-  redisDel,
   closeRedis,
   type OrderFixture,
 } from "./db"
@@ -24,12 +23,12 @@ import {
  * ledger's paid-vs-cancelled projection.
  *
  * Fixtures are seeded directly via SQL (disposable orders keyed to the QA
- * customer) and the approval token is written to Redis exactly as
- * proof-generator does, so the email-link URL `/orders/:id/approve?token=…`
+ * customer) and exact saved snapshot/files plus a hashed request-bound token
+ * are persisted in PostgreSQL; local immutable PDF files are written, so the email-link URL `/orders/:id/approve?token=…`
  * is exercised end-to-end.
  */
 
-const APPROVAL_TOKEN = "phase2-e2e-approval-token-1"
+const APPROVAL_TOKEN = "b".repeat(64)
 
 function authHeaders(page: Page) {
   return page.evaluate(() => ({
@@ -84,11 +83,14 @@ test.describe.serial("Phase 2 — approval, invoice & billing", () => {
     orders.cancelled = cancelled
   })
 
+  test.beforeEach(async({page})=>{
+    // Retired analytics transport is isolated, no analytics-readiness claim.
+    await page.addInitScript(()=>{const original=window.fetch;window.fetch=(input,init)=>new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.origin).pathname==='/api/packagepro/analytics/batch'?Promise.resolve(new Response(null,{status:204})):original.call(window,input,init)})
+  })
   test.afterAll(async () => {
     for (const o of Object.values(orders)) {
       await deleteOrderFixture(o.orderId)
     }
-    await redisDel(`approval:token:${APPROVAL_TOKEN}`)
     await closeRedis()
   })
 
@@ -139,11 +141,10 @@ test.describe.serial("Phase 2 — approval, invoice & billing", () => {
     })
     await expect(page.getByText(new RegExp(orders.awaiting.orderNumber, "i"))).toBeVisible()
 
-    // Proof + preview assets are rendered from the seeded design files.
-    const preview = page.locator('img[alt="Design preview"]').or(page.locator('img[alt*="preview"]'))
-    await expect(preview).toBeVisible({ timeout: 10_000 })
-    await expect(page.getByRole("link", { name: /download pdf proof|تحميل نموذج/i })).toBeVisible()
-
+    // Current-request proof only; historical preview images are not approval evidence.
+    const proof=page.getByTestId('current-approval-proof');await expect(proof).toBeVisible();const href=await proof.getAttribute('href');expect(href).toContain('/api/files/test-e2e-approval/');expect(href).toContain('/proof.pdf');
+    const exact=await page.request.get(href!);expect(exact.status()).toBe(200);expect((await exact.body()).subarray(0,5).toString()).toBe('%PDF-');
+    await expect(page.locator('img[alt="Design preview"]')).toHaveCount(0);
     // Approve is gated on the legal confirmation checkbox.
     await page.getByRole("button", { name: /^Approve Design|اعتماد التصميم$/i }).click()
     await expect(page.getByText(/please confirm the details|يرجى تأكيد البيانات/i)).toBeVisible()

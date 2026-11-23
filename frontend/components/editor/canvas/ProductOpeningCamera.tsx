@@ -11,12 +11,14 @@ export function ProductOpeningCamera({family,dimensions,open,camDist}:{camDist:n
  const controls=useRef<any>(null),initialTarget=useRef<[number,number,number]>([0,dimensions.height/200,0])
  const progress=useRef(open),previous=useRef<OpeningFraming>({scale:1,lift:dimensions.height/200}),reduced=useRef(false)
  useEffect(()=>{const q=window.matchMedia('(prefers-reduced-motion: reduce)'),read=()=>{reduced.current=q.matches};read();q.addEventListener('change',read);return()=>q.removeEventListener('change',read)},[])
- useFrame((_,delta)=>{
+ useFrame(({size},delta)=>{
   const c=controls.current
   if(!c)return
   progress.current=productOpeningStep(progress.current,open,delta,reduced.current)
+  c.object.userData.openingCamera = {target:open,progress:progress.current}
   const allowance=productOpeningFraming(family,dimensions,progress.current)
-  const next={scale:allowance.scale,lift:dimensions.height/200+allowance.lift}
+  const viewportScale=Math.max(1,size.height/Math.max(1,size.width))
+  const next={scale:allowance.scale*viewportScale,lift:dimensions.height/200+allowance.lift}
   if(next.scale===previous.current.scale&&next.lift===previous.current.lift)return
   const frame=reframeOpeningCamera(c.object.position.toArray(),c.target.toArray(),previous.current,next)
   c.object.position.fromArray(frame.position);c.target.fromArray(frame.target);c.update();previous.current=next

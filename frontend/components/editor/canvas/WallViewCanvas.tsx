@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
+import { unsupportedSheetArtwork, unsupportedArtworkOutputMessage } from "@/lib/editor/print-coverage"
 import { useLanguage } from "@/providers/language-provider"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
@@ -98,7 +99,15 @@ export function WallViewCanvas() {
   }, [designImage, settings, zoom, canvas])
 
   // Handle export
+  const [outputNotice, setOutputNotice] = useState("")
   const handleExport = () => {
+    const live = useDesignStore.getState()
+    const unsupported = unsupportedSheetArtwork(live.model.faces, live.layers, live.model.type)
+    if (unsupported) {
+      setOutputNotice(`Export blocked: ${unsupportedArtworkOutputMessage(unsupported)}`)
+      return
+    }
+    setOutputNotice("")
     if (!canvasRef.current) return
     const link = document.createElement("a")
     link.download = "wall-view.png"
@@ -120,6 +129,7 @@ export function WallViewCanvas() {
 
   return (
     <div className="flex h-full bg-slate-100">
+      {outputNotice && <p role="alert" className="text-xs text-red-700 p-2">{outputNotice}</p>}
       {/* Canvas Area */}
       <div className="flex-1 overflow-auto p-4" ref={containerRef}>
         <div className="flex items-center justify-center min-h-full">

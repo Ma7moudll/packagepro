@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { useLanguage } from "@/providers/language-provider"
 import { Button } from "@/components/ui/button"
@@ -16,160 +16,7 @@ import {
 } from "@/components/ui/select"
 import { QrCode, Barcode, Plus, Loader2 } from "lucide-react"
 
-// QR Code generation using Canvas API
-function generateQRCode(
-  text: string,
-  size: number = 200,
-  fgColor: string = "#000000",
-  bgColor: string = "#ffffff"
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    // Simple QR code pattern generator (for demo - in production use qrcode library)
-    const canvas = document.createElement("canvas")
-    canvas.width = size
-    canvas.height = size
-    const ctx = canvas.getContext("2d")
-    
-    if (!ctx) {
-      reject(new Error("Could not get canvas context"))
-      return
-    }
-
-    // Background
-    ctx.fillStyle = bgColor
-    ctx.fillRect(0, 0, size, size)
-
-    // Generate QR pattern (simplified version)
-    // In production, use a proper QR code library like 'qrcode'
-    const moduleCount = 21 // Version 1 QR code
-    const moduleSize = Math.floor(size / (moduleCount + 8))
-    const margin = Math.floor((size - moduleCount * moduleSize) / 2)
-
-    ctx.fillStyle = fgColor
-
-    // Create a deterministic pattern based on text
-    const hash = text.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
-    
-    // Finder patterns (three corners)
-    const drawFinderPattern = (x: number, y: number) => {
-      // Outer square
-      ctx.fillRect(margin + x * moduleSize, margin + y * moduleSize, 7 * moduleSize, 7 * moduleSize)
-      ctx.fillStyle = bgColor
-      ctx.fillRect(margin + (x + 1) * moduleSize, margin + (y + 1) * moduleSize, 5 * moduleSize, 5 * moduleSize)
-      ctx.fillStyle = fgColor
-      ctx.fillRect(margin + (x + 2) * moduleSize, margin + (y + 2) * moduleSize, 3 * moduleSize, 3 * moduleSize)
-    }
-
-    drawFinderPattern(0, 0)
-    ctx.fillStyle = fgColor
-    drawFinderPattern(moduleCount - 7, 0)
-    ctx.fillStyle = fgColor
-    drawFinderPattern(0, moduleCount - 7)
-
-    // Data modules (pseudo-random based on text hash)
-    ctx.fillStyle = fgColor
-    for (let row = 0; row < moduleCount; row++) {
-      for (let col = 0; col < moduleCount; col++) {
-        // Skip finder pattern areas
-        if ((row < 8 && col < 8) || (row < 8 && col > moduleCount - 9) || (row > moduleCount - 9 && col < 8)) {
-          continue
-        }
-        // Timing patterns
-        if (row === 6 || col === 6) {
-          if ((row + col) % 2 === 0) {
-            ctx.fillRect(margin + col * moduleSize, margin + row * moduleSize, moduleSize, moduleSize)
-          }
-          continue
-        }
-        // Data modules
-        const seed = (hash + row * moduleCount + col) % 100
-        if (seed > 50) {
-          ctx.fillRect(margin + col * moduleSize, margin + row * moduleSize, moduleSize, moduleSize)
-        }
-      }
-    }
-
-    resolve(canvas.toDataURL("image/png"))
-  })
-}
-
-// Barcode generation
-function generateBarcode(
-  text: string,
-  type: "code128" | "ean13" | "upc" = "code128",
-  width: number = 300,
-  height: number = 100,
-  fgColor: string = "#000000",
-  bgColor: string = "#ffffff"
-): Promise<string> {
-  return new Promise((resolve) => {
-    const canvas = document.createElement("canvas")
-    canvas.width = width
-    canvas.height = height
-    const ctx = canvas.getContext("2d")
-    
-    if (!ctx) {
-      resolve("")
-      return
-    }
-
-    // Background
-    ctx.fillStyle = bgColor
-    ctx.fillRect(0, 0, width, height)
-
-    ctx.fillStyle = fgColor
-    const barHeight = height - 20
-    const margin = 10
-
-    // Simple Code128-like pattern
-    const patterns: Record<string, string> = {
-      "0": "212222", "1": "222122", "2": "222221", "3": "121223", "4": "121322",
-      "5": "131222", "6": "122213", "7": "122312", "8": "132212", "9": "221213",
-      "A": "211232", "B": "231212", "C": "221221", "D": "221123", "E": "221232",
-      "F": "231122", "G": "211133", "H": "231131", "I": "213122", "J": "123132",
-      "K": "122133", "L": "132123", "M": "132132", "N": "212132", "O": "231321",
-      "P": "231312", "Q": "312132", "R": "311123", "S": "311232", "T": "321123",
-      "U": "321132", "V": "321231", "W": "112232", "X": "122132", "Y": "122231",
-      "Z": "132122", " ": "212222", "-": "112232", ".": "122132",
-    }
-
-    // Start code
-    let barcode = "211412" // Start B
-
-    // Encode text
-    for (const char of text.toUpperCase()) {
-      barcode += patterns[char] || patterns["0"]
-    }
-
-    // Stop code
-    barcode += "2331112"
-
-    // Calculate bar width
-    const totalUnits = barcode.split("").reduce((sum, char) => sum + parseInt(char), 0)
-    const unitWidth = (width - margin * 2) / totalUnits
-
-    // Draw bars
-    let x = margin
-    let isBar = true
-    for (const char of barcode) {
-      const units = parseInt(char)
-      const barWidth = units * unitWidth
-      if (isBar) {
-        ctx.fillRect(x, 5, barWidth, barHeight)
-      }
-      x += barWidth
-      isBar = !isBar
-    }
-
-    // Draw text below
-    ctx.fillStyle = fgColor
-    ctx.font = "12px monospace"
-    ctx.textAlign = "center"
-    ctx.fillText(text, width / 2, height - 5)
-
-    resolve(canvas.toDataURL("image/png"))
-  })
-}
+import {CodeArtworkError, renderQRArtwork, renderBarcodeArtwork} from '@/lib/editor/code-artwork'
 
 export function CodeGenerators() {
   const { language } = useLanguage()
@@ -187,55 +34,76 @@ export function CodeGenerators() {
   const [barcodeHeight, setBarcodeHeight] = useState(80)
 
   const [generating, setGenerating] = useState(false)
+  const [error,setError]=useState('')
+  const errorMessage=(e:unknown)=>{
+   if(e instanceof CodeArtworkError){
+    const messages={empty:['Enter a value.','أدخل قيمة.'],capacity:['QR content is too long. Shorten it.','محتوى QR طويل جداً. اختصره.'],colour:['Use a darker foreground and a lighter background with stronger contrast.','اختر مقدمة داكنة وخلفية فاتحة بتباين أكبر.'],barcode:['Could not encode this barcode. Check its content.','تعذر ترميز الباركود. تحقق من المحتوى.'],code128:['Code 128 needs 1 to 80 printable ASCII characters.','يحتاج Code 128 إلى ما بين 1 و80 حرفاً من أحرف ASCII القابلة للطباعة.'],ean13_length:['EAN-13 needs exactly 13 digits, including its check digit.','يحتاج EAN-13 إلى 13 رقماً بالضبط، تشمل رقم التحقق.'],upc_length:['UPC-A needs exactly 12 digits, including its check digit.','يحتاج UPC-A إلى 12 رقماً بالضبط، تشمل رقم التحقق.'],ean13_check:['The EAN-13 check digit is incorrect. Check the original number.','رقم التحقق في EAN-13 غير صحيح. راجع الرقم الأصلي.'],upc_check:['The UPC-A check digit is incorrect. Check the original number.','رقم التحقق في UPC-A غير صحيح. راجع الرقم الأصلي.'],size:['This code cannot fit this face without making its modules too small. Shorten the content or use a larger face.','لا يتسع هذا الوجه للكود دون تصغير وحداته أكثر من اللازم. اختصر المحتوى أو اختر وجهاً أكبر.']}
+    return messages[e.code][language==='ar'?1:0]
+   }
+   return language==='ar'?'تعذر إنشاء الكود. لم تتم إضافة طبقة.':'Could not create code. No layer was added.'
+  }
 
-  const handleGenerateQR = useCallback(async () => {
+  const handleGenerateQR = async () => {
     if (!qrText.trim()) return
     
+    setError('')
     setGenerating(true)
     try {
-      const dataUrl = await generateQRCode(qrText, qrSize, qrFgColor, qrBgColor)
+      const image = renderQRArtwork(qrText, qrSize, qrFgColor, qrBgColor)
+      const canvas=useDesignStore.getState().canvas
+      const scale=Math.min(1,canvas.width*.8/image.width,canvas.height*.8/image.height)
+      // Keep at least one logical pixel per module before the 2x PNG export.
+      if(image.modulePixels*scale<1)throw new CodeArtworkError('size')
       addLayer({
+        scale:{x:scale,y:scale},
         type: "image",
         name: `QR Code: ${qrText.slice(0, 20)}`,
         faceId: selectedFace,
         imageProperties: {
-          src: dataUrl,
-          naturalWidth: qrSize,
-          naturalHeight: qrSize,
+          src: image.src,
+          naturalWidth: image.width,
+          naturalHeight: image.height,
         },
       })
     } catch (error) {
-      console.error("Error generating QR code:", error)
+      setError(errorMessage(error))
     } finally {
       setGenerating(false)
     }
-  }, [qrText, qrSize, qrFgColor, qrBgColor, addLayer, selectedFace])
+  }
 
-  const handleGenerateBarcode = useCallback(async () => {
+  const handleGenerateBarcode = async () => {
     if (!barcodeText.trim()) return
     
+    setError('')
     setGenerating(true)
     try {
-      const dataUrl = await generateBarcode(barcodeText, barcodeType, barcodeWidth, barcodeHeight)
+      const image = renderBarcodeArtwork(barcodeText, barcodeType, barcodeWidth, barcodeHeight)
+      const canvas=useDesignStore.getState().canvas
+      const scale=Math.min(1,canvas.width*.8/image.width,canvas.height*.8/image.height)
+      // Keep at least one logical pixel per module before the 2x PNG export.
+      if(image.modulePixels*scale<1)throw new CodeArtworkError('size')
       addLayer({
+        scale:{x:scale,y:scale},
         type: "image",
         name: `Barcode: ${barcodeText.slice(0, 20)}`,
         faceId: selectedFace,
         imageProperties: {
-          src: dataUrl,
-          naturalWidth: barcodeWidth,
-          naturalHeight: barcodeHeight,
+          src: image.src,
+          naturalWidth: image.width,
+          naturalHeight: image.height,
         },
       })
     } catch (error) {
-      console.error("Error generating barcode:", error)
+      setError(errorMessage(error))
     } finally {
       setGenerating(false)
     }
-  }, [barcodeText, barcodeType, barcodeWidth, barcodeHeight, addLayer, selectedFace])
+  }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-code-generators>
+      <p className="text-xs text-slate-600">{language==='ar'?'الأكواد القديمة المحفوظة لم يتم إصلاحها. أعد إنشاءها من المحتوى الأصلي واختبرها. حجم الصورة قد يزيد للحفاظ على وحدات كاملة. تحقق من المسح بعد التصدير والطباعة.':'Previously saved codes are not repaired. Recreate them from the original content and test them. Image size may increase to keep whole modules. Verify scanning after export and printing.'}</p>
       <div className="flex items-center gap-2 mb-2">
         <QrCode className="h-4 w-4 text-slate-600" />
         <h3 className="text-sm font-semibold">
@@ -243,7 +111,8 @@ export function CodeGenerators() {
         </h3>
       </div>
 
-      <Tabs defaultValue="qr" className="w-full">
+      <p className="text-xs text-slate-600">{language==='ar'?'المقاس المختار حد أدنى لصورة المصدر، وقد تكون الصورة أكبر. تتم ملاءمتها للوجه فقط إذا بقيت الوحدات واضحة.':'Selected size is a minimum source-image size, so the image may be larger. It is fitted to the face only if its modules remain large enough.'}</p>
+      <Tabs defaultValue="qr" className="w-full" onValueChange={()=>setError('')}>
         <TabsList className="grid grid-cols-2 w-full">
           <TabsTrigger value="qr" className="text-xs">
             <QrCode className="h-3 w-3 mr-1" />
@@ -262,8 +131,9 @@ export function CodeGenerators() {
             </Label>
             <Input
               placeholder={language === "ar" ? "أدخل النص أو الرابط..." : "Enter text or URL..."}
+              aria-label={language==='ar'?'محتوى QR':'QR content'}
               value={qrText}
-              onChange={(e) => setQrText(e.target.value)}
+              onChange={(e) => {setError('');setQrText(e.target.value)}}
               className="text-xs h-8"
             />
           </div>
@@ -275,7 +145,7 @@ export function CodeGenerators() {
               </Label>
               <Select
                 value={qrSize.toString()}
-                onValueChange={(v) => setQrSize(parseInt(v))}
+                onValueChange={(v) => {setError('');setQrSize(parseInt(v))}}
               >
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
@@ -296,14 +166,14 @@ export function CodeGenerators() {
                 <input
                   type="color"
                   value={qrFgColor}
-                  onChange={(e) => setQrFgColor(e.target.value)}
+                  onChange={(e)=>{setError('');setQrFgColor(e.target.value)}}
                   className="w-8 h-8 rounded cursor-pointer"
                   title={language === "ar" ? "لون المقدمة" : "Foreground"}
                 />
                 <input
                   type="color"
                   value={qrBgColor}
-                  onChange={(e) => setQrBgColor(e.target.value)}
+                  onChange={(e)=>{setError('');setQrBgColor(e.target.value)}}
                   className="w-8 h-8 rounded cursor-pointer"
                   title={language === "ar" ? "لون الخلفية" : "Background"}
                 />
@@ -311,6 +181,7 @@ export function CodeGenerators() {
             </div>
           </div>
 
+          {error&&<p role="alert" className="text-xs text-red-700">{error}</p>}
           <Button
             onClick={handleGenerateQR}
             disabled={!qrText.trim() || generating}
@@ -333,8 +204,9 @@ export function CodeGenerators() {
             </Label>
             <Input
               placeholder={language === "ar" ? "أدخل الكود..." : "Enter code..."}
+              aria-label={language==='ar'?'محتوى الباركود':'Barcode content'}
               value={barcodeText}
-              onChange={(e) => setBarcodeText(e.target.value)}
+              onChange={(e) => {setError('');setBarcodeText(e.target.value)}}
               className="text-xs h-8"
             />
           </div>
@@ -345,9 +217,9 @@ export function CodeGenerators() {
             </Label>
             <Select
               value={barcodeType}
-              onValueChange={(v: "code128" | "ean13" | "upc") => setBarcodeType(v)}
+              onValueChange={(v: 'code128'|'ean13'|'upc')=>{setError('');setBarcodeType(v)}}
             >
-              <SelectTrigger className="h-8 text-xs">
+              <SelectTrigger aria-label="Barcode type" className="h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -365,7 +237,7 @@ export function CodeGenerators() {
               </Label>
               <Select
                 value={barcodeWidth.toString()}
-                onValueChange={(v) => setBarcodeWidth(parseInt(v))}
+                onValueChange={(v) => {setError('');setBarcodeWidth(parseInt(v))}}
               >
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
@@ -384,7 +256,7 @@ export function CodeGenerators() {
               </Label>
               <Select
                 value={barcodeHeight.toString()}
-                onValueChange={(v) => setBarcodeHeight(parseInt(v))}
+                onValueChange={(v) => {setError('');setBarcodeHeight(parseInt(v))}}
               >
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
@@ -399,6 +271,7 @@ export function CodeGenerators() {
             </div>
           </div>
 
+          {error&&<p role="alert" className="text-xs text-red-700">{error}</p>}
           <Button
             onClick={handleGenerateBarcode}
             disabled={!barcodeText.trim() || generating}

@@ -138,4 +138,10 @@ describe('unified catalogue — 55 products, honest readiness', () => {
       expect((p as any).editorType, p.slug).toBeTruthy();
     }
   });
+  it('loyalty card has two full preview faces and own stock while manufacturing and quote stay deferred',async()=>{
+    const cfg=await catalogService.getEditorConfig('custom-loyalty-card',50);
+    expect(cfg.product.structure.faces).toEqual({front:{width:85,height:55,depth:1,label:'Front'},back:{width:85,height:55,depth:1,label:'Back'}});
+    expect(cfg.material).toMatchObject({code:'card-stock-white',hex:'#e9ecef'});expect(cfg.product.readiness).toEqual({preview:'in_progress',dieline:'deferred',pricing:'quote_required'});expect(cfg.product.dieline).toBeUndefined();expect(cfg.pricing.totalPrice).toBeNull();
+  });
+
 });

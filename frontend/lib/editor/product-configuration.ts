@@ -1,3 +1,5 @@
+import {loyaltyPreviewStockColour} from '../../../backend/src/modules/catalog/loyalty-preview.ts'
+import {thankYouPreviewStockColour} from '../../../backend/src/modules/catalog/thank-you-preview.ts'
 import type {DesignCoreState} from './state/types.ts'
 import {canonicalEditorType} from '../../../shared/catalog/products.ts'
 import {productPreviewCoverage} from './product-preview-coverage.ts'
@@ -38,5 +40,9 @@ export function readinessLabel(status:string,language='en'){
 /** One undo step keeps visual stock, requested stock and selected config in sync. */
 export function requestProductMaterial(core:DesignCoreState,code:string,candidates:readonly string[]):DesignCoreState{
  if(!candidates.includes(code))return core
- return {...core,model:{...core.model,material:code,boardSpecification:undefined,materialSpecification:{version:1,productType:canonicalEditorType(core.model.type),code,status:'requested',supplierConfirmed:false}},productConfig:core.productConfig?{...core.productConfig,selectedMaterial:code}:undefined}
+ const previousStock=loyaltyPreviewStockColour(core.model.type,core.model.material)??thankYouPreviewStockColour(core.model.type,core.model.material)
+ const nextStock=loyaltyPreviewStockColour(core.model.type,code)??thankYouPreviewStockColour(core.model.type,code)
+ // Follow a stock-colored canvas, but never overwrite a custom background.
+ const canvas=nextStock&&previousStock&&core.canvas?.backgroundColor===previousStock?{...core.canvas,backgroundColor:nextStock}:core.canvas
+ return {...core,canvas,model:{...core.model,material:code,boardSpecification:undefined,materialSpecification:{version:1,productType:canonicalEditorType(core.model.type),code,status:'requested',supplierConfirmed:false}},productConfig:core.productConfig?{...core.productConfig,selectedMaterial:code}:undefined}
 }

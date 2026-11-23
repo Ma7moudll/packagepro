@@ -4,6 +4,7 @@ import { useRef, useEffect, useCallback, useState } from "react"
 import * as fabric from "fabric"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { BLEED_MM, SAFE_MM } from "@/lib/editor/geometry/units"
+import { unsupportedArtworkOutputMessage, unsupportedSheetArtwork } from "@/lib/editor/print-coverage"
 import { useLanguage } from "@/providers/language-provider"
 import { TextProperties, ImageFilterConfig, DEFAULT_IMAGE_FILTERS } from "@/lib/editor/state/types"
 import { Button } from "@/components/ui/button"
@@ -165,7 +166,12 @@ export function DesignCanvas2D() {
   const { language } = useLanguage()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null)
+  const gestureLayerRef=useRef<string|null>(null)
 
+  const viewportRef=useRef<HTMLDivElement>(null)
+  // Display-only fit: keep Fabric's logical artwork/export coordinates intact.
+  const fitSheet=useDesignStore(s=>s.model.type==='loyalty_card'||s.model.type==='stand_up_pouch')
+  const [sheetScale,setSheetScale]=useState(1)
   const layers = useDesignStore((s) => s.layers)
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds)
   const selectedFace = useDesignStore((s) => s.ui.selectedFace)
@@ -181,10 +187,18 @@ export function DesignCanvas2D() {
   const guidesVisible = useDesignStore((s) => s.ui.guidesVisible)
   const toggleGuides = useDesignStore((s) => s.toggleGuides)
   
+  useEffect(()=>{
+    const viewport=viewportRef.current
+    if(!viewport||!fitSheet){setSheetScale(1);return}
+    const fit=()=>setSheetScale(Math.min(1,Math.max(1,viewport.clientWidth-48)/(canvasState.width+24),Math.max(1,viewport.clientHeight-48)/(canvasState.height+24)))
+    const observer=new ResizeObserver(fit);observer.observe(viewport);fit();return()=>observer.disconnect()
+  },[fitSheet,canvasState.width,canvasState.height])
+
   // Zone visibility state
   const [showBleed, setShowBleed] = useState(true)
   const [showSafeZone, setShowSafeZone] = useState(true)
   const [canvasReady, setCanvasReady] = useState(false)
+  const [exportNotice, setExportNotice] = useState("")
 
   // Smart Guides hook - uses canvasReady state to ensure canvas is initialized
   useSmartGuides({
@@ -234,12 +248,36 @@ export function DesignCanvas2D() {
         setSelectedLayers([])
       })
 
+      let stopping=false
+      const finish=(cancel=false)=>useDesignStore.getState().finishLayerGesture(cancel)
+      canvas.on("before:transform", ({transform})=>{
+        const id=(transform.target as any).layerId
+        if(!id)return // ActiveSelection remains outside this single-layer slice.
+        gestureLayerRef.current=id
+        useDesignStore.getState().beginLayerGesture(id,()=>{
+          if(!(canvas as any)._currentTransform){gestureLayerRef.current=null;return}
+          if(transform.actionPerformed)syncFabricObjectToLayer(transform.target,id)
+          stopping=true
+          try{canvas.endCurrentTransform()}finally{stopping=false;gestureLayerRef.current=null}
+        })
+      })
+      canvas.on("mouse:up",()=>finish())
+      const interrupt=()=>finish()
+      const cancel=()=>finish(true)
+      const visibility=()=>{if(document.hidden)finish()}
+      document.addEventListener("visibilitychange",visibility)
+      window.addEventListener("blur",interrupt)
+      window.addEventListener("pointercancel",cancel,true)
+      window.addEventListener("touchcancel",cancel,true)
+
       // Handle object modifications
       canvas.on("object:modified", (e) => {
+        if(stopping)return
         const fabricObj = e.target as any
         const layerId = fabricObj.layerId
         if (layerId && fabricObj) {
           syncFabricObjectToLayer(fabricObj, layerId)
+          finish()
         }
       })
 
@@ -247,7 +285,7 @@ export function DesignCanvas2D() {
         const fabricObj = e.target as any
         const layerId = fabricObj.layerId
         if (layerId && fabricObj) {
-          updateLayer(layerId, (layer) => ({
+          useDesignStore.getState().previewLayerGesture(layerId, (layer) => ({
             ...layer,
             position: { x: fabricObj.left || 0, y: fabricObj.top || 0 },
           }))
@@ -258,7 +296,7 @@ export function DesignCanvas2D() {
         const fabricObj = e.target as any
         const layerId = fabricObj.layerId
         if (layerId && fabricObj) {
-          updateLayer(layerId, (layer) => ({
+          useDesignStore.getState().previewLayerGesture(layerId, (layer) => ({
             ...layer,
             scale: { x: fabricObj.scaleX || 1, y: fabricObj.scaleY || 1 },
           }))
@@ -269,7 +307,7 @@ export function DesignCanvas2D() {
         const fabricObj = e.target as any
         const layerId = fabricObj.layerId
         if (layerId && fabricObj) {
-          updateLayer(layerId, (layer) => ({
+          useDesignStore.getState().previewLayerGesture(layerId, (layer) => ({
             ...layer,
             rotation: (fabricObj.angle || 0) * (Math.PI / 180),
           }))
@@ -277,6 +315,11 @@ export function DesignCanvas2D() {
       })
 
       return () => {
+        finish()
+        document.removeEventListener("visibilitychange",visibility)
+        window.removeEventListener("blur",interrupt)
+        window.removeEventListener("pointercancel",cancel,true)
+        window.removeEventListener("touchcancel",cancel,true)
         if ((window as any).__fabricCanvas === canvas) (window as any).__fabricCanvas = null
         canvas.dispose()
         fabricCanvasRef.current = null
@@ -369,10 +412,18 @@ export function DesignCanvas2D() {
       // current layer, not the initial empty layers closure, when persisting.
       const layer = useDesignStore.getState().layers.find((l) => l.id === layerId)
       if (!layer) return
+      if(gestureLayerRef.current===layerId){
+        useDesignStore.getState().previewLayerGesture(layerId,l=>({...l,
+          position:{x:fabricObj.left??0,y:fabricObj.top??0},
+          rotation:(fabricObj.angle??0)*(Math.PI/180),
+          scale:{x:fabricObj.scaleX??1,y:fabricObj.scaleY??1},
+        }))
+        return
+      }
 
       if (layer.type === "text" && fabricObj instanceof fabric.Text) {
         const fabShadow = fabricObj.shadow as any
-        updateLayer(layerId, (l) => ({
+        useDesignStore.getState().previewLayerGesture(layerId, (l) => ({
           ...l,
           position: { x: fabricObj.left || 0, y: fabricObj.top || 0 },
           rotation: (fabricObj.angle || 0) * (Math.PI / 180),
@@ -404,14 +455,14 @@ export function DesignCanvas2D() {
           },
         }))
       } else if (fabricObj instanceof fabric.Group) {
-        updateLayer(layerId, (l) => ({
+        useDesignStore.getState().previewLayerGesture(layerId, (l) => ({
           ...l,
           position: { x: fabricObj.left || 0, y: fabricObj.top || 0 },
           rotation: (fabricObj.angle || 0) * (Math.PI / 180),
           scale: { x: fabricObj.scaleX || 1, y: fabricObj.scaleY || 1 },
         }))
       } else if (layer.type === "image" && fabricObj instanceof fabric.Image) {
-        updateLayer(layerId, (l) => ({
+        useDesignStore.getState().previewLayerGesture(layerId, (l) => ({
           ...l,
           position: { x: fabricObj.left || 0, y: fabricObj.top || 0 },
           rotation: (fabricObj.angle || 0) * (Math.PI / 180),
@@ -422,7 +473,7 @@ export function DesignCanvas2D() {
           },
         }))
       } else if (layer.type === "shape") {
-        updateLayer(layerId, (l) => ({
+        useDesignStore.getState().previewLayerGesture(layerId, (l) => ({
           ...l,
           position: { x: fabricObj.left || 0, y: fabricObj.top || 0 },
           rotation: (fabricObj.angle || 0) * (Math.PI / 180),
@@ -618,6 +669,9 @@ export function DesignCanvas2D() {
       }
     }
 
+    // History restore changes the transform programmatically; refresh hit areas
+    // and selection handles as well as artwork pixels.
+    fabricObj.setCoords()
     fabricCanvasRef.current?.renderAll()
   }, [])
 
@@ -634,6 +688,16 @@ export function DesignCanvas2D() {
   }
 
   const exportDesign = () => {
+    // Shared output boundary (this button is a current-face PNG reference,
+    // not a full-design export): a two-face sheet carrying inside-face
+    // artwork must not produce a file that silently omits that artwork.
+    const storeState = useDesignStore.getState()
+    const unsupported = unsupportedSheetArtwork(storeState.model.faces, storeState.layers, storeState.model.type)
+    if (unsupported) {
+      setExportNotice(language === "ar" ? "التنزيل محظور: راجع تنبيه التصميم أعلاه." : "Download blocked. See the artwork warning above.")
+      return
+    }
+    setExportNotice("")
     if (fabricCanvasRef.current) {
       const dataURL = fabricCanvasRef.current.toDataURL({
         format: "png",
@@ -822,8 +886,8 @@ export function DesignCanvas2D() {
   return (
     <div className="relative w-full h-full flex flex-col bg-white">
       {/* 2D Canvas Toolbar */}
-      <div className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between">
-        <div className="flex items-center gap-2 bg-white/95 backdrop-blur-sm rounded-lg border p-2">
+      <div className="relative z-10 w-full min-w-0 shrink-0 p-2">
+        <div className="flex max-w-full min-w-0 items-center gap-2 overflow-x-auto bg-white/95 backdrop-blur-sm rounded-lg border p-2 [&>button]:shrink-0">
           <Button size="sm" variant="outline" onClick={() => handleZoom(0.1)}>
             <ZoomIn className="h-4 w-4" />
           </Button>
@@ -840,15 +904,18 @@ export function DesignCanvas2D() {
             <Magnet className="h-4 w-4" />
           </Button>
           <ZoneSettings />
-          <Button size="sm" variant="outline" onClick={exportDesign} title={language === "ar" ? "تحميل" : "Download"}>
+          <Button size="sm" variant="outline" onClick={exportDesign} title={language === "ar" ? "تنزيل الوجه الحالي (مرجع PNG)" : "Download current face (PNG reference)"}>
             <Download className="h-4 w-4" />
           </Button>
+
         </div>
+        {exportNotice && <p role="alert" className="bg-white px-2 py-1 text-xs text-red-700">{exportNotice}</p>}
       </div>
 
       {/* 2D Canvas */}
-      <div className="flex-1 flex items-center justify-center bg-slate-50 overflow-auto p-8">
-        <div className="relative" style={{ padding: showBleed ? "12px" : 0 }}>
+      <div ref={viewportRef} data-sheet-viewport className="min-h-0 min-w-0 flex-1 flex items-center justify-center bg-slate-50 overflow-auto p-8">
+        <div dir={fitSheet?"ltr":undefined} style={fitSheet?{width:(canvasState.width+(showBleed?24:0))*sheetScale,height:(canvasState.height+(showBleed?24:0))*sheetScale,flexShrink:0}:undefined}>
+        <div data-sheet-surface className="relative" style={{ padding: showBleed ? "12px" : 0,...(fitSheet?{width:canvasState.width+(showBleed?24:0),transform:`scale(${sheetScale})`,transformOrigin:"top left"}: {}) }}>
           {/* Zone Overlays */}
           <ZoneOverlays
             canvasWidth={canvasState.width}
@@ -874,6 +941,7 @@ export function DesignCanvas2D() {
             }}
           />
           <canvas ref={canvasRef} className="shadow-xl border border-slate-300 relative z-0" />
+        </div>
         </div>
       </div>
     </div>

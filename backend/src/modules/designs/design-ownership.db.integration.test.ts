@@ -96,18 +96,12 @@ import { vi } from 'vitest';
 // Force the stale-read interleavings that found the original ownership bug.
 // Reads and writes below still run against PostgreSQL, not an in-memory DB.
 async function synchronizedSaves(sessionId: string, a: string, b: string) {
-  const read = prisma.design.findUnique.bind(prisma.design);
-  let reads = 0;
-  let release!: () => void;
-  const bothRead = new Promise<void>((resolve) => { release = resolve; });
-  const spy = vi.spyOn(prisma.design, 'findUnique').mockImplementation((async (args: any) => {
-    const row = await read(args);
-    if (args.where.sessionId === sessionId) {
-      reads++;
-      if (reads === 2) release();
-      await bothRead;
-    }
-    return row;
+  // Synchronize transaction starts, before the session advisory lock. Both
+  // missing-row reads cannot occur now: the second saver sees the committed owner.
+  const transaction=prisma.$transaction.bind(prisma);let starts=0;let release!:()=>void;
+  const bothStarted=new Promise<void>(r=>release=r);
+  const spy=vi.spyOn(prisma,'$transaction').mockImplementation((async(cb:any,...options:any[])=>{
+    starts++;if(starts===2)release();await bothStarted;return (transaction as any)(cb,...options);
   }) as any);
   try {
     return await Promise.allSettled([
@@ -133,13 +127,13 @@ describe('ownership deterministic PostgreSQL interleavings', () => {
     expect(row.designData).toEqual({ by: row.ownerId });
   });
 
-  it('two first saves after synchronized missing-row reads return one success and one 409', async () => {
+  it('two synchronized first saves serialize to one success and one ownership denial', async () => {
     const a = await user('first-a'); const b = await user('first-b');
     const sid = `${marker}-sync-new`; sessionIds.push(sid);
     const results = await synchronizedSaves(sid, a.userId, b.userId);
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     const failure = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
-    expect(failure.reason).toMatchObject({ statusCode: 409 });
+    expect(failure.reason).toMatchObject({ statusCode: 403 });
     const rows = await prisma.design.findMany({ where: { sessionId: sid } });
     expect(rows).toHaveLength(1);
     expect(rows[0].designData).toEqual({ by: rows[0].ownerId });
@@ -149,16 +143,14 @@ describe('ownership deterministic PostgreSQL interleavings', () => {
     const a = await user('state-a');
     const sid = `${marker}-state`; sessionIds.push(sid);
     const d = await prisma.design.create({ data: { sessionId: sid, ownerId: a.userId, designData: { keep: true } } });
-    const read = prisma.design.findUnique.bind(prisma.design);
-    let injected = false;
-    const spy = vi.spyOn(prisma.design, 'findUnique').mockImplementation((async (args: any) => {
-      const row = await read(args);
-      if (!injected && args.where.sessionId === sid) {
-        injected = true;
-        await prisma.design.update({ where: { id: d.id }, data: { lifecycleStatus: 'SUBMITTED' } });
-      }
-      return row;
-    }) as any);
+    // Simulate a lifecycle update in the SAME transaction after its initial
+    // read. External writers are now blocked by FOR UPDATE until save commits.
+    const transaction=prisma.$transaction.bind(prisma);let injected=false;
+    const spy=vi.spyOn(prisma,'$transaction').mockImplementation((async(cb:any)=>transaction(async(tx:any)=>{
+      const read=tx.design.findUnique.bind(tx.design);
+      const proxy=new Proxy(tx,{get(target,key){if(key!=='design')return target[key];return new Proxy(tx.design,{get(d,k){if(k!=='findUnique')return d[k];return async(args:any)=>{const row=await read(args);if(!injected&&args.where.sessionId===sid&&args.include){injected=true;await tx.design.update({where:{id:row.id},data:{lifecycleStatus:'SUBMITTED'}})}return row}}})}});
+      return cb(proxy);
+    })) as any);
     try {
       await expect(designService.saveDesign({ sessionId: sid, designData: { forbidden: true } }, a.userId)).rejects.toMatchObject({ statusCode: 400 });
     } finally { spy.mockRestore(); }
@@ -228,16 +220,11 @@ describe('ownership deterministic PostgreSQL interleavings', () => {
     const a = await user('delete-save-a');
     const sid = `${marker}-delete-save`; sessionIds.push(sid);
     const d = await prisma.design.create({ data: { ownerId: a.userId, sessionId: sid } });
-    const update = prisma.design.updateMany.bind(prisma.design);
-    let injected = false;
-    const spy = vi.spyOn(prisma.design, 'updateMany').mockImplementation((async (args: any) => {
-      const result = await update(args);
-      if (!injected && args.where.id === d.id) {
-        injected = true;
-        await prisma.design.delete({ where: { id: d.id } });
-      }
-      return result;
-    }) as any);
+    const transaction=prisma.$transaction.bind(prisma);let injected=false;
+    const spy=vi.spyOn(prisma,'$transaction').mockImplementation((async(cb:any)=>transaction(async(tx:any)=>{
+      const update=tx.design.updateMany.bind(tx.design);
+      return cb(new Proxy(tx,{get(target,key){if(key!=='design')return target[key];return new Proxy(tx.design,{get(model,k){if(k!=='updateMany')return model[k];return async(args:any)=>{const result=await update(args);if(!injected&&args.where.id===d.id){injected=true;await tx.design.delete({where:{id:d.id}})}return result}}})}}));
+    })) as any);
     try {
       await expect(designService.saveDesign({ sessionId: sid, designData: {} }, a.userId)).rejects.toMatchObject({ statusCode: 409 });
     } finally { spy.mockRestore(); }
