@@ -1,3 +1,4 @@
+import {approvalContentHash} from '../orders/approval-snapshot';
 import { prisma } from '../../lib/prisma';
 import { NotFoundError, AppError } from '../../utils/errors';
 import { randomUUID } from 'crypto';
@@ -5,9 +6,9 @@ import { getRedisClient } from '../../lib/redis';
 import { fileUploadService } from '../../services/file-upload/upload.service';
 import { DesignLifecycleService, DesignLifecycleState } from '../../services/design-lifecycle/design-lifecycle.service';
 import { isDesignOwner } from '../../middleware/auth.middleware';
-import { enqueueExport, ExportJobData } from '../../workers/export-queue/export.worker';
 import { certifiedDielineReceipt } from './dieline-delivery';
 import { prePressCheckService } from '../../services/pre-press-checker/prepress.service';
+import { deriveUnsupportedArtwork, unsupportedArtworkOutputMessage } from '../../services/pre-press-checker/unsupported-artwork';
 
 export interface CreateDesignSessionData {
   orderId?: string;
@@ -47,30 +48,70 @@ export class DesignService {
     const sessionId = randomUUID();
     const redis = getRedisClient();
 
+    // An authenticated user may only attach a design to an order they own.
+    // This first check is a read; order ownership is not enforced as immutable
+    // by the database, so the claim below repeats it inside its guarded WHERE.
+    // A first insert still uses this read snapshot. Concurrent direct database
+    // reassignment before that insert is an operator-writer boundary, not an
+    // application guarantee. Current app paths do not reassign these relations.
+    // Unknown and foreign orders give the same 403 (no oracle).
+    if (data.orderId && ownerId) {
+      const order = await prisma.order.findUnique({
+        where: { id: data.orderId },
+        select: { customer: { select: { userId: true } } },
+      });
+      if (!order || order.customer?.userId !== ownerId) {
+        throw new AppError(403, 'You do not have access to this order');
+      }
+    }
+
     // Durable database record (owner-scoped). Without an order the design sits
     // in `draft` until it is saved or eventually linked to an order.
-    const design =
-      data.orderId && ownerId
-        ? await prisma.design.upsert({
-            where: { orderId: data.orderId },
-            update: { sessionId, updatedAt: new Date() },
-            create: {
-              orderId: data.orderId,
-              ownerId,
-              sessionId,
-              name: data.name,
-              description: data.description,
-            },
-          })
-        : await prisma.design.create({
-            data: {
-              orderId: data.orderId ?? null,
-              ownerId: ownerId ?? null,
-              sessionId,
-              name: data.name,
-              description: data.description,
-            },
-          });
+    let design: any;
+    if (data.orderId && ownerId) {
+      // Order-bound: Design.orderId is unique. Try to create; if one exists,
+      // take over its session ONLY through one guarded UPDATE whose WHERE
+      // clause holds the ownership rule (unowned, or already this user), so
+      // two concurrent callers cannot both pass a stale check.
+      try {
+        design = await prisma.design.create({
+          data: { orderId: data.orderId, ownerId, sessionId, name: data.name, description: data.description },
+        });
+      } catch (error: any) {
+        if (error?.code === 'P2003') {
+          // The order was deleted between the check and the insert.
+          throw new AppError(403, 'You do not have access to this order');
+        }
+        if (error?.code !== 'P2002') throw error;
+        const claimed = await prisma.design.updateMany({
+          where: {
+            orderId: data.orderId,
+            OR: [{ ownerId: null }, { ownerId }],
+            // Order membership is part of the same guarded write.
+            order: { is: { customer: { is: { userId: ownerId } } } },
+          },
+          data: { sessionId, ownerId, updatedAt: new Date() },
+        });
+        if (claimed.count !== 1) {
+          throw new AppError(403, 'You do not have access to this order');
+        }
+        design = await prisma.design.findUnique({ where: { orderId: data.orderId } });
+        if (!design) {
+          // Deleted right after the claim: never report success with no design.
+          throw new AppError(409, 'Design was removed while the session was being created; retry');
+        }
+      }
+    } else {
+      design = await prisma.design.create({
+        data: {
+          orderId: data.orderId ?? null,
+          ownerId: ownerId ?? null,
+          sessionId,
+          name: data.name,
+          description: data.description,
+        },
+      });
+    }
 
     // Mirror session in Redis (24 hour TTL) for fast lookups
     if (redis) {
@@ -156,6 +197,7 @@ export class DesignService {
    * Save design data (durable database persistence)
    */
   async saveDesign(data: SaveDesignData, ownerId?: string): Promise<any> {
+    if (data.files?.some((file) => file.fileType === 'artwork_review')) throw new AppError(400, 'Review artifacts must use the owner-bound review endpoint');
     let session: any = {};
     const redis = getRedisClient();
 
@@ -170,9 +212,14 @@ export class DesignService {
       }
     }
 
+    const design = await prisma.$transaction(async (tx) => {
+      // Serialize the first-save session race, then existing design content.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${data.sessionId}, 0))`;
+      const row = await tx.design.findUnique({where:{sessionId:data.sessionId},select:{id:true}});
+      if (row) await tx.$queryRaw`SELECT id FROM designs WHERE id = ${row.id} FOR UPDATE`;
     // Upsert the design record. The editor session is self-sufficient (no
     // order required); if an orderId is attached later the record is linked.
-    let design = await prisma.design.findUnique({
+    let design = await tx.design.findUnique({
       where: { sessionId: data.sessionId },
       include: { files: true },
     });
@@ -190,8 +237,21 @@ export class DesignService {
         );
       }
 
-      design = await prisma.design.update({
-        where: { id: design.id },
+      // Ownership and write happen in ONE guarded UPDATE. The WHERE clause is
+      // the rule, evaluated by the database under the row lock, so concurrent
+      // savers cannot both pass: the first claims an unowned design, the second
+      // matches 0 rows. An existing owner is never reassigned.
+      const ownerGuard: any = ownerId
+        ? {
+            OR: [{ ownerId: null }, { ownerId }],
+            // Order-bound designs must also belong to the caller's order.
+            ...(design.orderId
+              ? { orderId: design.orderId, order: { is: { customer: { is: { userId: ownerId } } } } }
+              : { orderId: null }),
+          }
+        : { ownerId: null };
+      const written = await tx.design.updateMany({
+        where: { id: design.id, lifecycleStatus: 'DRAFT', ...ownerGuard },
         data: {
           designData: data.designData as any,
           status: 'saved',
@@ -201,10 +261,23 @@ export class DesignService {
           ...(data.sku ? { sku: data.sku } : {}),
           ...(data.designConfig ? { designConfig: data.designConfig as any } : {}),
         },
-        include: { files: true },
       });
+      if (written.count !== 1) {
+        // Distinguish a lost race on state from an ownership refusal.
+        const current = await tx.design.findUnique({ where: { id: design.id }, select: { lifecycleStatus: true } });
+        if (current && current.lifecycleStatus !== 'DRAFT') {
+          throw new AppError(400, `Cannot save design in ${current.lifecycleStatus} status. Only DRAFT designs can be edited.`);
+        }
+        throw new AppError(403, 'You do not have access to this design');
+      }
+      design = await tx.design.findUnique({ where: { id: design.id }, include: { files: true } });
+      if (!design) {
+        // Deleted right after the guarded write: never report success with no design.
+        throw new AppError(409, 'Design was removed while saving; retry');
+      }
     } else {
-      design = await prisma.design.create({
+      try {
+      design = await tx.design.create({
         data: {
           orderId: session.orderId ?? null,
           ownerId: ownerId ?? null,
@@ -220,7 +293,37 @@ export class DesignService {
         },
         include: { files: true },
       });
+      } catch (error: any) {
+        // Two first-saves of the same session raced: the loser must retry
+        // (it then goes through the guarded update), never overwrite.
+        if (error?.code === 'P2002') throw new AppError(409, 'Design session is being saved by another request; retry');
+        // The referenced order disappeared before the insert.
+        if (error?.code === 'P2003') throw new AppError(409, 'Design could not be saved because a linked record no longer exists');
+        throw error;
+      }
     }
+
+    // Save files if provided
+    if (data.files && data.files.length > 0 && design) {
+      await Promise.all(
+        data.files.map((file) =>
+          tx.designFile.create({
+            data: {
+              designId: design.id,
+              fileType: file.fileType,
+              fileName: file.fileName,
+              fileUrl: file.fileUrl,
+              fileSize: file.fileSize,
+              mimeType: file.mimeType,
+              metadata: { ...(file.metadata as any), approvalContentHash: approvalContentHash(design) },
+            },
+          })
+        )
+      );
+    }
+
+      return design;
+    });
 
     // Mirror session in Redis
     if (redis) {
@@ -239,24 +342,6 @@ export class DesignService {
       }
     }
 
-    // Save files if provided
-    if (data.files && data.files.length > 0 && design) {
-      await Promise.all(
-        data.files.map((file) =>
-          prisma.designFile.create({
-            data: {
-              designId: design.id,
-              fileType: file.fileType,
-              fileName: file.fileName,
-              fileUrl: file.fileUrl,
-              fileSize: file.fileSize,
-              mimeType: file.mimeType,
-              metadata: file.metadata as any,
-            },
-          })
-        )
-      );
-    }
 
     return design;
   }
@@ -306,8 +391,10 @@ export class DesignService {
       fileType: string;
     }
   ): Promise<any> {
+    if (file.fileType === 'artwork_review') throw new AppError(400, 'Review artifacts must use the owner-bound review endpoint');
     // Verify design exists
-    await this.getDesign(designId);
+    const initialDesign = await this.getDesign(designId);
+    const initialHash = approvalContentHash(initialDesign);
 
     // Upload to S3
     const uploadResult = await fileUploadService.uploadFile(
@@ -318,7 +405,11 @@ export class DesignService {
     );
 
     // Save file record
-    const designFile = await prisma.designFile.create({
+    const designFile = await prisma.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM designs WHERE id = ${designId} FOR UPDATE`;
+      const current=await tx.design.findUniqueOrThrow({where:{id:designId}});
+      if(approvalContentHash(current)!==initialHash)throw new AppError(409,'Design changed while uploading; retry against the saved design');
+    const result = await tx.designFile.create({
       data: {
         designId,
         fileType: file.fileType,
@@ -326,7 +417,11 @@ export class DesignService {
         fileUrl: uploadResult.fileUrl,
         fileSize: uploadResult.fileSize,
         mimeType: uploadResult.mimeType,
+        metadata: {approvalContentHash:approvalContentHash(current)},
       },
+    });
+
+      return result;
     });
 
     return designFile;
@@ -404,7 +499,7 @@ export class DesignService {
 
   /**
    * Export design in specified format
-   * Enqueues an async export job
+   * svg returns the certified dieline receipt; other formats are not implemented server-side
    */
   async exportDesign(
     designId: string,
@@ -422,10 +517,19 @@ export class DesignService {
     // Verify design exists
     const design = await this.getDesign(designId);
 
-    // Check if user can export (owner or admin)
+    // Only the design owner can export.
     const isOwner = await isDesignOwner(userId, designId);
     if (!isOwner) {
       throw new AppError(403, 'Only the design owner can export');
+    }
+
+    // Shared output boundary, derived from the saved layers and structure
+    // (not the optional manifest flag alone): a two-face sheet carrying
+    // inside-face artwork gets no export of any format — including the
+    // certified dieline receipt below — until the user resolves it.
+    const unsupported = deriveUnsupportedArtwork(design.designData);
+    if (unsupported) {
+      throw new AppError(400, `Export blocked: ${unsupportedArtworkOutputMessage(unsupported)}`);
     }
 
     // Check if design can be exported
@@ -440,8 +544,8 @@ export class DesignService {
     // M8-J: certified dieline delivery is synchronous — the geometry lives in the
     // frontend canonical pipeline (resolveDieline -> serializeSVG), so the server
     // returns an explicit delivery receipt grounded in the persisted M8-I result
-    // and the design lifecycle, never a fabricated artifact. Raster/composite
-    // formats keep the async job queue below.
+    // and the design lifecycle, never a fabricated artifact. Other formats
+    // return 501 until a real server-side exporter exists.
     if (options.format === 'svg') {
       const boxType = (design.designData as any)?.manifest?.product?.boxType ?? (design.designData as any)?.product?.boxType;
       const prepress = design.orderId
@@ -455,25 +559,14 @@ export class DesignService {
       });
     }
 
-    // Enqueue export job
-    const exportData: ExportJobData = {
-      designId,
-      format: options.format,
-      options: options.options,
-    };
-
-    try {
-      const job = await enqueueExport(exportData);
-      
-      return {
-        jobId: job.id,
-        status: 'queued',
-        format: options.format,
-        message: `Export job queued. Check status with jobId: ${job.id}`,
-      };
-    } catch (error) {
-      throw new AppError(500, 'Failed to queue export job');
-    }
+    // png/pdf/ai/eps: the server has no real renderer yet (the queue worker is
+    // never started and only produces placeholder bytes), so do not queue a job
+    // that can only end as a fake success. Browser previews and the certified
+    // dieline (svg) are unaffected.
+    throw new AppError(
+      501,
+      `Server-side ${options.format} export is not available yet. Use the editor's browser export, or the certified dieline (svg).`
+    );
   }
 
   /**

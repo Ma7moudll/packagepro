@@ -1,6 +1,5 @@
 import { Worker } from 'bullmq';
 import { getRedisClient, isRedisEnabled } from '../../lib/redis';
-import { getEmailQueue } from '../../lib/queues';
 import { approvalService } from '../../modules/orders/approval.service';
 import { logger } from '../../utils/logger';
 
@@ -14,18 +13,11 @@ export const reminderWorker = redis && isRedisEnabled() ? new Worker(
 
     try {
       switch (type) {
-        case 'approval-reminder':
-          const emailQueue = getEmailQueue();
-          if (emailQueue) {
-            await emailQueue.add('email', {
-              type: 'approval-reminder',
-              orderId: data.orderId,
-              approvalUrl: data.approvalUrl,
-              reminderType: data.type, // 24h, 48h, 72h
-            });
-            logger.info(`Approval reminder sent for order ${data.orderId}`);
-          }
+        case 'approval-reminder': {
+          // Legacy jobs contain unbound URLs. Do not reactivate or forward them.
+          logger.warn('Unbound legacy approval reminder skipped');
           break;
+        }
 
         case 'auto-cancel-order':
           await approvalService.autoCancelOrder(data.orderId);

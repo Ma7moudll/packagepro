@@ -1,13 +1,14 @@
 import 'dotenv/config';
-import Fastify, { FastifyError, FastifyRequest, FastifyReply } from 'fastify';
+import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { connectRedis, isRedisEnabled, getRedisClient } from './lib/redis';
 import { logger } from './utils/logger';
-import { AppError } from './utils/errors';
-import { startWorkers } from './workers';
+import { httpErrorHandler } from './utils/http-error-handler';
+import { startWorkers, getBackgroundWorkerStatus } from './workers';
 
 import rawBody from 'fastify-raw-body';
+import { registerReviewFileRedaction } from './modules/designs/artwork-review-response';
 
 const server = Fastify({
   logger: process.env.NODE_ENV === 'development',
@@ -18,6 +19,9 @@ const server = Fastify({
   // preventing header spoofing from bypassing per-IP rate limits.
   trustProxy: process.env.TRUST_PROXY === 'true',
 });
+
+// Strip private review metadata from every nested API file list.
+registerReviewFileRedaction(server);
 
 // Register plugins
 async function registerPlugins() {
@@ -110,47 +114,7 @@ server.addHook('onResponse', async (request: FastifyRequest, reply: FastifyReply
 });
 
 // Error handler
-server.setErrorHandler(
-  (error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
-    logger.error('Request error', error, {
-      method: request.method,
-      url: request.url,
-      statusCode: error.statusCode,
-    });
-
-    if (error instanceof AppError) {
-      return reply.status(error.statusCode).send({
-        success: false,
-        error: error.code || 'ERROR',
-        message: error.message,
-        details: error.details,
-      });
-    }
-
-    // Validation error from Fastify
-    if (error.validation) {
-      return reply.status(400).send({
-        success: false,
-        error: 'VALIDATION_ERROR',
-        message: 'Validation failed',
-        details: error.validation,
-      });
-    }
-
-    // Default error response
-    const statusCode = error.statusCode || 500;
-    const message =
-      statusCode === 500 && process.env.NODE_ENV === 'production'
-        ? 'Internal server error'
-        : error.message;
-
-    return reply.status(statusCode).send({
-      success: false,
-      error: 'INTERNAL_ERROR',
-      message,
-    });
-  }
-);
+server.setErrorHandler(httpErrorHandler);
 
 // Root endpoint
 server.get('/', async () => {
@@ -187,10 +151,15 @@ server.get('/', async () => {
 
 // Health check endpoint
 server.get('/health', async () => {
+  const redisReady = isRedisEnabled();
   return {
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    // Additive: Redis is optional for boot, but background work (email,
+    // settlement, reminder, marketing and export queues) only runs with it.
+    redis: redisReady ? 'ready' : 'unavailable',
+    backgroundWorkers: getBackgroundWorkerStatus(),
   };
 });
 
@@ -281,6 +250,18 @@ async function registerRoutes() {
   logger.info('Routes registered');
 }
 
+// Redis is optional for boot, but without it the BullMQ workers never start.
+// Say so loudly in production instead of at info level.
+function warnRedisUnavailable(): void {
+  if (process.env.NODE_ENV === 'production') {
+    logger.warn(
+      'Redis is not available: background workers (email, settlement, reminder, marketing, export) are disabled and queued work will not run. /health reports redis=unavailable.',
+    );
+  } else {
+    logger.info('Running without Redis (optional service)');
+  }
+}
+
 // Start server
 async function start() {
   try {
@@ -291,10 +272,10 @@ async function start() {
       if (isRedisEnabled()) {
         logger.info('Redis connected');
       } else {
-        logger.info('Running without Redis (optional service)');
+        warnRedisUnavailable();
       }
     } catch (error) {
-      logger.info('Running without Redis (optional service)');
+      warnRedisUnavailable();
     }
 
     // Register plugins

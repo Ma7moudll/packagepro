@@ -34,7 +34,7 @@ export function detectFileKind(buffer: Buffer, declaredMimeType?: string | null)
   if (buffer.length >= 10 && buffer.subarray(0, PS_MAGIC.length).equals(PS_MAGIC)) {
     return { kind: 'postscript', mimeType: 'application/postscript' };
   }
-  const head = buffer.subarray(0, 2048).toString('latin1').replace(/\u0000/g, '').trim();
+  const head = buffer.subarray(0, 2048).toString('latin1').split(String.fromCharCode(0)).join('').trim();
   if (head.startsWith('<svg') || head.startsWith('<?xml') || /<svg[\s>]/.test(head)) {
     return { kind: 'svg', mimeType: 'image/svg+xml' };
   }

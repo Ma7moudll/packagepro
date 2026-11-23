@@ -4,9 +4,10 @@
  *     /orders/:orderId/approve?token=...
  *   - Approves via the existing POST /orders/:id/approve endpoint
  *     (NO duplicate backend API).
- *   - Requests changes via PATCH /orders/:id/status → pending_review.
+ *   - Revision guidance routes the customer to the order administrator.
+ *     Only the separate admin reopen endpoint can return an order to review.
  */
-import { apiGet, apiPost, apiPatch } from "./client"
+import { apiGet, apiPost } from "./client"
 import type { Order } from "@shared/types"
 
 export const approvalsApi = {
@@ -17,7 +18,4 @@ export const approvalsApi = {
   approve: (id: string, token: string) =>
     apiPost<{ message: string }>(`/orders/${id}/approve`, { token }),
 
-  /** PATCH /orders/:id/status { status: "pending_review" } — bounce back for vendor revision. */
-  requestChanges: (id: string) =>
-    apiPatch<Order>(`/orders/${id}/status`, { status: "pending_review" }),
 }

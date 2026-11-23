@@ -68,14 +68,37 @@ export async function isDesignOwner(
 ): Promise<boolean> {
   const design = await prisma.design.findUnique({
     where: { id: designId },
-    select: { order: { select: { customerId: true } } },
+    select: {
+      ownerId: true,
+      order: { select: { customer: { select: { userId: true } } } },
+    },
   });
 
   if (!design) {
     return false;
   }
+  return designOwnerMatches(design.ownerId, design.order?.customer?.userId ?? null, userId);
+}
 
-  return design.order ? design.order.customerId === userId : false;
+/**
+ * Ownership identity: Design.ownerId is a User.id. Order.customerId points at
+ * Customer.id, so the order's user is order.customer.userId (never compare
+ * Order.customerId to a User.id).
+ * - ownerId only (editor draft, no order): owner is ownerId.
+ * - order only (legacy rows without ownerId): owner is the order's customer user.
+ * - both: they must agree. A conflict fails closed for everyone.
+ * - neither: nobody owns it.
+ */
+export function designOwnerMatches(
+  ownerId: string | null | undefined,
+  orderUserId: string | null | undefined,
+  userId: string
+): boolean {
+  if (!userId) return false;
+  if (ownerId && orderUserId) return ownerId === orderUserId && ownerId === userId;
+  if (ownerId) return ownerId === userId;
+  if (orderUserId) return orderUserId === userId;
+  return false;
 }
 
 /**

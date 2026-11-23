@@ -1,5 +1,6 @@
+import {approvalContentHash,approvalBytesHash} from '../../backend/src/modules/orders/approval-snapshot'
 import { createRequire } from "node:module"
-import { readFileSync } from "node:fs"
+import { readFileSync, mkdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
 // Playwright transpiles specs to CJS; __dirname is the e2e directory.
@@ -29,8 +30,10 @@ let pool: InstanceType<typeof Pool> | null = null
 function getPool(): InstanceType<typeof Pool> {
   if (pool) return pool
   const dotEnv = loadDotenv(path.join(backendDir, ".env"))
-  const url = dotEnv.DATABASE_URL
-  if (!url) throw new Error("DATABASE_URL not found in backend/.env")
+  const url = process.env.DATABASE_URL || dotEnv.DATABASE_URL
+  if (!url) throw new Error("DATABASE_URL is required for disposable E2E fixtures")
+  const parsed=new URL(url)
+  if(process.env.PACKAGEPRO_DISPOSABLE_E2E_DATABASE!=="yes"||!["localhost","127.0.0.1"].includes(parsed.hostname)||!/(?:^|[_-])(?:test|e2e)(?:[_-]|$)/i.test(decodeURIComponent(parsed.pathname).replace(/^\//,"")))throw new Error("E2E fixtures require an explicitly disposable local test database")
   pool = new Pool({ connectionString: url, max: 2 })
   return pool
 }
@@ -326,10 +329,18 @@ export async function createOrderFixture(opts: {
   let approvalToken = ""
   if (opts.approvalToken) {
     approvalToken = opts.approvalToken
-    await redisSetJSON(`approval:token:${approvalToken}`, {
-      orderId,
-      createdAt: new Date().toISOString(),
-    })
+    if(!designId||!opts.withProofFiles)throw new Error('Approval fixture requires saved design/proof')
+    const {createHash}=require_('crypto');const {PDFDocument}=require_('pdf-lib');
+    const requestId=randomUUID();const printId=randomUUID();const pdf=await PDFDocument.create();pdf.addPage();const bytes=Buffer.from(await pdf.save());
+    // This browser fixture uses identical test print/proof bytes and a prebound
+    // local snapshot URL. Snapshot separation is exercised by backend real-save tests.
+    const folder=path.join(backendDir,'.data/uploads/test-e2e-approval',requestId);mkdirSync(folder,{recursive:true});writeFileSync(path.join(folder,'print.pdf'),bytes);writeFileSync(path.join(folder,'proof.pdf'),bytes);
+    const printUrl=`/api/files/test-e2e-approval/${requestId}/print.pdf`,proofUrl=`/api/files/test-e2e-approval/${requestId}/proof.pdf`;
+    const design=await dbSingle<any>('SELECT * FROM designs WHERE id=$1',[designId]);const hash=approvalContentHash(design);
+    await dbQuery(`INSERT INTO design_files(id,"designId","fileType","fileName","fileUrl","fileSize","mimeType",metadata,"createdAt") VALUES($1,$2,'print_file','print.pdf',$3,$4,'application/pdf',$5::jsonb,now())`,[printId,designId,printUrl,bytes.length,JSON.stringify({approvalContentHash:hash})]);
+    const proof=await dbSingle<any>(`SELECT id FROM design_files WHERE "designId"=$1 AND "fileType"='proof' LIMIT 1`,[designId]);await dbQuery('UPDATE design_files SET "fileUrl"=$1 WHERE id=$2',[proofUrl,proof!.id]);
+    await dbQuery(`INSERT INTO approval_requests(id,"orderId","designId",status,"contentHash","designSnapshot","printFileId","printSha256","printSnapshotUrl","proofFileId","proofSha256","proofUrl","deliveryState","createdAt","expiresAt") VALUES($1,$2,$3,'pending',$4,$5::jsonb,$6,$7,$8,$9,$7,$10,'sent',$11,$12)`,[requestId,orderId,designId,hash,JSON.stringify({designData:design.designData,designConfig:design.designConfig}),printId,approvalBytesHash(bytes),printUrl,proof!.id,proofUrl,new Date().toISOString(),new Date(Date.now()+7*86400000).toISOString()]);
+    await dbQuery(`INSERT INTO order_approval_tokens("tokenHash","orderId","requestId","expiresAt") VALUES($1,$2,$3,now()+interval '7 days')`,[createHash('sha256').update(approvalToken).digest('hex'),orderId,requestId]);
   }
 
   return { orderId, orderNumber, designId, approvalToken }
@@ -346,7 +357,7 @@ let redisClient: InstanceType<any> | null = null
 function getRedis(): InstanceType<any> | null {
   if (redisClient) return redisClient
   const dotEnv = loadDotenv(path.join(backendDir, ".env"))
-  const url = dotEnv.REDIS_URL
+  const url = process.env.REDIS_URL || dotEnv.REDIS_URL
   if (!url) return null
   const Redis = require_(require_.resolve("ioredis"))
   redisClient = new Redis(url, {
