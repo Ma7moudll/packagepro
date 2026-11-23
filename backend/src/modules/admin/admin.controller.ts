@@ -1,3 +1,4 @@
+import {parseAdminListQuery} from './admin-list-query';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { sumByCurrency } from "../../utils/currency-summary";
 import { prisma } from '../../lib/prisma';
@@ -89,14 +90,8 @@ export class AdminController {
 
   /** All platform orders with search (number/email), status filter, pagination. */
   async getOrders(request: FastifyRequest, reply: FastifyReply) {
-    const query = request.query as {
-      page?: string;
-      limit?: string;
-      status?: string;
-      search?: string;
-    };
-    const page = Math.max(1, parseInt(query.page || '1'));
-    const limit = Math.min(100, Math.max(1, parseInt(query.limit || '20')));
+    const query = parseAdminListQuery(request.query,'orders');
+    const {page,limit,skip} = query;
 
     const where: Record<string, unknown> = {};
     if (query.status) {
@@ -113,9 +108,9 @@ export class AdminController {
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
         where,
-        skip: (page - 1) * limit,
+        skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' },{id:'desc'}],
         include: {
           customer: { include: { user: { select: { email: true, firstName: true, lastName: true } } } },
           items: true,
@@ -141,9 +136,8 @@ export class AdminController {
 
   /** Vendor directory with live operational stats for management actions. */
   async getVendors(request: FastifyRequest, reply: FastifyReply) {
-    const query = request.query as { page?: string; limit?: string; active?: string };
-    const page = Math.max(1, parseInt(query.page || '1'));
-    const limit = Math.min(100, Math.max(1, parseInt(query.limit || '20')));
+    const query = parseAdminListQuery(request.query,'vendors');
+    const {page,limit,skip} = query;
 
     const where: Record<string, unknown> = {};
     if (query.active === 'true') where.isActive = true;
@@ -152,9 +146,9 @@ export class AdminController {
     const [vendors, total] = await Promise.all([
       prisma.vendor.findMany({
         where,
-        skip: (page - 1) * limit,
+        skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' },{id:'desc'}],
         include: {
           user: { select: { email: true, firstName: true, lastName: true, lastLoginAt: true } },
           _count: { select: { purchaseOrders: true, handshakes: true, productions: true, reviews: true } },
@@ -191,9 +185,8 @@ export class AdminController {
 
   /** QA sample review queue with order/production context, newest first. */
   async getSamples(request: FastifyRequest, reply: FastifyReply) {
-    const query = request.query as { status?: string; page?: string; limit?: string };
-    const page = Math.max(1, parseInt(query.page || '1'));
-    const limit = Math.min(100, Math.max(1, parseInt(query.limit || '20')));
+    const query = parseAdminListQuery(request.query,'samples');
+    const {page,limit,skip} = query;
 
     const where: Record<string, unknown> = {};
     if (query.status) {
@@ -203,9 +196,9 @@ export class AdminController {
     const [samples, total] = await Promise.all([
       prisma.sample.findMany({
         where,
-        skip: (page - 1) * limit,
+        skip,
         take: limit,
-        orderBy: [{ status: 'desc' }, { updatedAt: 'desc' }],
+        orderBy: [{ status: 'desc' }, { updatedAt: 'desc' }, {id:'desc'}],
         include: {
           production: {
             include: {
@@ -231,9 +224,8 @@ export class AdminController {
   }
 
   /** Customer list with lifetime order count and spend (LTV proxy). */  async getCustomers(request: FastifyRequest, reply: FastifyReply) {
-    const query = request.query as { page?: string; limit?: string; search?: string };
-    const page = Math.max(1, parseInt(query.page || '1'));
-    const limit = Math.min(100, Math.max(1, parseInt(query.limit || '20')));
+    const query = parseAdminListQuery(request.query,'customers');
+    const {page,limit,skip} = query;
 
     const where: Record<string, unknown> = {};
     if (query.search) {
@@ -250,9 +242,9 @@ export class AdminController {
     const [customers, total] = await Promise.all([
       prisma.customer.findMany({
         where,
-        skip: (page - 1) * limit,
+        skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' },{id:'desc'}],
         include: {
           user: { select: { email: true, firstName: true, lastName: true, createdAt: true } },
           orders: { select: { total: true, currency: true, status: true, createdAt: true } },
