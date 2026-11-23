@@ -1,86 +1,106 @@
-import { prisma } from '../../lib/prisma';
-import { NotFoundError, ValidationError } from '../../utils/errors';
-import { notificationService } from '../notifications/notifications.service';
+import { prisma } from "../../lib/prisma";
+import {
+  ConflictError,
+  AuthorizationError,
+  NotFoundError,
+  ValidationError,
+} from "../../utils/errors";
+import { notificationService } from "../notifications/notifications.service";
+
+const context = {
+  purchaseOrder: { include: { order: true } },
+  vendor: true,
+} as const;
 
 export class ProductionService {
-  /**
-   * Start production
-   */
-  async startProduction(poId: string): Promise<any> {
-    const po = await prisma.purchaseOrder.findUnique({
-      where: { id: poId },
-      include: {
-        order: true,
-      },
+  /** A retry observes the existing run; it never restarts or erases its progress. */
+  async startProduction(poId: string, actor: {userId:string;role:string}) {
+    const result = await prisma.$transaction(async (tx) => {
+      const lookup = await tx.purchaseOrder.findUnique({
+        where: { id: poId },
+        select: { orderId: true },
+      });
+      if (!lookup) throw new NotFoundError("Purchase Order");
+      // Start requests lock order then PO. Other workflow writers are not
+      // coordinated here; this is not a whole-lifecycle aggregate-state protocol.
+      await tx.$queryRaw`SELECT id FROM orders WHERE id=${lookup.orderId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM purchase_orders WHERE id=${poId} FOR UPDATE`;
+      const po = await tx.purchaseOrder.findUniqueOrThrow({
+        where: { id: poId },
+        include: { order: true },
+      });
+      // Recheck the authenticated actor against the locked PO, not only the
+      // controller's earlier observation. Direct DB/operator reassignment is possible.
+      if(actor.role !== 'ADMIN') {
+        if(actor.role !== 'VENDOR') throw new AuthorizationError('Only the assigned vendor or admin may start production');
+        const vendor = await tx.vendor.findUnique({where:{userId:actor.userId},select:{id:true}});
+        if(!vendor || vendor.id!==po.vendorId) throw new AuthorizationError('You do not have access to this purchase order');
+      }
+      const existing = await tx.production.findUnique({
+        where: { poId },
+        include: context,
+      });
+      if(existing && existing.vendorId!==po.vendorId) throw new ConflictError('Production vendor differs from purchase order; manual investigation required');
+      if (existing && existing.status !== "not_started")
+        return { production: existing, started: false };
+      if (po.status !== "confirmed")
+        throw new ValidationError(
+          "PO must be confirmed before starting production",
+        );
+      if (!["vendor_confirmed", "in_production"].includes(po.order.status))
+        throw new ConflictError("Order is not eligible to start production");
+      const production = existing
+        ? await tx.production.update({
+            where: { id: existing.id },
+            data: {
+              status: "in_progress",
+              startedAt: new Date(),
+              progressPercent: 0,
+            },
+            include: context,
+          })
+        : await tx.production.create({
+            data: {
+              poId,
+              vendorId: po.vendorId,
+              status: "in_progress",
+              startedAt: new Date(),
+              progressPercent: 0,
+            },
+            include: context,
+          });
+      if (po.order.status === "vendor_confirmed")
+        await tx.order.update({
+          where: { id: po.orderId },
+          data: { status: "in_production" },
+        });
+      return { production, started: true };
     });
-
-    if (!po) {
-      throw new NotFoundError('Purchase Order');
-    }
-
-    if (po.status !== 'confirmed') {
-      throw new ValidationError('PO must be confirmed before starting production');
-    }
-
-    // Create or update production record
-    const production = await prisma.production.upsert({
-      where: { poId },
-      update: {
-        status: 'in_progress',
-        startedAt: new Date(),
-        progressPercent: 0,
-      },
-      create: {
-        poId,
-        vendorId: po.vendorId,
-        status: 'in_progress',
-        startedAt: new Date(),
-        progressPercent: 0,
-      },
-      include: {
-        purchaseOrder: {
-          include: {
-            order: true,
+    if (result.started) {
+      const orderCustomer = await prisma.order.findUnique({
+        where: { id: result.production.purchaseOrder.orderId },
+        select: { orderNumber: true, customer: { select: { userId: true } } },
+      });
+      if (orderCustomer?.customer?.userId)
+        await notificationService.createIfUnseen(
+          orderCustomer.customer.userId,
+          {
+            entityType: "order",
+            entityId: result.production.purchaseOrder.orderId,
           },
-        },
-        vendor: true,
-      },
-    });
-
-    // Update order status
-    await prisma.order.update({
-      where: { id: po.orderId },
-      data: {
-        status: 'in_production',
-      },
-    });
-
-    const orderCustomer = await prisma.order.findUnique({
-      where: { id: po.orderId },
-      select: {
-        orderNumber: true,
-        customer: {
-          select: {
-            userId: true,
+          {
+            type: "production_started",
+            title: `Production started for ${orderCustomer.orderNumber}`,
+            message: `Your order ${orderCustomer.orderNumber} is now in production.`,
+            link: `/orders/${result.production.purchaseOrder.orderId}`,
           },
-        },
-      },
-    });
-
-    if (orderCustomer?.customer?.userId) {
-      await notificationService.createIfUnseen(
-        orderCustomer.customer.userId,
-        { entityType: 'order', entityId: po.orderId },
-        {
-          type: 'production_started',
-          title: `Production started for ${orderCustomer.orderNumber}`,
-          message: `Good news — your order ${orderCustomer.orderNumber} is now in production.`,
-          link: `/orders/${po.orderId}`,
-        }
-      );
+        );
     }
-
-    return production;
+    // Reload the relation after its atomic order transition rather than returning stale order state.
+    return prisma.production.findUniqueOrThrow({
+      where: { id: result.production.id },
+      include: context,
+    });
   }
 
   /**
@@ -91,7 +111,7 @@ export class ProductionService {
     progressPercent: number,
     notes?: string
   ): Promise<any> {
-    if (progressPercent < 0 || progressPercent > 100) {
+    if (!Number.isInteger(progressPercent) || progressPercent < 0 || progressPercent > 100) {
       throw new ValidationError('Progress must be between 0 and 100');
     }
 
