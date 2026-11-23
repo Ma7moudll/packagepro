@@ -1,4 +1,9 @@
 "use client"
+import {
+  Money,
+  MoneySummary,
+  mergeMoneyGroups,
+} from "@/components/admin/money";
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -11,7 +16,7 @@ import { KPICard } from "@/components/admin/kpi-card"
 import { useAuth } from "@/providers/auth-provider"
 import { useDebounce } from "@/hooks/use-debounce"
 import { adminApi, type AdminCustomer, type Pagination } from "@/lib/api/admin"
-import { Search, Users, DollarSign, Loader2 } from "lucide-react"
+import { Search, Users, Banknote, Loader2 } from "lucide-react"
 
 export default function AdminCustomersPage() {
   const { user, isLoading: authLoading } = useAuth()
@@ -56,7 +61,9 @@ export default function AdminCustomersPage() {
 
   if (!user || user.role !== "ADMIN") return null
 
-  const totalLtv = customers.reduce((sum, c) => sum + c.lifetimeValue, 0)
+  const totalLtv = customers.every((c) => c.lifetimeValueByCurrency)
+    ? mergeMoneyGroups(customers.flatMap((c) => c.lifetimeValueByCurrency!))
+    : undefined;
   const repeatBuyers = customers.filter((c) => c.ordersCount > 1).length
 
   const columns: Column<AdminCustomer>[] = [
@@ -84,10 +91,10 @@ export default function AdminCustomersPage() {
       cell: (c) => <span className="text-sm font-medium">{c.ordersCount}</span>,
     },
     {
-      header: "Lifetime value",
+      header: "Order value (not cancelled)",
       cell: (c) => (
         <span className="font-medium text-emerald-700">
-          ${c.lifetimeValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          <MoneySummary groups={c.lifetimeValueByCurrency} unclassifiedCount={c.unclassifiedOrderCount} />
         </span>
       ),
     },
@@ -109,9 +116,9 @@ export default function AdminCustomersPage() {
         <KPICard title="Customers (page)" value={customers.length} icon={Users} loading={loading} />
         <KPICard title="Repeat buyers (page)" value={repeatBuyers} icon={Users} loading={loading} />
         <KPICard
-          title="LTV on page"
-          value={`$${totalLtv.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-          icon={DollarSign}
+          title="Order value on page"
+          value={<MoneySummary groups={totalLtv} unclassifiedCount={customers.reduce((n,c)=>n+(c.unclassifiedOrderCount??0),0)} />}
+          icon={Banknote}
           tone="positive"
           loading={loading}
         />

@@ -1,4 +1,8 @@
 "use client"
+import {
+  Money,
+  MoneySummary,
+} from "@/components/admin/money";
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -13,8 +17,8 @@ import { KPICard } from "@/components/admin/kpi-card"
 import { useAuth } from "@/providers/auth-provider"
 import { useDebounce } from "@/hooks/use-debounce"
 import { adminApi, type AdminOrder, type AdminOverview, type Pagination } from "@/lib/api/admin"
-import { num } from "@/lib/api/vendors"
-import { Search, ShoppingCart, DollarSign, Clock, Truck, Loader2 } from "lucide-react"
+import { Search, ShoppingCart,
+  Banknote, Clock, Truck, Loader2 } from "lucide-react"
 
 const ORDER_STATUSES = [
   "pending_review",
@@ -114,7 +118,7 @@ export default function AdminOrdersPage() {
       header: "Total",
       cell: (o) => (
         <span className="font-medium">
-          ${num(o.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          <Money amount={o.total} currency={o.currency} />
         </span>
       ),
     },
@@ -165,9 +169,14 @@ export default function AdminOrdersPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <KPICard title="Orders Today" value={overview?.ordersToday ?? "—"} icon={ShoppingCart} loading={!overview} />
         <KPICard
-          title="Revenue Today"
-          value={overview ? `$${overview.revenueToday.toLocaleString()}` : "—"}
-          icon={DollarSign}
+          title="Order value today (not cancelled)"
+          value={overview ? (
+              <MoneySummary groups={overview.revenueTodayByCurrency} unclassifiedCount={overview.unclassifiedTodayOrderCount} />
+            ) : (
+              "—"
+            )
+          }
+          icon={Banknote}
           tone="positive"
           loading={!overview}
         />
@@ -175,14 +184,14 @@ export default function AdminOrdersPage() {
           title="Pending Handshakes"
           value={overview?.pendingHandshakes ?? "—"}
           icon={Clock}
-          tone={((overview?.pendingHandshakes ?? 0) > 0) ? "warning" : "default"}
+          tone={(overview?.pendingHandshakes ?? 0) > 0 ? "warning" : "default"}
           loading={!overview}
         />
         <KPICard
           title="Pending Settlements"
           value={overview?.pendingSettlements ?? "—"}
           icon={Truck}
-          tone={((overview?.pendingSettlements ?? 0) > 0) ? "warning" : "default"}
+          tone={(overview?.pendingSettlements ?? 0) > 0 ? "warning" : "default"}
           loading={!overview}
         />
       </div>

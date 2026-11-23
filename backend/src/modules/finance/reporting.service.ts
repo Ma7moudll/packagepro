@@ -1,3 +1,4 @@
+import { currencyKey, sumByCurrency } from "../../utils/currency-summary";
 import { prisma } from '../../lib/prisma';
 
 /**
@@ -15,11 +16,69 @@ function aggregateSettlementStatus(
   return 'pending';
 }
 
+export interface CurrencyFinancialMetrics {
+  currency: string | null;
+  revenue: number;
+  taxes: number;
+  orderCount: number;
+  averageOrderValue: number;
+  vendorPayments: number | null;
+  costs: number | null;
+  profit: number | null;
+  costStatus: "same-currency" | "unreconciled";
+}
+export function currencyFinancialMetrics(
+  orders: Array<{
+    total: unknown;
+    tax: unknown;
+    currency?: unknown;
+    settlements: Array<{ amount: unknown; currency?: unknown }>;
+  }>,
+): CurrencyFinancialMetrics[] {
+  return sumByCurrency(
+    orders
+      .filter((o) => currencyKey(o.currency) !== null)
+      .map((o) => ({ amount: o.total, currency: o.currency })),
+  ).map((group) => {
+    const selected = orders.filter(
+      (o) => currencyKey(o.currency) === group.currency,
+    );
+    // No inferred FX: even known convertedAmount requires a separate reporting policy.
+    const reconciled =
+      group.currency !== null &&
+      selected.every(
+        (o) =>
+          o.settlements.length > 0 &&
+          o.settlements.every(
+            (s) => currencyKey(s.currency) === group.currency,
+          ),
+      );
+    const costs = reconciled
+      ? selected.reduce(
+          (n, o) => n + o.settlements.reduce((a, s) => a + Number(s.amount), 0),
+          0,
+        )
+      : null;
+    return {
+      currency: group.currency,
+      revenue: group.amount,
+      taxes: selected.reduce((n, o) => n + Number(o.tax), 0),
+      orderCount: selected.length,
+      averageOrderValue: group.amount / selected.length,
+      vendorPayments: costs,
+      costs,
+      profit: costs === null ? null : group.amount - costs,
+      costStatus: reconciled ? "same-currency" : "unreconciled",
+    };
+  });
+}
 export interface FinancialReport {
   period: {
     start: Date;
     end: Date;
   };
+  byCurrency: CurrencyFinancialMetrics[];
+  unclassifiedOrderCount: number;
   revenue: number;
   costs: number;
   profit: number;
@@ -74,6 +133,10 @@ export class FinanceReportingService {
         start: startDate,
         end: endDate,
       },
+      byCurrency: currencyFinancialMetrics(orders),
+      unclassifiedOrderCount: orders.filter(
+        (o) => currencyKey(o.currency) === null,
+      ).length,
       revenue,
       costs,
       profit,

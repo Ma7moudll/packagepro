@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { sumByCurrency } from "../../utils/currency-summary";
 import { prisma } from '../../lib/prisma';
 import { NotFoundError, ValidationError } from '../../utils/errors';
 import { z } from 'zod';
@@ -21,6 +22,10 @@ export class AdminController {
       ordersToday,
       revenueAgg,
       revenueTodayAgg,
+      currencyTotals,
+      currencyTodayTotals,
+      unclassifiedOrderCount,
+      unclassifiedTodayOrderCount,
       activeVendors,
       totalCustomers,
       pendingHandshakes,
@@ -30,9 +35,28 @@ export class AdminController {
       prisma.order.count({ where: { createdAt: { gte: startOfToday } } }),
       prisma.order.aggregate({ where: { status: { not: 'cancelled' } }, _sum: { total: true }, _count: true }),
       prisma.order.aggregate({
-        where: { createdAt: { gte: startOfToday }, status: { not: 'cancelled' } },
+        where: {
+          createdAt: { gte: startOfToday },
+          status: { not: "cancelled" },
+        },
         _sum: { total: true },
       }),
+      prisma.order.groupBy({
+        by: ["currency"],
+        where: { status: { not: "cancelled" }, currency: { not: null } },
+        _sum: { total: true },
+      }),
+      prisma.order.groupBy({
+        by: ["currency"],
+        where: {
+          status: { not: "cancelled" },
+          currency: { not: null },
+          createdAt: { gte: startOfToday },
+        },
+        _sum: { total: true },
+      }),
+      prisma.order.count({where:{status:{not:"cancelled"},currency:null}}),
+      prisma.order.count({where:{status:{not:"cancelled"},currency:null,createdAt:{gte:startOfToday}}}),
       prisma.vendor.count({ where: { isActive: true } }),
       prisma.customer.count(),
       prisma.handshake.count({ where: { status: 'pending' } }),
@@ -47,6 +71,10 @@ export class AdminController {
         totalOrders: revenueAgg._count,
         totalRevenue: Number(revenueAgg._sum.total ?? 0),
         revenueToday: Number(revenueTodayAgg._sum.total ?? 0),
+        revenueByCurrency: sumByCurrency(currencyTotals.map(o=>({amount:o._sum.total??0,currency:o.currency}))),
+        revenueTodayByCurrency: sumByCurrency(currencyTodayTotals.map(o=>({amount:o._sum.total??0,currency:o.currency}))),
+        unclassifiedOrderCount,
+        unclassifiedTodayOrderCount,
         activeVendors,
         totalCustomers,
         pendingHandshakes,
@@ -227,7 +255,7 @@ export class AdminController {
         orderBy: { createdAt: 'desc' },
         include: {
           user: { select: { email: true, firstName: true, lastName: true, createdAt: true } },
-          orders: { select: { total: true, status: true, createdAt: true } },
+          orders: { select: { total: true, currency: true, status: true, createdAt: true } },
         },
       }),
       prisma.customer.count({ where }),
@@ -245,6 +273,8 @@ export class AdminController {
           memberSince: customer.user?.createdAt ?? customer.createdAt,
           ordersCount: paidOrders.length,
           lifetimeValue: paidOrders.reduce((sum, o) => sum + Number(o.total), 0),
+          unclassifiedOrderCount: paidOrders.filter(o=>!o.currency).length,
+          lifetimeValueByCurrency: sumByCurrency(paidOrders.filter(o=>o.currency).map(o=>({amount:o.total,currency:o.currency}))),
         };
       }),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
