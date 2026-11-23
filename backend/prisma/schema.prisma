@@ -266,6 +266,9 @@ model Order {
   shippingCost Decimal @db.Decimal(10, 2)
   total        Decimal @db.Decimal(10, 2)
 
+  // New-order quote currency only. Historical unknown rows remain null.
+  currency String?
+
   // Shipping
   shippingAddress Json // Full address object
   shippingName    String
@@ -299,6 +302,7 @@ model Order {
 
   @@map("orders")
   approvalTokens OrderApprovalToken[]
+  approvalRequests ApprovalRequest[]
 }
 
 model OrderItem {
@@ -404,6 +408,7 @@ model Design {
   prepressCheck PrePressCheck?
   cartItems     CartItem[]
   orderItems    OrderItem[]
+  approvalRequests ApprovalRequest[]
 
   @@index([ownerId])
   @@index([sessionId])
@@ -904,6 +909,38 @@ model OrderApprovalToken {
   createdAt DateTime @default(now())
   expiresAt DateTime
   consumedAt DateTime?
+  requestId String?
+  request ApprovalRequest? @relation(fields:[requestId], references:[id], onDelete:Cascade)
   @@index([orderId])
   @@map("order_approval_tokens")
+}
+
+// Additive, legacy rows stay unbound and require explicit review renewal.
+model ApprovalRequest {
+  id                 String               @id @default(cuid())
+  orderId            String
+  designId           String
+  order              Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  design             Design               @relation(fields: [designId], references: [id], onDelete: Cascade)
+  status             String               @default("generating")
+  contentHash        String
+  designSnapshot     Json
+  printFileId        String
+  printSha256        String
+  printSnapshotUrl   String
+  dielineFileId      String?
+  dielineSha256      String?
+  dielineSnapshotUrl String?
+  proofFileId        String?
+  proofSha256        String?
+  proofUrl           String?
+  deliveryState      String               @default("not_sent")
+  failureCode        String?
+  createdAt          DateTime             @default(now())
+  expiresAt          DateTime
+  approvedAt         DateTime?
+  tokens             OrderApprovalToken[]
+
+  @@index([orderId, createdAt])
+  @@map("approval_requests")
 }

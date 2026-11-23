@@ -15,6 +15,9 @@ import {
  */
 export class StripePaymentProvider implements PaymentProvider {
   readonly key = 'stripe' as const;
+  assertCheckoutAvailable(): void {
+    if (!process.env.STRIPE_SECRET_KEY) throw new Error('Payment provider unavailable');
+  }
 
   async createPayment(data: CreatePaymentRequest): Promise<ProviderPayment> {
     const paymentIntent = await stripeService.createPaymentIntent({

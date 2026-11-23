@@ -19,3 +19,6 @@ export function reframeOpeningCamera(position:readonly number[],target:readonly 
  const nextPosition:[number,number,number]=[0,1,2].map(i=>nextTarget[i]+(position[i]-target[i])*ratio) as [number,number,number]
  return {position:nextPosition,target:nextTarget}
 }
+
+/** Qualified menu and thank-you sheets are centered on Y=0; other constructions retain their existing target. */
+export function productCameraTargetHeight(type:string|undefined,height:number){return ['menu_card','thank_you_card'].includes(type?.replace(/-/g,'_')??'')?0:height/200}

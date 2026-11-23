@@ -8,7 +8,9 @@ import { poService } from '../purchase-orders/po.service';
 import { stripeService } from '../../integrations/stripe/stripe.service';
 import { dhlService } from '../../integrations/dhl/dhl.service';
 import { emailService } from '../../services/email/email.service';
-import { proofGeneratorService } from '../../services/pre-press-checker/proof-generator';
+import {designService} from '../designs/design.service';
+import {fileUploadService} from '../../services/file-upload/upload.service';
+import sharp from 'sharp';
 
 const stripeState = vi.hoisted(() => ({ intent: {} as any, creates: [] as any[] }));
 vi.mock('stripe', () => ({ default: class {
@@ -23,12 +25,13 @@ vi.mock('stripe', () => ({ default: class {
 vi.mock('../../services/email/email.service', () => ({
   emailService: { sendEmail: vi.fn(async () => {}), sendApprovalRequest: vi.fn(async () => {}) },
 }));
-vi.mock('../../services/pre-press-checker/proof-generator', () => ({
-  proofGeneratorService: { generateProof: vi.fn(async () => ({ approvalToken: 'test-proof' })) },
-}));
+
 
 // Real PostgreSQL constraints and real JWT authentication. Stripe, carrier and
 // outbound email are test doubles: these tests cannot charge or message anyone.
+const priorFrontendUrl=process.env.FRONTEND_URL;
+beforeAll(()=>{process.env.FRONTEND_URL='http://localhost:3001'});
+afterAll(()=>{if(priorFrontendUrl===undefined)delete process.env.FRONTEND_URL;else process.env.FRONTEND_URL=priorFrontendUrl});
 describe('security report regressions, real database', () => {
   const app = Fastify();
   const marker = `security-${Date.now()}`;
@@ -60,6 +63,7 @@ describe('security report regressions, real database', () => {
     await app.close();
     await prisma.notification.deleteMany({ where: { userId: { in: ids } } });
     await prisma.purchaseOrder.deleteMany({ where: { order: { customerId: owner.customerId } } });
+    await prisma.design.deleteMany({where:{ownerId:owner.userId}});
     await prisma.order.deleteMany({ where: { customerId: owner.customerId } });
     await prisma.user.deleteMany({ where: { id: { in: ids } } });
   });
@@ -112,6 +116,17 @@ describe('security report regressions, real database', () => {
     const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: o.id } });
     expect(Number(payment.amount)).toBe(20); expect(payment.currency).toBe('egp');
   });
+  it('persisted checkout currency survives environment changes through provider creation and confirmation', async () => {
+    const o = await order();
+    await prisma.order.update({where:{id:o.id},data:{currency:'EGP'}});
+    process.env.DEFAULT_CURRENCY='usd';
+    const pi=await stripeService.createPaymentIntent({orderId:o.id,amount:0.01,currency:'usd'});
+    expect(stripeState.creates[0].data.currency).toBe('egp');
+    const payment=await prisma.payment.findUniqueOrThrow({where:{orderId:o.id}});
+    stripeState.intent={id:pi.id,status:'succeeded',amount:2000,amount_received:2000,currency:'egp',metadata:{orderId:o.id}};
+    await stripeService.confirmPayment(payment.stripePaymentIntentId!);
+    expect((await prisma.order.findUniqueOrThrow({where:{id:o.id}})).status).toBe('awaiting_approval');
+  });
   it('HTTP creation ignores client currency', async () => {
     const o = await order();
     const res = await app.inject({ method: 'POST', url: '/api/payments/create-intent', headers: headers(owner), payload: { orderId: o.id, currency: 'jpy' } });
@@ -161,32 +176,35 @@ describe('security report regressions, real database', () => {
   it('anonymous approval request is rejected', async () => {
     const o = await order();
     const res = await app.inject({ method: 'POST', url: `/api/orders/${o.id}/request-approval` });
-    expect(res.statusCode).toBe(401); expect(proofGeneratorService.generateProof).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(401); expect(emailService.sendApprovalRequest).not.toHaveBeenCalled();
   });
   it('customer approval request is rejected before proof or email', async () => {
     const o = await order();
     const res = await app.inject({ method: 'POST', url: `/api/orders/${o.id}/request-approval`, headers: headers(owner) });
-    expect(res.statusCode).toBe(403); expect(proofGeneratorService.generateProof).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(403); expect(emailService.sendApprovalRequest).not.toHaveBeenCalled();
   });
   it('canceled order approval cannot progress even for admin', async () => {
     const o = await order('cancelled');
     await expect(approvalService.requestApproval(o.id, admin)).rejects.toMatchObject({ statusCode: 400 });
     expect(emailService.sendApprovalRequest).not.toHaveBeenCalled();
   });
-  it('failed proof/token persistence cannot send approval email and retains duplicate claim', async () => {
-    const o=await order();
-    vi.mocked(proofGeneratorService.generateProof).mockRejectedValueOnce(new Error('durable token storage unavailable'));
-    await expect(approvalService.requestApproval(o.id,admin)).rejects.toThrow('durable token storage unavailable');
-    expect(emailService.sendApprovalRequest).not.toHaveBeenCalled();
-    await expect(approvalService.requestApproval(o.id,admin)).rejects.toMatchObject({statusCode:409});
-    expect(proofGeneratorService.generateProof).toHaveBeenCalledTimes(1);
+  async function approvalInput(o:any){
+    const bytes=await sharp({create:{width:20,height:20,channels:3,background:'#ffffff'}}).png().toBuffer();const upload=await fileUploadService.uploadFile(bytes,'security.png','image/png','test-approval');
+    const d=await designService.saveDesign({sessionId:`${marker}-design-${++seq}`,designData:{layers:[]},files:[{fileType:'print_file',fileName:'security.png',fileUrl:upload.fileUrl,mimeType:'image/png'}]},owner.userId);
+    await prisma.design.update({where:{id:d.id},data:{orderId:o.id}});const file=await prisma.designFile.findFirstOrThrow({where:{designId:d.id,fileType:'print_file'}});return {printFileId:file.id,dielineFileId:null};
+  }
+  it('failed durable token persistence rolls back finalization and sends no email; explicit renewal recovers',async()=>{
+    const o=await order();const selection=await approvalInput(o);const transaction=prisma.$transaction.bind(prisma);
+    const spy=vi.spyOn(prisma,'$transaction').mockImplementation((async(cb:any)=>transaction(async(tx:any)=>cb(new Proxy(tx,{get(target,key){if(key!=='orderApprovalToken')return target[key];return {create:async()=>{throw new Error('durable token storage unavailable')}}}})))) as any);
+    try{await expect(approvalService.requestApproval(o.id,admin,selection)).rejects.toThrow('durable token storage unavailable')}finally{spy.mockRestore()}
+    expect(emailService.sendApprovalRequest).not.toHaveBeenCalled();expect(await prisma.orderApprovalToken.count({where:{orderId:o.id}})).toBe(0);expect((await prisma.approvalRequest.findFirstOrThrow({where:{orderId:o.id}})).status).toBe('failed');
+    await expect(approvalService.requestApproval(o.id,admin,selection)).rejects.toMatchObject({statusCode:409});
+    await approvalService.requestApproval(o.id,admin,{...selection,renew:true});expect(emailService.sendApprovalRequest).toHaveBeenCalledTimes(1);
   });
-  it('concurrent admin approval requests send at most one proof/email', async () => {
-    const { o } = await paid('awaiting_approval');
-    const results = await Promise.allSettled([approvalService.requestApproval(o.id, admin), approvalService.requestApproval(o.id, admin)]);
-    expect(results.filter(x => x.status === 'fulfilled')).toHaveLength(1);
-    expect(proofGeneratorService.generateProof).toHaveBeenCalledTimes(1);
-    expect(emailService.sendApprovalRequest).toHaveBeenCalledTimes(1);
+  it('concurrent admin requests finalize and send at most one exact proof',async()=>{
+    const {o}=await paid('awaiting_approval');const selection=await approvalInput(o);
+    const results=await Promise.allSettled([approvalService.requestApproval(o.id,admin,selection),approvalService.requestApproval(o.id,admin,selection)]);
+    expect(results.filter(x=>x.status==='fulfilled')).toHaveLength(1);expect(await prisma.approvalRequest.count({where:{orderId:o.id}})).toBe(1);expect(await prisma.orderApprovalToken.count({where:{orderId:o.id}})).toBe(1);expect(emailService.sendApprovalRequest).toHaveBeenCalledTimes(1);
   });
   it('PO reads reject customers and unrelated vendors, allow owning vendor and admin', async () => {
     const vu = await prisma.user.create({ data: { email: `${marker}-vendor@test.local`, passwordHash: 'unused', role: 'VENDOR' } }); ids.push(vu.id);

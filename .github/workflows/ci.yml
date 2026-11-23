@@ -83,6 +83,13 @@ jobs:
           STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder
           DHL_API_KEY: test
           DHL_API_SECRET: test
+          # Hard containment: the DHL suites stub axios, but if a stub ever failed
+          # to install, a carrier call would hit loopback port 9, never api.dhl.com.
+          DHL_BASE_URL: http://127.0.0.1:9
+          # Select the in-process JSON email transport (refused unless NODE_ENV=test).
+          # SMTP_HOST/SMTP_PORT below are NOT read by backend/src/services/email;
+          # without EMAIL_PROVIDER=test the service dials smtp.sendgrid.net.
+          EMAIL_PROVIDER: test
           SMTP_HOST: 127.0.0.1
           SMTP_PORT: 9
         run: npm test -- --run

@@ -1,3 +1,4 @@
+import {approvalContentHash} from './approval-snapshot';
 import { assertSpecificationPriced } from "../../utils/production-specification";
 import { prisma } from '../../lib/prisma';
 import {
@@ -15,6 +16,9 @@ import {
 } from './order-status-transitions';
 import { randomUUID } from 'crypto';
 
+const round2 = (value: number): number => Math.round(value * 100) / 100;
+const ORDER_PRICING_CONTRACT = 'tax-exclusive-v1';
+
 /**
  * Map Prisma Payment.status → shared PaymentStatus union the FE renders.
  * 'captured' (webhook-confirmed Stripe capture) is surfaced as 'succeeded'
@@ -30,7 +34,8 @@ const PAYMENT_STATUS_MAP: Record<string, string> = {
 /**
  * Normalize a raw Prisma Order into the shared Order contract consumed by
  * the customer portal. Prisma Order has no paymentStatus/paymentMethod/
- * currency/shipping/trackingNumber columns — those are projections over
+ * shipping/trackingNumber columns. New-order currency is persisted; older
+ * currency values fall back to the payment or legacy EGP projection over
  * the payment + shipment relations. Decimals serialize to strings via
  * JSON, which the FE projection helpers coerce back to numbers.
  */
@@ -38,11 +43,17 @@ export function serializeOrder<T extends Record<string, any>>(order: T): T {
   const rawPaymentStatus = order.payment?.status as string | undefined;
   return {
     ...order,
+    currentApprovalRequest: (()=>{
+      const r=order.approvalRequests?.[0];
+      return r ? {id:r.id,status:r.status,contentHash:r.contentHash,proofFileId:r.proofFileId,proofUrl:r.proofUrl,expiresAt:r.expiresAt,deliveryState:r.deliveryState,current:!!order.design&&approvalContentHash(order.design)===r.contentHash} : null;
+    })(),
+    approvalRequests: undefined,
     paymentStatus: rawPaymentStatus
       ? (PAYMENT_STATUS_MAP[rawPaymentStatus] ?? rawPaymentStatus)
       : 'pending',
     paymentMethod: 'stripe',
-    currency: order.payment?.currency || 'EGP',
+    currency: order.currency || order.payment?.currency || 'EGP',
+    currencyKnown: Boolean(order.currency || order.payment?.currency),
     shipping: order.shippingCost ?? 0,
     trackingNumber:
       order.shipment?.dhlTrackingNumber ??
@@ -155,10 +166,9 @@ export class OrderService {
               materialCode: item.materialCode,
             });
 
-        // Line total EXCLUDES shipping; shipping is aggregated separately so
-        // it is not double-counted in the order total.
-        const lineTotal =
-          pricing.breakdown.subtotal + pricing.breakdown.tax;
+        // New-order line amounts exclude tax and shipping, like the cart.
+        // The quote subtotal already includes its discounts and adjustments.
+        const lineTotal = round2(pricing.breakdown.subtotal);
 
         return {
           productType: item.productType,
@@ -167,7 +177,7 @@ export class OrderService {
           material: item.materialCode,
           color: item.color,
           finish: item.finish,
-          unitPrice: lineTotal / item.quantity,
+          unitPrice: round2(lineTotal / item.quantity),
           totalPrice: lineTotal,
           tax: pricing.breakdown.tax,
           shippingEstimate: pricing.breakdown.shippingEstimate,
@@ -183,13 +193,13 @@ export class OrderService {
     );
 
     // Calculate totals
-    const subtotal = orderItems.reduce((sum, item) => sum + item.totalPrice, 0);
-    const tax = orderItems.reduce((sum, item) => sum + item.tax, 0);
-    const shippingCost = orderItems.reduce(
+    const subtotal = round2(orderItems.reduce((sum, item) => sum + item.totalPrice, 0));
+    const tax = round2(orderItems.reduce((sum, item) => sum + item.tax, 0));
+    const shippingCost = round2(orderItems.reduce(
       (sum, item) => sum + item.shippingEstimate,
       0
-    );
-    const total = subtotal + tax + shippingCost;
+    ));
+    const total = round2(subtotal + tax + shippingCost);
 
     // 4c: persist the per-group shipping split (one group per productType,
     // the same grouping multi-vendor POs use) so order views can show
@@ -201,12 +211,17 @@ export class OrderService {
       }))
     );
 
+    const currencies = new Set(orderItems.map(item => item.pricing.material.currency?.trim().toUpperCase()));
+    if (currencies.size !== 1 || ![...currencies].every(c => typeof c === 'string' && /^[A-Z]{3}$/.test(c))) throw new ValidationError('New orders require one known quote currency');
+    const currency = [...currencies][0];
+
     // Create order
     const order = await prisma.order.create({
       data: {
         customerId: data.customerId,
         orderNumber: this.generateOrderNumber(),
         status: 'pending_review',
+        currency,
         subtotal,
         tax,
         shippingCost,
@@ -218,7 +233,12 @@ export class OrderService {
         notes: data.notes,
         // 4c: stored under metadata; approval.service spreads-and-extends
         // this object, so the breakdown survives the approval transition.
-        metadata: { shippingBreakdown },
+        metadata: {
+          shippingBreakdown,
+          // Prospective convention only. Unmarked historical orders are not
+          // reinterpreted, repriced or migrated by this write-time correction.
+          pricingContract: ORDER_PRICING_CONTRACT,
+        },
         items: {
           create: orderItems.map((item) => ({
             productType: item.productType,
@@ -271,7 +291,7 @@ export class OrderService {
     // Link design if session ID provided
     if (data.designSessionId) {
       await prisma.design.updateMany({
-        where: { sessionId: data.designSessionId },
+        where: { sessionId: data.designSessionId, orderId:null, ownerId: customer.userId, lifecycleStatus:'DRAFT' },
         data: { orderId: order.id },
       });
     }
@@ -286,6 +306,7 @@ export class OrderService {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
+        approvalRequests: {orderBy:{createdAt:'desc'},take:1},
         items: true,
         design: {
           include: {

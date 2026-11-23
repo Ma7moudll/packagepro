@@ -48,7 +48,11 @@ const mocks = vi.hoisted(() => {
   const sendEmail = vi.fn();
   const createHandshake = vi.fn();
   const settleVendor = vi.fn();
+  const approvalFindFirst=vi.fn(),approvalFindUnique=vi.fn(),designFindUnique=vi.fn();
   const tx = {
+    $queryRaw:vi.fn().mockResolvedValue([]),
+    design:{findUniqueOrThrow:designFindUnique},
+    approvalRequest:{findUniqueOrThrow:approvalFindUnique},
     order: { updateMany: orderUpdateMany },
     purchaseOrder: {
       count: poCount,
@@ -60,6 +64,7 @@ const mocks = vi.hoisted(() => {
   };
   return {
     orderFindUnique,
+    approvalFindFirst,approvalFindUnique,designFindUnique,
     orderUpdateMany,
     poFindMany,
     poCount,
@@ -77,6 +82,7 @@ const mocks = vi.hoisted(() => {
     settleVendor,
     tx,
     prisma: {
+      approvalRequest:{findFirst:approvalFindFirst},
       order: { findUnique: orderFindUnique, updateMany: orderUpdateMany },
       purchaseOrder: {
         findMany: poFindMany,
@@ -105,6 +111,8 @@ vi.mock('../../services/vendor-router/router.service', () => ({
   vendorRouterService: { routeOrder: mocks.routeOrder },
 }));
 
+vi.mock('../orders/approval.service',()=>({approvalService:{verifyBytes:vi.fn().mockResolvedValue(undefined)}}));
+
 vi.mock('./po-generator', () => ({
   poGenerator: { generatePO: mocks.generatePO },
 }));
@@ -128,6 +136,7 @@ vi.mock('../settlements/settlement.service', () => ({
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { poController } from './po.controller';
 import { poService } from './po.service';
+import {approvalContentHash} from '../orders/approval-snapshot';
 
 function mockRequest(payload: {
   params?: Record<string, string>;
@@ -174,7 +183,7 @@ function orderFixture() {
     items: [
       { productType: 'box', quantity: 10, totalPrice: 100, material: 'cardboard' },
     ],
-    design: { files: [] },
+    design: {id:'design-approved',designData:{},files: []},
   };
 }
 
@@ -187,6 +196,8 @@ function poFixture(overrides: Record<string, unknown> = {}) {
     productType: 'box',
     vendorCost: 60,
     status: 'pending',
+    printFileUrl:'https://files.test/approved.bin',
+    dielineFileUrl:null,
     poDocumentUrl: null,
     handshake: null,
     vendor: vendorFixture('vendor-a', 'vendor-user-a'),
@@ -219,6 +230,9 @@ describe('SEC-04A createPO authorization + idempotency', () => {
     mocks.settleVendor.mockResolvedValue(undefined);
     mocks.orderUpdateMany.mockResolvedValue({ count: 1 });
     mocks.poCount.mockResolvedValue(0);
+    const approval={id:'request-approved',designId:'design-approved',status:'approved',contentHash:approvalContentHash(orderFixture().design),printSnapshotUrl:'https://files.test/approved.bin',dielineSnapshotUrl:null};
+    mocks.approvalFindFirst.mockResolvedValue(approval);mocks.approvalFindUnique.mockResolvedValue(approval);mocks.designFindUnique.mockResolvedValue(orderFixture().design);
+    mocks.tx.$queryRaw.mockResolvedValue([]);
     mocks.handshakeFindUnique.mockResolvedValue(null);
   });
 

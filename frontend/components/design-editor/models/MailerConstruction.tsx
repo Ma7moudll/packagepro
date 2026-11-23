@@ -57,6 +57,7 @@ export function MailerConstruction({ l,w,h,open, outside,inside,front,back,left,
   // Initial JSX rotations must stay stable. Updating those props to the new
   // target would snap one frame to the endpoint before useFrame eases back.
   const angles = useRef(mailerFoldAngles(open)).current
+  const rootRef = useRef<THREE.Group>(null)
   const lidRef = useRef<THREE.Group>(null)
   const tuckRef = useRef<THREE.Group>(null)
   const wingRefs = useRef<Array<THREE.Group | null>>([])
@@ -71,6 +72,7 @@ export function MailerConstruction({ l,w,h,open, outside,inside,front,back,left,
   useFrame((_, delta) => {
     progress.current = reducedMotion.current ? open : THREE.MathUtils.damp(progress.current, open, 9, Math.min(delta, 0.1))
     if (Math.abs(progress.current - open) < 0.0001) progress.current = open
+    if(rootRef.current) rootRef.current.userData.openingPose = {target:open,progress:progress.current}
     const pose = mailerFoldAngles(progress.current)
     if (lidRef.current) lidRef.current.rotation.x = pose.lid
     if (tuckRef.current) tuckRef.current.rotation.x = pose.tuck
@@ -80,7 +82,7 @@ export function MailerConstruction({ l,w,h,open, outside,inside,front,back,left,
   const tuckAngle = angles.tuck
   const wingAngle = angles.wing
   const p = { thickness:b, inside, edge, radius:c.cornerRadius }
-  return <group name="mailer-construction">
+  return <group ref={rootRef} name="mailer-construction">
     <Board {...p} width={l-b*2} height={h} inside={insideFaces?.front || inside} outside={front} position={[0,h/2,w/2-b/2]} profile="notch" faceId="front" />
     <Board {...p} width={l-b*2} height={h} inside={insideFaces?.back || inside} outside={back} position={[0,h/2,-w/2+b/2]} rotation={[0,Math.PI,0]} faceId="back" />
     <Board {...p} width={w} height={h} inside={insideFaces?.left || inside} outside={left} position={[-l/2+b/2,h/2,0]} rotation={[0,-Math.PI/2,0]} faceId="left" />

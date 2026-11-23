@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { authenticate, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { checkoutService } from './checkout.service';
+import { prisma } from '../../lib/prisma';
 
 const shippingAddressSchema = z.object({
   name: z.string().min(1),
@@ -49,7 +50,6 @@ export class CheckoutController {
 
   private async resolveCustomer(request: FastifyRequest, reply: FastifyReply) {
     const user = (request as AuthenticatedRequest).user;
-    const { prisma } = require('../../lib/prisma');
     const customer = await prisma.customer.findUnique({
       where: { userId: user?.userId },
     });
