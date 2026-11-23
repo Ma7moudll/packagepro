@@ -34,7 +34,8 @@ const PAYMENT_STATUS_MAP: Record<string, string> = {
 /**
  * Normalize a raw Prisma Order into the shared Order contract consumed by
  * the customer portal. Prisma Order has no paymentStatus/paymentMethod/
- * currency/shipping/trackingNumber columns — those are projections over
+ * shipping/trackingNumber columns. New-order currency is persisted; older
+ * currency values fall back to the payment or legacy EGP projection over
  * the payment + shipment relations. Decimals serialize to strings via
  * JSON, which the FE projection helpers coerce back to numbers.
  */
@@ -51,7 +52,8 @@ export function serializeOrder<T extends Record<string, any>>(order: T): T {
       ? (PAYMENT_STATUS_MAP[rawPaymentStatus] ?? rawPaymentStatus)
       : 'pending',
     paymentMethod: 'stripe',
-    currency: order.payment?.currency || 'EGP',
+    currency: order.currency || order.payment?.currency || 'EGP',
+    currencyKnown: Boolean(order.currency || order.payment?.currency),
     shipping: order.shippingCost ?? 0,
     trackingNumber:
       order.shipment?.dhlTrackingNumber ??
@@ -209,12 +211,17 @@ export class OrderService {
       }))
     );
 
+    const currencies = new Set(orderItems.map(item => item.pricing.material.currency?.trim().toUpperCase()));
+    if (currencies.size !== 1 || ![...currencies].every(c => typeof c === 'string' && /^[A-Z]{3}$/.test(c))) throw new ValidationError('New orders require one known quote currency');
+    const currency = [...currencies][0];
+
     // Create order
     const order = await prisma.order.create({
       data: {
         customerId: data.customerId,
         orderNumber: this.generateOrderNumber(),
         status: 'pending_review',
+        currency,
         subtotal,
         tax,
         shippingCost,

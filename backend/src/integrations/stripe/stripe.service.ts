@@ -98,7 +98,7 @@ export class StripeService {
     }
 
     const amount = Number(order.total);
-    const currency = serverPaymentCurrency();
+    const currency = order.currency ? order.currency.toLowerCase() : serverPaymentCurrency();
     if (!Number.isFinite(amount) || amount <= 0) throw new ValidationError('Invalid order total');
 
     // Check if payment already exists
@@ -191,11 +191,11 @@ export class StripeService {
     // then-current authoritative state.
   }
 
-  private assertPaymentMatches(intent: Stripe.PaymentIntent, payment: { orderId: string; amount: unknown; currency: string }, order: { id: string; total: unknown }): void {
+  private assertPaymentMatches(intent: Stripe.PaymentIntent, payment: { orderId: string; amount: unknown; currency: string }, order: { id: string; total: unknown; currency?: string | null }): void {
     const expected = Math.round(Number(order.total) * 100);
     if (!Number.isSafeInteger(expected) || expected <= 0 ||
         Math.round(Number(payment.amount) * 100) !== expected ||
-        payment.currency.toLowerCase() !== serverPaymentCurrency() ||
+        payment.currency.toLowerCase() !== (order.currency?.toLowerCase() || serverPaymentCurrency()) ||
         intent.currency.toLowerCase() !== payment.currency.toLowerCase() ||
         intent.amount !== expected || intent.metadata?.orderId !== order.id ||
         payment.orderId !== order.id ||

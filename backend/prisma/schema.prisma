@@ -266,6 +266,9 @@ model Order {
   shippingCost Decimal @db.Decimal(10, 2)
   total        Decimal @db.Decimal(10, 2)
 
+  // New-order quote currency only. Historical unknown rows remain null.
+  currency String?
+
   // Shipping
   shippingAddress Json // Full address object
   shippingName    String

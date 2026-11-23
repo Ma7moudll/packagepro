@@ -116,6 +116,17 @@ describe('security report regressions, real database', () => {
     const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: o.id } });
     expect(Number(payment.amount)).toBe(20); expect(payment.currency).toBe('egp');
   });
+  it('persisted checkout currency survives environment changes through provider creation and confirmation', async () => {
+    const o = await order();
+    await prisma.order.update({where:{id:o.id},data:{currency:'EGP'}});
+    process.env.DEFAULT_CURRENCY='usd';
+    const pi=await stripeService.createPaymentIntent({orderId:o.id,amount:0.01,currency:'usd'});
+    expect(stripeState.creates[0].data.currency).toBe('egp');
+    const payment=await prisma.payment.findUniqueOrThrow({where:{orderId:o.id}});
+    stripeState.intent={id:pi.id,status:'succeeded',amount:2000,amount_received:2000,currency:'egp',metadata:{orderId:o.id}};
+    await stripeService.confirmPayment(payment.stripePaymentIntentId!);
+    expect((await prisma.order.findUniqueOrThrow({where:{id:o.id}})).status).toBe('awaiting_approval');
+  });
   it('HTTP creation ignores client currency', async () => {
     const o = await order();
     const res = await app.inject({ method: 'POST', url: '/api/payments/create-intent', headers: headers(owner), payload: { orderId: o.id, currency: 'jpy' } });

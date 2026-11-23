@@ -48,6 +48,8 @@ export type ProviderPaymentStatus =
 
 export interface PaymentProvider {
   readonly key: PaymentProviderKey;
+  /** Explicit fail-closed capability check before any checkout order is created. */
+  assertCheckoutAvailable(): void;
   /**
    * Create a payment against an existing `pending_review` order and persist
    * the local Payment row. Returns what the frontend needs to collect money.

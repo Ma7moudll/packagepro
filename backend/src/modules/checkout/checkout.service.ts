@@ -37,6 +37,8 @@ export class CheckoutService {
    * webhook -> awaiting_approval) is unchanged.
    */
   async checkout(customerId: string, input: CheckoutInput) {
+    const provider = getPaymentProvider();
+    provider.assertCheckoutAvailable();
     const cart = await cartService.getCart(customerId);
 
     if (cart.items.length === 0) {
@@ -75,10 +77,10 @@ export class CheckoutService {
       designSessionId: input.designSessionId,
     });
 
-    const payment = await getPaymentProvider().createPayment({
+    const payment = await provider.createPayment({
       orderId: order.id,
       amount: Number(order.total),
-      currency: (process.env.DEFAULT_CURRENCY || 'usd').toLowerCase(),
+      currency: order.currency.toLowerCase(),
       customerEmail: customer.user.email,
     });
 

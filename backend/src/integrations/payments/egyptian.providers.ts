@@ -36,6 +36,8 @@ const REQUIRED_ENV: Record<Exclude<PaymentProviderKey, 'stripe'>, string[]> = {
 abstract class EgyptianProviderStub implements PaymentProvider {
   abstract readonly key: Exclude<PaymentProviderKey, 'stripe'>;
 
+  assertCheckoutAvailable(): void { this.fail(); }
+
   private fail(): never {
     throw new PaymentProviderNotConfiguredError(
       this.key,
