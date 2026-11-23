@@ -19,7 +19,7 @@ import { useDesignStore } from "@/lib/editor/state/store"
 import { unsupportedSheetArtwork, unsupportedArtworkOutputMessage } from "@/lib/editor/print-coverage"
 import { useLanguage } from "@/providers/language-provider"
 import { flatBounds } from "@/lib/editor/geometry/dieline"
-import { serializeSVG } from "@/lib/editor/services/dieline-service"
+import { serializeSVG, checkOverlaps } from "@/lib/editor/services/dieline-service"
 import {
   deriveFoldAngleAnnotations,
   deriveGlueTabAnnotations,
@@ -79,6 +79,11 @@ export function DielineView({
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 })
 
   const geometry = resolution?.ok ? resolution.geometry : undefined
+  // Panel overlap in resolved geometry (possible when a blueprint's own
+  // authored layout overlaps, which the engine preserves at its authored
+  // size): that geometry is shown (it is what the blueprint resolves to)
+  // but never exported silently.
+  const overlaps = geometry ? checkOverlaps(geometry) : []
   // Panel rotation is metadata in the canonical geometry and this view draws
   // panels unrotated. Artwork is withheld for any rotated panel rather than
   // drawn in a plausible but wrong orientation.
@@ -105,15 +110,27 @@ export function DielineView({
     [geometry],
   )
 
-  // Center the view on the sheet (mm dims rendered 1:1).
+  // Fit the real net bounds, including authored offsets and negative origins.
+  // A container resize (sidebar/toolbar/viewport) must refit the same geometry.
   useEffect(() => {
-    if (!geometry || !containerRef.current) return
-    const cw = containerRef.current.clientWidth
-    const ch = containerRef.current.clientHeight
-    const scale = Math.max(0.25, Math.min((cw - 100) / sheetW, (ch - 100) / sheetH, 2))
-    setZoom(scale)
-    setPan({ x: (cw - sheetW * scale) / 2, y: (ch - sheetH * scale) / 2 })
-  }, [geometry, sheetW, sheetH])
+    const container = containerRef.current
+    if (!geometry || !container || !bounds) return
+    const fit = () => {
+      const cw = container.clientWidth
+      const ch = container.clientHeight
+      if (cw <= 0 || ch <= 0) return
+      const scale = Math.max(0.01, Math.min((cw - 48) / sheetW, (ch - 48) / sheetH, 2))
+      setZoom(scale)
+      setPan({
+        x: (cw - sheetW * scale) / 2 - bounds.x0 * scale,
+        y: (ch - sheetH * scale) / 2 - bounds.y0 * scale,
+      })
+    }
+    fit()
+    const observer = new ResizeObserver(fit)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [geometry, sheetW, sheetH, bounds?.x0, bounds?.y0])
 
   const handleZoom = (delta: number) => {
     setZoom((prev) => Math.max(0.25, Math.min(2, prev + delta)))
@@ -148,6 +165,13 @@ export function DielineView({
     }
     setOutputNotice("")
     if (!geometry) return
+    if (overlaps.length > 0) {
+      const pairs = overlaps.map((o) => `${o.a}/${o.b}`).join(", ")
+      setOutputNotice(
+        `Export blocked: the resolved dieline panels overlap (${pairs}) at the current dimensions, so this geometry is not a coherent flat layout.`
+      )
+      return
+    }
     const svg = serializeSVG(geometry)
     const blob = new Blob([svg], { type: "image/svg+xml" })
     const url = URL.createObjectURL(blob)
@@ -156,6 +180,24 @@ export function DielineView({
     a.download = `dieline-${geometry.boxType}.svg`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  // Fail-closed: a blueprint WAS present but resolution failed — an
+  // unsupported size or a malformed blueprint. This must NOT fall through
+  // to the generic legacy delegate: its export would generate plausible
+  // but wrong geometry for a product that has a real blueprint. Show the
+  // explicit reason and offer no export at all.
+  if (!geometry && resolution && !resolution.ok && resolution.reason !== "no-blueprint") {
+    return (
+      <div className="flex flex-col h-full bg-slate-100 items-center justify-center p-6" data-dieline-blocked={resolution.reason}>
+        <p role="alert" className="text-sm text-red-700 max-w-md text-center">
+          {language === "ar"
+            ? "لا يمكن إنشاء مخطط القص (الدايلاين) بالأبعاد الحالية — لم يتم إنشاء أي مخطط بديل."
+            : "The dieline cannot be generated at the current dimensions — no substitute layout has been generated."}
+        </p>
+        {resolution.error && <p className="text-xs text-slate-600 max-w-md text-center mt-2">{resolution.error}</p>}
+      </div>
+    )
   }
 
   // Blueprint-absent path — exact M7 rendering (frozen legacy delegate).
@@ -183,6 +225,20 @@ export function DielineView({
               {language === "ar"
                 ? "معاينة التصميم غير متاحة للوحات المدوّرة"
                 : "Artwork preview unavailable for rotated panels"}
+            </span>
+          )}
+          {overlaps.length > 0 && (
+            <span role="alert" className="text-xs text-red-700" data-dieline-overlaps={overlaps.map((o) => `${o.a}/${o.b}`).join(",")}>
+              {language === "ar"
+                ? "اللوحات متداخلة بالأبعاد الحالية — التصدير محظور"
+                : "Panels overlap at the current dimensions — export blocked"}
+            </span>
+          )}
+          {resolution?.ok && resolution.source === "stored" && (
+            <span role="status" className="text-xs text-amber-700" data-dieline-stored>
+              {language === "ar"
+                ? "هندسة محفوظة من إصدار سابق تُعرض كما حُفظت؛ التصدير يخضع لفحص الهندسة. عدّل الأبعاد لبدء مراجعة جديدة"
+                : "Stored geometry from an earlier version is shown as saved; export is subject to geometry checks. Edit the dimensions to start a new revision"}
             </span>
           )}
         </div>
@@ -233,6 +289,8 @@ export function DielineView({
       {/* Canvas */}
       <div
         ref={containerRef}
+        data-dieline-viewport
+        dir="ltr"
         className="flex-1 overflow-hidden cursor-grab active:cursor-grabbing"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -251,6 +309,7 @@ export function DielineView({
         >
           {/* Sheet background */}
           <div
+            data-dieline-sheet
             className="absolute shadow-lg bg-white"
             style={{
               left: bounds?.x0,
@@ -272,7 +331,7 @@ export function DielineView({
                 data-face-id={faceId}
                 onClick={() => !isFlap && onSelectFace(id)}
                 className={`
-                  group absolute border transition-all
+                  group absolute border
                   ${isFlap ? "cursor-default" : "cursor-pointer hover:ring-2 hover:ring-blue-400"}
                   ${selectedFace === id && !isFlap ? "ring-2 ring-blue-500 z-10" : ""}
                 `}
@@ -330,6 +389,7 @@ export function DielineView({
             className="absolute inset-0 pointer-events-none"
             width={sheetW}
             height={sheetH}
+            viewBox={bounds ? `${bounds.x0} ${bounds.y0} ${sheetW} ${sheetH}` : undefined}
             style={{ left: bounds?.x0, top: bounds?.y0, zIndex: 4 }}
           >
             {geometry.cutPaths.map((p) => (

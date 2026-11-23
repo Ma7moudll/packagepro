@@ -164,11 +164,16 @@ test("M8-C (AMENDMENT 2) non-rectangular paths serialize as first-class polyline
 test("M8-C (H) overlap detection is real — empty for mailer, catches planted overlap", () => {
   assert.deepEqual(checkOverlaps(geometry), [], "touching panels are not overlaps")
 
-  const planted: DielineBlueprint = {
-    ...mailerBlueprint,
-    panels: { ...mailerBlueprint.panels, left: { ...mailerBlueprint.panels.left, x: 60 } },
+  // The plant moves a panel in the RESOLVED geometry (the detector's
+  // input): since the topology-aware layout derives positions from the
+  // declared fold relationships, an authored-position edit no longer
+  // reaches the resolved panels — and resolved geometry itself can never
+  // overlap, because buildDieline refuses incoherent layouts.
+  const planted: DielineGeometry = {
+    ...geometry,
+    panels: { ...geometry.panels, left: { ...geometry.panels.left, x: 60 } },
   }
-  const overlaps = checkOverlaps(buildDieline(planted, MAILER_DIMS))
+  const overlaps = checkOverlaps(planted)
   assert.ok(overlaps.length >= 1, "planted overlap detected")
   assert.deepEqual(overlaps[0], { a: "left", b: "front" })
 })

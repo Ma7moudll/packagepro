@@ -5,6 +5,7 @@ import {presetColourVariant} from "../preset-catalog-quote"
 import { create } from "zustand"
 import { nanoid } from "nanoid"
 import { mmToPx, facePanel, isTwoFaceSheet } from "@/lib/editor/geometry/units"
+import { invalidateStaleStoredSnapshot } from "@/lib/editor/state/stored-snapshot"
 import {
   DesignCoreState,
   DesignState,
@@ -206,14 +207,22 @@ export const useDesignStore = create<DesignStore>((set, get) => {
   const pushToHistory = (nextCore: DesignCoreState) => {
     finishLayerGesture()
     set((state) => {
+      // Revision boundary for restored dieline snapshots: a geometry-input
+      // edit committed here invalidates the stored-snapshot carrier, so
+      // the edited design resolves fresh geometry and a later change back
+      // cannot resurrect the old snapshot. Undo/redo bypass this commit
+      // and restore carriers with their revisions verbatim.
+      const committed = invalidateStaleStoredSnapshot(state.history.present, nextCore)
       return {
         history: {
           past: [...state.history.past, state.history.present],
-          present: nextCore,
+          present: committed,
           future: [],
         },
-        ...nextCore,
-        ui: withPreservedLiveUi(nextCore, state.ui),
+        ...committed,
+        // Zustand merges partial state: omission must explicitly clear this key.
+        storedDielineSnapshot: committed.storedDielineSnapshot,
+        ui: withPreservedLiveUi(committed, state.ui),
       }
     })
   }
@@ -540,6 +549,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
 
       let nextCore: DesignCoreState = {
         ...current,
+        storedDielineSnapshot: undefined,
         canvas,
         model,
         ui: { ...current.ui, selectedFace: "front", viewMode: get().ui.viewMode },
@@ -575,6 +585,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
       // Reset history so the EditorConfig init becomes the clean baseline
       set({
         ...nextCore,
+        storedDielineSnapshot: nextCore.storedDielineSnapshot,
         history: { past: [], present: nextCore, future: [] },
       })
     },
@@ -589,6 +600,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
         return {
           ...state,
           ...previous,
+          storedDielineSnapshot: previous.storedDielineSnapshot,
           ui: withPreservedLiveUi(previous,state.ui),
           history: {
             past: newPast,
@@ -609,6 +621,7 @@ export const useDesignStore = create<DesignStore>((set, get) => {
         return {
           ...state,
           ...next,
+          storedDielineSnapshot: next.storedDielineSnapshot,
           ui: withPreservedLiveUi(next,state.ui),
           history: {
             past: [...past, present],

@@ -37,6 +37,7 @@ export function DielineAnnotations({
       className="absolute inset-0 pointer-events-none"
       width={bounds.sheetW}
       height={bounds.sheetH}
+      viewBox={`${bounds.x0} ${bounds.y0} ${bounds.sheetW} ${bounds.sheetH}`}
       style={{ left: bounds.x0, top: bounds.y0, zIndex: 5 }}
     >
       {folds.map((f) => (

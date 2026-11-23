@@ -1,6 +1,6 @@
 "use client"
 
-import type { DielineBlueprint } from "../../../../shared/types/index.ts"
+import type { DielineBlueprint, DielineGeometry } from "../../../../shared/types/index.ts"
 
 export type ToolType = "select" | "text" | "shape" | "draw" | "upload"
 
@@ -271,6 +271,24 @@ export interface DesignCoreState {
    *  next save so legacy (`migrated`/`best_effort`) lineage is never re-claimed
    *  as exactly reproducible. */
   manifestMetadata?: { schemaVersion: number; manifestSource: "blueprint" | "migrated"; reproducibility: "exact" | "best_effort" }
+  /** M8-H follow-up: the dieline snapshot carried in the saved manifest this
+   *  state was restored from (attached by normalizeFromManifest, in-memory
+   *  only — never persisted in the state body). While it is present and the
+   *  geometry inputs are unchanged, it IS the design's effective geometry
+   *  (see selectEffectiveDieline): display, export and save all use it. A
+   *  geometry-input edit committed through the store invalidates it (see
+   *  invalidateStaleStoredSnapshot); undo/redo restore it with their
+   *  revision. */
+  storedDielineSnapshot?: StoredDielineSnapshot
+}
+
+/** A saved manifest's dieline snapshot, carried in memory after a restore. */
+export interface StoredDielineSnapshot {
+  geometry: DielineGeometry
+  dielineOverlaps?: { a: string; b: string }[]
+  productId?: string
+  /** Serializer version recorded on the manifest this snapshot came from. */
+  serializerVersion?: number
 }
 
 export interface DesignState extends DesignCoreState {

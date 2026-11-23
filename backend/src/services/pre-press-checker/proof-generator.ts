@@ -60,6 +60,53 @@ interface DielinePathLike {
   points?: Array<{ x: number; y: number }>;
 }
 
+export interface DielinePanelLike {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface DielineOverlaySegment {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  path: DielinePathLike;
+}
+
+/**
+ * Map a face's dieline paths from flat-net millimetres into panel-local
+ * millimetres for its proof plate. Net coordinates are absolute (the panel
+ * sits at panel.x/panel.y in the flat layout) and net Y grows downward,
+ * while a plate is drawn in PDF orientation (Y upward from the trim's
+ * bottom edge): subtract the panel origin and flip Y inside the panel
+ * height. Without the panel the paths cannot be placed truthfully, so an
+ * unknown panel yields no segments rather than misplaced lines.
+ */
+export function dielineOverlaySegments(
+  panel: DielinePanelLike | undefined,
+  faceId: string,
+  paths: DielinePathLike[] | undefined
+): DielineOverlaySegment[] {
+  if (!panel || !paths) return [];
+  const segments: DielineOverlaySegment[] = [];
+  for (const path of paths) {
+    if (path.faceId && path.faceId !== faceId) continue;
+    const pts = path.points ?? [];
+    for (let i = 1; i < pts.length; i++) {
+      segments.push({
+        x1: (Number(pts[i - 1].x) || 0) - panel.x,
+        y1: panel.h - ((Number(pts[i - 1].y) || 0) - panel.y),
+        x2: (Number(pts[i].x) || 0) - panel.x,
+        y2: panel.h - ((Number(pts[i].y) || 0) - panel.y),
+        path,
+      });
+    }
+  }
+  return segments;
+}
+
 export function readManifest(designData: unknown): ProofManifestInput {
   const d = (designData ?? {}) as any;
   const manifest = d?.manifest ?? {};
@@ -106,7 +153,7 @@ export async function composeProofPdf(
   const bleedMm = manifest.prepress?.bleedMm ?? DEFAULT_BLEED_MM;
   const safeMm = manifest.prepress?.safeMm ?? DEFAULT_SAFE_MM;
   const sortedFaceIds = Object.keys(faces).sort();
-  const dieline = manifest.dieline as { cutPaths?: DielinePathLike[]; foldPaths?: DielinePathLike[]; gluePaths?: DielinePathLike[] } | undefined;
+  const dieline = manifest.dieline as { cutPaths?: DielinePathLike[]; foldPaths?: DielinePathLike[]; gluePaths?: DielinePathLike[]; panels?: Record<string, DielinePanelLike> } | undefined;
 
   // 1 — Cover page.
   addCoverPage(pdfDoc, font, fontBold, meta.orderNumber, meta.items ?? []);
@@ -275,31 +322,32 @@ function addDielineOverlay(
   offsetY: number,
   scale: number,
   faceId: string,
+  panel: DielinePanelLike | undefined,
   paths: DielinePathLike[] | undefined
 ): void {
-  if (!paths || paths.length === 0) return;
+  // Panel-local segments: net-absolute path coordinates are translated by
+  // the panel's own origin and Y-flipped (see dielineOverlaySegments). A
+  // face whose panel is unknown gets no overlay — the previous behaviour
+  // plotted net coordinates directly on the plate, displacing every line
+  // by the panel's position in the flat layout and mirroring it vertically.
+  const segments = dielineOverlaySegments(panel, faceId, paths);
+  if (segments.length === 0) return;
   const ptPerMm = MM_TO_PT * scale;
-  for (const path of paths) {
-    const pts = path.points ?? [];
-    if (pts.length < 2) continue;
-    const scope = path.faceId;
-    if (scope && scope !== faceId) continue;
-    const style = pathColor(path);
-    for (let i = 1; i < pts.length; i++) {
-      page.drawLine({
-        start: {
-          x: offsetX + ptPerMm * (Number(pts[i - 1].x) || 0),
-          y: offsetY + ptPerMm * (Number(pts[i - 1].y) || 0),
-        },
-        end: {
-          x: offsetX + ptPerMm * (Number(pts[i].x) || 0),
-          y: offsetY + ptPerMm * (Number(pts[i].y) || 0),
-        },
-        thickness: style.thickness,
-        color: style.color,
-        dashArray: style.dashArray,
-      });
-    }
+  for (const segment of segments) {
+    const style = pathColor(segment.path);
+    page.drawLine({
+      start: {
+        x: offsetX + ptPerMm * segment.x1,
+        y: offsetY + ptPerMm * segment.y1,
+      },
+      end: {
+        x: offsetX + ptPerMm * segment.x2,
+        y: offsetY + ptPerMm * segment.y2,
+      },
+      thickness: style.thickness,
+      color: style.color,
+      dashArray: style.dashArray,
+    });
   }
 }
 
@@ -312,7 +360,7 @@ function addFacePlatePage(
   trimH: number,
   bleedMm: number,
   safeMm: number,
-  dieline: { cutPaths?: DielinePathLike[]; foldPaths?: DielinePathLike[]; gluePaths?: DielinePathLike[] } | undefined,
+  dieline: { cutPaths?: DielinePathLike[]; foldPaths?: DielinePathLike[]; gluePaths?: DielinePathLike[]; panels?: Record<string, DielinePanelLike> } | undefined,
   sourceBuffer: Buffer,
   kind: string,
   faceCount: number
@@ -390,7 +438,7 @@ function addFacePlatePage(
   const foldPaths = dieline?.foldPaths ?? [];
   const gluePaths = dieline?.gluePaths ?? [];
   if (cutPaths.length || foldPaths.length || gluePaths.length) {
-    addDielineOverlay(page, trimX, trimY, scale, faceId, [...cutPaths, ...foldPaths, ...gluePaths]);
+    addDielineOverlay(page, trimX, trimY, scale, faceId, dieline?.panels?.[faceId], [...cutPaths, ...foldPaths, ...gluePaths]);
   } else if (kind === 'svg' || kind === 'postscript') {
     page.drawText('No persisted dieline paths for this face — vector artwork shown as trim rect.', {
       x: areaX,

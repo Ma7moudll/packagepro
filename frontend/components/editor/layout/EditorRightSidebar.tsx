@@ -2,7 +2,7 @@
 
 import { BoardSpecificationPanel } from "@/components/editor/panels/BoardSpecificationPanel"
 import { RaisedPrintControl } from "@/components/editor/panels/RaisedPrintControl"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
 import {useEditorPresetQuote} from "@/lib/editor/hooks/useEditorPresetQuote"
 import { Slider } from "@/components/ui/slider"
@@ -28,6 +28,7 @@ import { COLOR_VARIANTS, FINISHING_OPTIONS, LAMINATION_OPTIONS, MATERIAL_TYPES, 
 import {CATALOGUE_PRODUCTS,CATALOGUE_CATEGORIES,CATALOGUE_CANDIDATE_MATERIALS,canonicalEditorType} from "../../../../shared/catalog/products"
 import {catalogApi} from "@/lib/api/catalog"
 import {productConfiguration,productDimensionChange,materialCandidateLabel,readinessLabel,requestProductMaterial} from "@/lib/editor/product-configuration"
+import {resolveDieline,selectEffectiveDieline,dielineRuntimeStatus} from "@/lib/editor/geometry/resolve-dieline"
 import { useLanguage } from "@/providers/language-provider"
 import { ValidationPanel } from "@/components/editor/panels/ValidationPanel"
 import { ColorPicker } from "@/components/editor/panels/ColorPicker"
@@ -67,6 +68,17 @@ export function EditorRightSidebar({onContinue}:{onContinue:()=>void}) {
   const quote = pricing.quote
   const quoteLoading = pricing.status === "loading"
   const initProduct=useDesignStore(s=>s.initFromEditorConfig)
+  const storeProduct=useDesignStore(s=>s.product)
+  const storedSnapshot=useDesignStore(s=>s.storedDielineSnapshot)
+  // Runtime dieline status at the CURRENT size and history, from the same
+  // effective-geometry selector the dieline tab renders from — the
+  // catalogue readiness line above stays the static capability statement;
+  // this line reports what resolution actually does right now, so the
+  // sidebar never implies a current dieline exists while it is blocked.
+  const dielineStatus=useMemo(()=>{
+    if(!storeProduct?.dieline)return undefined
+    return dielineRuntimeStatus(selectEffectiveDieline(resolveDieline(storeProduct.dieline,model.dimensions),{productId:storeProduct.id,dims:model.dimensions,stored:storedSnapshot}))
+  },[storeProduct?.dieline,storeProduct?.id,model.dimensions,storedSnapshot])
   const selected = layers.find((l) => l.id === selectedIds[0])
 
   const [activeTab, setActiveTab] = useState<TabId>("design")
@@ -398,7 +410,8 @@ export function EditorRightSidebar({onContinue}:{onContinue:()=>void}) {
                       </Select>
             {productLoading&&<p role="status" className="text-xs">{language==='ar'?'تحميل إعدادات المنتج...':'Loading product settings...'}</p>}
             {productError&&<p role="alert" className="text-xs text-red-700">{productError}</p>}
-            {currentCatalogue&&<p className="text-[10px] text-slate-600">{language==='ar'?'المعاينة':'Preview'}: {readinessLabel(currentCatalogue.readiness.preview,language)} · {language==='ar'?'مخطط الإنتاج':'Production dieline'}: {readinessLabel(currentCatalogue.readiness.dieline,language)} · {language==='ar'?'التسعير':'Pricing'}: {readinessLabel(currentCatalogue.readiness.pricing,language)}</p>}
+            {currentCatalogue&&<p className="text-[10px] text-slate-600">{language==='ar'?'المعاينة':'Preview'}: {readinessLabel(currentCatalogue.readiness.preview,language)}{!dielineStatus&&<> · {language==='ar'?'مخطط الإنتاج':'Production dieline'}: {readinessLabel(currentCatalogue.readiness.dieline,language)}</>} · {language==='ar'?'التسعير':'Pricing'}: {readinessLabel(currentCatalogue.readiness.pricing,language)}</p>}
+            {dielineStatus&&<p role="status" className="text-[10px] text-slate-600" data-dieline-status={dielineStatus}>{language==='ar'?'مخطط القص الحالي':'Current dieline'}: {dielineStatus==='fresh'?(language==='ar'?'متاح بالأبعاد الحالية':'Available at the current size'):dielineStatus==='stored'?(language==='ar'?'هندسة محفوظة من إصدار سابق':'Stored geometry from an earlier version'):dielineStatus==='unsupported'?(language==='ar'?'غير متاح — أبعاد غير مدعومة':'Unavailable — unsupported size'):(language==='ar'?'غير متاح':'Unavailable')}</p>}
           </AccordionContent>
         </AccordionItem>
 
