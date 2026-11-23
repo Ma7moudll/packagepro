@@ -1,0 +1,78 @@
+import {test,expect} from './local-customer-fixture'
+import {loginViaApi,BACKEND} from './helpers'
+import {readFile,writeFile} from 'node:fs/promises'
+test('ziplock actual saved front/back preview and reference exports',async({page,localCustomer},info)=>{
+ await loginViaApi(page,localCustomer.email)
+ const r=await page.request.get(BACKEND+'/catalog/custom-frosted-ziplock-bag/editor-config');expect(r.ok()).toBe(true);const config=(await r.json()).data
+ expect(config.product.readiness).toEqual({preview:'in_progress',dieline:'deferred',pricing:'quote_required'});expect(Object.keys(config.product.structure.faces).sort()).toEqual(['back','front']);expect(config.material).toMatchObject({code:'plastic-frosted',hex:'#e9ebeb'});expect(config.product.dieline).toBeUndefined()
+ await page.goto('/editor?product=custom-frosted-ziplock-bag&editorDebug=1');await page.waitForFunction(()=>(window as any).__editorStore?.getState().product?.id==='prod-frosted-ziplock-bag')
+ await page.evaluate(()=>{(window as any).__zipStore=(window as any).__editorStore;const s=(window as any).__zipStore.getState();for(const [faceId,txt,color] of [['front','FRONT 1 >','#174e32'],['back','BACK 2 >','#b02030']])s.addLayer({id:'zip-'+faceId,type:'text',faceId,name:txt,position:{x:300,y:440},textProperties:{content:txt,fontFamily:'Arial',fontSize:40,fontWeight:700,color,align:'center',letterSpacing:0,lineHeight:1}})})
+ const saved=page.waitForResponse(r=>r.url().endsWith('/designs/save')&&r.request().method()==='POST');await page.getByRole('button',{name:'Save',exact:true}).click();expect((await saved).status()).toBe(200);await page.waitForFunction(()=>new URL(location.href).searchParams.has('sessionId'));await page.reload();await page.waitForFunction(()=>(window as any).__editorStore?.getState().layers.some((l:any)=>l.id==='zip-back'))
+ await page.evaluate(()=>{(window as any).__zipStore=(window as any).__editorStore;(window as any).__editorSetViewMode('3d')});await page.waitForFunction(()=>(window as any).__editor3DFaces?.().some((f:any)=>f.faceId==='front'))
+ await page.waitForTimeout(2000);await page.screenshot({path:'/downloads/ziplock-before-3d.png'})
+ console.log('ZIPLOCK_FACES',JSON.stringify(await page.evaluate(()=>(window as any).__editor3DFaces())))
+ for(const face of ['front','back']){
+  await page.evaluate(face=>{(window as any).__zipStore.getState().setSelectedFace(face);(window as any).__zipStore.getState().setViewMode('2d')},face)
+  await page.waitForFunction(face=>(window as any).__fabricCanvas?.getObjects().some((o:any)=>o.layerId==='zip-'+face),face)
+  const dl=page.waitForEvent('download');await page.getByTitle('Download current face (PNG reference)',{exact:true}).click();const d=await dl;const bytes=await readFile((await d.path())!);await writeFile('/downloads/ziplock-saved-'+face+'.png',bytes);expect([bytes.readUInt32BE(16),bytes.readUInt32BE(20)]).toEqual([1200,1800]);await page.screenshot({path:'/downloads/ziplock-'+face+'-2d.png'})
+ }
+ await page.evaluate(()=>(window as any).__zipStore.getState().setViewMode('3d'));await page.waitForTimeout(1500)
+ for(const face of ['front','back']){
+  await page.waitForFunction(()=>!!(window as any).__editorSpinBox)
+  await page.evaluate(face=>{const spin=(window as any).__editorSpinBox;spin.active=false;spin.yOverride=face==='front'?0:Math.PI},face)
+  await page.waitForTimeout(1200);await page.screenshot({path:'/downloads/ziplock-pinned-'+face+'-3d.png'})
+ }
+})
+for(const language of ['en','ar'])for(const width of [320,360,390,1280])test(`ziplock UI ${language} ${width}`,async({page,localCustomer})=>{
+ await loginViaApi(page,localCustomer.email);await page.addInitScript(lang=>{localStorage.setItem('language',lang);document.documentElement.dir=lang==='ar'?'rtl':'ltr';document.documentElement.lang=lang},language);await page.setViewportSize({width,height:800})
+ await page.goto('/editor?product=custom-frosted-ziplock-bag&editorDebug=1');await page.waitForFunction(()=>(window as any).__editorStore?.getState().product?.id==='prod-frosted-ziplock-bag')
+ await page.evaluate(()=>{(window as any).__zipStore=(window as any).__editorStore;const s=(window as any).__zipStore.getState();s.addLayer({id:'zip-top',faceId:'front',type:'text',name:'Top',position:{x:300,y:60},textProperties:{content:'TOP >',fontFamily:'Arial',fontSize:30,fontWeight:700,color:'#174e32',align:'center',letterSpacing:0,lineHeight:1}});s.addLayer({id:'zip-bottom',faceId:'front',type:'text',name:'Bottom',position:{x:300,y:820},textProperties:{content:'BOTTOM >',fontFamily:'Arial',fontSize:30,fontWeight:700,color:'#174e32',align:'center',letterSpacing:0,lineHeight:1}});s.setViewMode('2d')})
+ await page.waitForFunction(()=>(window as any).__fabricCanvas?.getObjects().some((o:any)=>o.layerId==='zip-bottom'))
+ const bounds=await page.evaluate(()=>{const s=document.querySelector('[data-sheet-surface]')!.getBoundingClientRect(),v=document.querySelector('[data-sheet-viewport]')!.getBoundingClientRect();return {surface:{x:s.x,y:s.y,r:s.right,b:s.bottom},view:{x:v.x,y:v.y,r:v.right,b:v.bottom}}})
+ expect(await page.locator('[data-editor-workspace]').getAttribute('dir')).toBe(language==='ar'?'rtl':'ltr')
+ console.log('ZIPLOCK_UI',language,width,JSON.stringify(bounds))
+ await page.screenshot({path:`/downloads/ziplock-ui-${language}-${width}.png`})
+ expect(bounds.surface.x).toBeGreaterThanOrEqual(bounds.view.x);expect(bounds.surface.r).toBeLessThanOrEqual(bounds.view.r+1);expect(bounds.surface.b).toBeLessThanOrEqual(bounds.view.b+1)
+ const point=await page.evaluate(()=>{const c=(window as any).__fabricCanvas,o=c.getObjects().find((o:any)=>o.layerId==='zip-bottom'),p=o.getCenterPoint(),v=c.viewportTransform,r=c.upperCanvasEl.getBoundingClientRect();return {x:r.x+(p.x*v[0]+v[4])*r.width/c.width,y:r.y+(p.y*v[3]+v[5])*r.height/c.height,dx:12*c.width/r.width/v[0],dy:-8*c.height/r.height/v[3]}})
+ const before=await page.evaluate(()=>(window as any).__zipStore.getState().layers.find((l:any)=>l.id==='zip-bottom').position)
+ await page.mouse.click(point.x,point.y);await expect.poll(()=>page.evaluate(()=>(window as any).__zipStore.getState().selectedLayerIds)).toContain('zip-bottom')
+ await page.mouse.move(point.x,point.y);await page.mouse.down();await page.mouse.move(point.x+12,point.y-8,{steps:8});await page.mouse.up()
+ const after=await page.evaluate(()=>(window as any).__zipStore.getState().layers.find((l:any)=>l.id==='zip-bottom').position)
+ expect(Math.abs(after.x-before.x-point.dx)).toBeLessThanOrEqual(1);expect(Math.abs(after.y-before.y-point.dy)).toBeLessThanOrEqual(1)
+ const top=await page.evaluate(()=>{const c=(window as any).__fabricCanvas,o=c.getObjects().find((o:any)=>o.layerId==='zip-top'),p=o.getCenterPoint(),v=c.viewportTransform,r=c.upperCanvasEl.getBoundingClientRect();return {x:r.x+(p.x*v[0]+v[4])*r.width/c.width,y:r.y+(p.y*v[3]+v[5])*r.height/c.height,dx:8*c.width/r.width/v[0]}})
+ await page.mouse.click(top.x,top.y);await page.mouse.move(top.x,top.y);await page.mouse.down();await page.mouse.move(top.x+8,top.y+5,{steps:4});await page.mouse.up()
+ expect(Math.abs(await page.evaluate(()=>(window as any).__zipStore.getState().layers.find((l:any)=>l.id==='zip-top').position.x)-300-top.dx)).toBeLessThanOrEqual(1)
+ const back=page.getByRole('button' ,{name:'Back',exact:true});await back.scrollIntoViewIfNeeded();await back.click();await expect(back).toHaveAttribute('aria-pressed','true')
+})
+test('ziplock unsupported saved artwork blocks all reference/export outputs and remains recoverable',async({page,localCustomer})=>{
+ await loginViaApi(page,localCustomer.email);await page.goto('/editor?product=custom-frosted-ziplock-bag&editorDebug=1');await page.waitForFunction(()=>(window as any).__editorStore?.getState().product?.id==='prod-frosted-ziplock-bag')
+ await page.evaluate(()=>{const s=(window as any).__editorStore.getState();s.addLayer({id:'zip-side',type:'text',faceId:'left',name:'Preserved side',position:{x:20,y:100},textProperties:{content:'SIDE >',fontFamily:'Arial',fontSize:20,fontWeight:700,color:'#b02030',align:'left',letterSpacing:0,lineHeight:1}})})
+ await expect(page.locator('[data-unsupported-artwork-warning]')).toBeVisible()
+ const saved=page.waitForResponse(r=>r.url().endsWith('/designs/save')&&r.request().method()==='POST');await page.getByRole('button',{name:'Save',exact:true}).click();expect((await saved).status()).toBe(200);await page.waitForFunction(()=>new URL(location.href).searchParams.has('sessionId'));await page.reload();await page.waitForFunction(()=>(window as any).__editorStore?.getState().layers.some((l:any)=>l.id==='zip-side'&&l.faceId==='left'))
+ await page.evaluate(()=>{(window as any).__zipStore=(window as any).__editorStore;(window as any).__editorSetViewMode('2d')})
+ const downloads:string[]=[];page.on('download',d=>downloads.push(d.suggestedFilename()))
+ await page.getByTitle('Download current face (PNG reference)',{exact:true}).click();await expect(page.getByText('Download blocked. See the artwork warning above.',{exact:true})).toBeVisible()
+ await page.getByRole('tab',{name:'Export',exact:true}).click();await page.getByRole('button',{name:'Export',exact:true}).click();const dialog=page.locator('[data-preview-export-dialog]');await expect(dialog).toBeVisible()
+ for(const format of ['PDF','SVG','PNG','JPEG']){await dialog.locator('[data-preview-format]').click();await page.getByRole('option',{name:new RegExp('^'+format+' ')}).click();await dialog.locator('[data-preview-export]').click();await expect(dialog.getByText(/Export blocked: This frosted ziplock bag/)).toBeVisible()}
+ expect(downloads).toEqual([]);await page.keyboard.press('Escape');await page.getByRole('tab',{name:'Design',exact:true}).click();await page.screenshot({path:'/downloads/ziplock-unsupported-preserved.png'})
+ await page.locator('[data-unsupported-artwork-warning]').getByRole('button',{name:'Details',exact:true}).click();const recovery=page.locator('[data-recovery-layer=zip-side]');await expect(recovery).toContainText('Preserved side (left)');await recovery.getByRole('button',{name:'Select in Properties',exact:true}).click();await expect.poll(()=>page.evaluate(()=>(window as any).__zipStore.getState().selectedLayerIds)).toEqual(['zip-side']);await expect(page.locator('[data-editor-properties] input:visible').first()).toHaveValue('Preserved side');await page.locator('[data-unsupported-artwork-warning]').getByRole('button',{name:'Details',exact:true}).click();await recovery.getByRole('button',{name:'Delete layer',exact:true}).click();await recovery.getByRole('button',{name:'Cancel',exact:true}).click();expect(await page.evaluate(()=>(window as any).__zipStore.getState().layers.some((l:any)=>l.id==='zip-side'))).toBe(true);await recovery.getByRole('button',{name:'Delete layer',exact:true}).click();await recovery.getByRole('button',{name:'Confirm delete',exact:true}).click();await expect(page.locator('[data-unsupported-artwork-warning]')).toHaveCount(0);await page.keyboard.press('Control+z');await expect(page.locator('[data-unsupported-artwork-warning]')).toBeVisible()
+})
+for(const language of ['en','ar'])test(`ziplock mobile recovery lock and confirmation ${language}`,async({page,localCustomer})=>{
+ await loginViaApi(page,localCustomer.email);await page.addInitScript(lang=>{localStorage.setItem('language',lang);document.documentElement.dir=lang==='ar'?'rtl':'ltr'},language);await page.setViewportSize({width:390,height:800});await page.goto('/editor?product=custom-frosted-ziplock-bag&editorDebug=1');await page.waitForFunction(()=>(window as any).__editorStore?.getState().product?.id==='prod-frosted-ziplock-bag')
+ await page.waitForFunction(()=>(window as any).__editorStore?.getState().model.type==='frosted_ziplock_bag');await page.evaluate(()=>{(window as any).__zipStore=(window as any).__editorStore;(window as any).__zipStore.getState().addLayer({id:'locked-side',faceId:'top',name:'LOCKED SAVED',type:'text',locked:true,textProperties:{content:'SIDE',fontFamily:'Arial',fontSize:20,fontWeight:700,color:'#333333',align:'left',letterSpacing:0,lineHeight:1}})})
+ const details=page.locator('[data-unsupported-artwork-warning]').getByRole('button',{name:'Details',exact:true});await details.click();const row=page.locator('[data-recovery-layer=locked-side]'),del=row.getByRole('button',{name:language==='ar'?'حذف الطبقة':'Delete layer',exact:true})
+ await expect(del).toBeDisabled();await row.getByRole('button',{name:language==='ar'?'إلغاء قفل الطبقة':'Unlock layer',exact:true}).click();await expect(del).toBeEnabled();await del.click();await expect(row.getByRole('button',{name:language==='ar'?'تأكيد الحذف':'Confirm delete',exact:true})).toBeVisible()
+ await page.screenshot({path:`/downloads/ziplock-recovery-${language}-390.png`});await page.keyboard.press('Escape');await details.click();await expect(row.getByRole('button',{name:language==='ar'?'تأكيد الحذف':'Confirm delete',exact:true})).toHaveCount(0)
+ await row.getByRole('button',{name:language==='ar'?'تحديد في الخصائص':'Select in Properties',exact:true}).click();await expect(page.locator('[data-editor-properties] input:visible').first()).toHaveValue('LOCKED SAVED');await expect.poll(()=>page.locator('[data-editor-properties]').evaluate(el=>{const r=el.getBoundingClientRect();return r.width>200&&r.x>=0&&r.right<=innerWidth})).toBe(true);await page.screenshot({path:`/downloads/ziplock-recovery-properties-${language}-390.png`})
+})
+test('ziplock requested width/height edit saves reopens and exports unchanged logical scale',async({page,localCustomer})=>{
+ await loginViaApi(page,localCustomer.email);await page.goto('/editor?product=custom-frosted-ziplock-bag&editorDebug=1');await page.waitForFunction(()=>(window as any).__editorStore?.getState().model.type==='frosted_ziplock_bag')
+ await page.getByRole('button',{name:'Dimensions (mm)',exact:true}).click()
+ for(const [label,value] of [['Width','260'],['Height','360']]){const input=page.locator('[data-editor-properties]').getByText(label,{exact:true}).locator('..').locator('input');await input.fill(value);await input.blur()}
+ expect(await page.evaluate(()=>(window as any).__editorStore.getState().model.dimensions)).toEqual({length:260,width:5,height:360})
+ await page.evaluate(()=>{const s=(window as any).__editorStore.getState();s.addLayer({id:'dim-art',faceId:'front',type:'text',name:'DIMENSIONS >',position:{x:390,y:540},textProperties:{content:'260 x 360 >',fontFamily:'Arial',fontSize:36,fontWeight:700,color:'#174e32',align:'center',letterSpacing:0,lineHeight:1}})})
+ const save=page.waitForResponse(r=>r.url().endsWith('/designs/save')&&r.request().method()==='POST');await page.getByRole('button',{name:'Save',exact:true}).click();expect((await save).status()).toBe(200);await page.waitForFunction(()=>new URL(location.href).searchParams.has('sessionId'));await page.reload();await page.waitForFunction(()=>(window as any).__editorStore?.getState().layers.some((l:any)=>l.id==='dim-art'))
+ expect(await page.evaluate(()=>(window as any).__editorStore.getState().model.dimensions)).toEqual({length:260,width:5,height:360});expect(await page.evaluate(()=>(window as any).__editorStore.getState().canvas)).toMatchObject({width:780,height:1080})
+ await page.evaluate(()=>(window as any).__editorSetViewMode('2d'));await page.waitForFunction(()=>(window as any).__fabricCanvas?.getObjects().some((o:any)=>o.layerId==='dim-art'))
+ const dl=page.waitForEvent('download');await page.getByTitle('Download current face (PNG reference)',{exact:true}).click();const bytes=await readFile((await (await dl).path())!);expect([bytes.readUInt32BE(16),bytes.readUInt32BE(20)]).toEqual([1560,2160]);await writeFile('/downloads/ziplock-resized-saved-front.png',bytes)
+})

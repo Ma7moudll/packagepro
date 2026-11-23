@@ -4,7 +4,9 @@ import { ConflictError } from '../../utils/errors';
 /**
  * SEC-04A — Order status transition matrix.
  *
- * Single source of truth for every order-status move in the system. The
+ * Generic forward-status transition matrix. Explicit approval reopening is a
+ * separate admin-only operation with an order lock, capability invalidation
+ * and an any-PO guard; do not add a generic reverse PATCH transition. The
  * matrix is derived from the lifecycle the code actually implements:
  *
  *   pending_review    — order created; Stripe capture moves it on

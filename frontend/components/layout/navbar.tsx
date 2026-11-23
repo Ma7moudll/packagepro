@@ -44,12 +44,12 @@ export function Navbar() {
     <header
       className={`sticky top-0 z-50 w-full border-b bg-white backdrop-blur-sm ${isRTL ? "font-cairo" : ""}`}
     >
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-2 min-[360px]:px-3 sm:px-4">
         <div className={`flex h-16 items-center ${isRTL ? "flex-row-reverse" : "justify-between"}`}>
           {/* Logo */}
           <Link href="/" className={`flex items-center space-x-2 ${isRTL ? "space-x-reverse" : ""}`}>
-            <Package className="h-8 w-8 text-emerald-600" />
-            <span className="text-2xl font-bold text-slate-900">PackagePro</span>
+            <Package className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-600" />
+            <span className="text-lg min-[360px]:text-xl sm:text-2xl font-bold text-slate-900">PackagePro</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -175,7 +175,7 @@ export function Navbar() {
           </NavigationMenu>
 
           {/* Right side actions */}
-          <div className={`flex items-center space-x-4 ${isRTL ? "space-x-reverse" : ""}`}>
+          <div className={`flex items-center space-x-1 sm:space-x-2 2xl:space-x-4 ${isRTL ? "space-x-reverse" : ""}`}>
             {/* Language Switcher */}
             <LanguageSwitcher />
 
@@ -304,7 +304,7 @@ export function Navbar() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <div className={`flex items-center space-x-2 ${isRTL ? "space-x-reverse" : ""}`}>
+              <div className={`hidden sm:flex items-center space-x-2 ${isRTL ? "space-x-reverse" : ""}`}>
                 <Button variant="ghost" size="sm" asChild>
                   <Link href="/login">{t("nav.login")}</Link>
                 </Button>
@@ -330,7 +330,7 @@ export function Navbar() {
                 </Button>
               </SheetTrigger>
               <SheetContent side={isRTL ? "left" : "right"} className="w-[300px] sm:w-[400px]">
-                <nav className={`flex flex-col space-y-4 mt-8 ${isRTL ? "text-right" : ""}`}>
+                <nav className={`flex flex-col space-y-4 mt-8 px-6 ${isRTL ? "text-right" : ""}`}>
                   <Link href="/products" className="text-lg font-medium" onClick={() => setIsOpen(false)}>
                     {t("nav.products")}
                   </Link>

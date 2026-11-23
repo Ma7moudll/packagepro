@@ -1,6 +1,6 @@
 /** Explicit coverage, never infer geometry from a product's marketing name.
  * Production dieline support is a separate backend contract. */
-export type PreviewFamily = "mailer" | "shipping" | "rigid" | "carton" | "pizza" | "cup" | "bag" | "pouch" | "tube" | "envelope" | "label" | "flat" | "mailer-bag"
+export type PreviewFamily = "mailer" | "shipping" | "rigid" | "carton" | "pizza" | "cup" | "bag" | "pouch" | "tube" | "envelope" | "label" | "flat" | "mailer-bag" | "ziplock-bag"
 const ROUTES: Record<string, PreviewFamily> = {
  "mailer-box":"mailer", "custom-mailer-box":"mailer",
  "shipping-box":"shipping", "custom-shipping-box":"shipping",
@@ -12,6 +12,7 @@ const ROUTES: Record<string, PreviewFamily> = {
  "tube":"tube", "cardboard-tube":"tube", "envelope":"envelope", "mailer-envelope":"envelope",
  "tube-metal-lid":"tube", "corrugated-envelope":"envelope",
  "paper-mailer-bag":"mailer-bag", "poly-mailer":"mailer-bag", "poly-mailer-bag":"mailer-bag", "bio-poly-mailer-bag":"mailer-bag",
+ "frosted-ziplock-bag":"ziplock-bag",
  "business-card":"flat", "loyalty-card":"flat", "menu-card":"flat", "thank-you-card":"flat", "tissue-paper":"flat", "packing-paper":"flat",
  "label":"label", "rectangle-label":"label", "circle-label":"label", "square-label":"label", "labels-sheet":"label",
 }

@@ -1,5 +1,8 @@
 # 🏗️ PackagePro Architecture Documentation
 
+> Historical document. Claims, completion checklists, architecture versions and test counts below are not current status. Use [current capability boundaries](CURRENT_CAPABILITIES.md) and the exact revision's source/test evidence instead. This report is not a launch or manufacturing approval.
+
+
 ## Overview
 
 PackagePro is a Full-Stack system for order management and custom packaging, built on a Microservices-ready architecture with a clear separation between the Frontend and Backend.

@@ -15,6 +15,8 @@ export function useKeyboardShortcuts() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Modal actions must not undo/delete the background design in flight.
+      if (document.querySelector('[role="dialog"][data-state="open"]')) return
       // Don't trigger shortcuts when typing in inputs
       if (
         e.target instanceof HTMLInputElement ||

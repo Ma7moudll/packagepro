@@ -1,3 +1,7 @@
+import {menuPreviewStructure} from '../src/modules/catalog/menu-preview';
+import {loyaltyPreviewStructure} from '../src/modules/catalog/loyalty-preview';
+import {thankYouPreviewStructure} from '../src/modules/catalog/thank-you-preview';
+import {ziplockPreviewStructure} from '../src/modules/catalog/ziplock-preview';
 import { Prisma, PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import EGP_RATES from '../src/services/pricing-bootstrap/egp-rates.json';
@@ -374,6 +378,27 @@ async function main() {
     },
     boxTypeOptions: [{ value: 'mailer-box', label: 'Mailer Box' }],
     editorFields: ['size', 'material', 'print', 'finish', 'lamination', 'foil', 'quantity'],
+  };
+
+  // Business card: a single flat sheet with two printable sides. The
+  // structure carries exactly the front and back faces — each the full
+  // card (85x55mm at the catalogue default size, 1mm sheet axis) — so the
+  // editor's face list, 2D canvas and 3D flat preview all work on the
+  // card's real faces instead of a six-face box set. This is a preview
+  // structure, not a production dieline: no blueprint is attached and
+  // the product's support flag stays deferred (see its catalogue entry).
+  const BUSINESS_CARD_STRUCTURE = {
+    type: 'flat',
+    brand: 'PackagePro',
+    boxType: 'business-card',
+    defaultSizes: [
+      { code: 'default', label: 'Business Card (85x55)', dims: { length: 85, width: 1, height: 55 } },
+    ],
+    faces: {
+      front: { width: 85, height: 55, depth: 1, label: 'Front' },
+      back: { width: 85, height: 55, depth: 1, label: 'Back' },
+    },
+    zones: { front: [], back: [] },
   };
 
   // M8-B: Canonical packaging blueprint — dieline template for the mailer
@@ -1529,6 +1554,37 @@ async function main() {
       conversion: 0.4,
       margin: 0.5,
     },
+    {
+      // Business card, hand-seeded so the editor receives its real flat
+      // structure (front/back faces only, BUSINESS_CARD_STRUCTURE above)
+      // instead of the generic catalogue-expansion entry, which carries
+      // no structure and leaves the editor with six box faces. Nothing
+      // else changes versus that expansion entry: no product-specific
+      // rates exist (priceFrom null, quote on request), no min/max size
+      // bounds are invented (null), and production dieline geometry
+      // stays deferred — support is not upgraded.
+      id: 'prod-business-card',
+      subcategoryId: 'sub-cards',
+      slug: 'custom-business-card',
+      name: 'Custom Business Card',
+      shortDescription: 'Premium business cards',
+      description: null,
+      productType: 'label',
+      boxType: 'business-card',
+      moq: 50,
+      sizeUnit: 'mm',
+      sizes: [{ code: 'default', name: 'Custom Business Card', length: 85, width: 1, height: 55 }],
+      minDims: null as unknown as CatalogDims,
+      maxDims: null as unknown as CatalogDims,
+      priceFrom: null,
+      thumbnail: null,
+      gallery: [],
+      ecoFlags: null,
+      filters: null,
+      editorDefaults: { boxType: 'business-card', defaultMaterial: 'card-stock-white', defaultColor: 'full_color', defaultPrint: 'outside', structure: BUSINESS_CARD_STRUCTURE, support: 'deferred', supportReason: 'Flat two-sided card: the front/back preview is wired through the editor structure, but production dieline geometry is deferred — no blueprint is shipped for this product.' },
+      defaultVariant: { materialCode: 'card-stock-white', color: 'natural', printMode: 'none', printSides: 'outside_only', finish: 'none' },
+      options: [],
+    },
   ];
 
   // Unified catalogue expansion: picker-listed products without a seeded
@@ -1569,6 +1625,15 @@ async function main() {
       filters: null,
       editorDefaults: {
         boxType: entry.boxType,
+        // Explicitly qualified card slices receive two-face previews.
+        // No production blueprint, rates or sibling support is inferred.
+        ...(entry.id === 'menu_card' ? {structure: menuPreviewStructure(entry.defaultDimensions)} : {}),
+        ...(entry.id === 'loyalty_card' ? {structure: loyaltyPreviewStructure(entry.defaultDimensions)} : {}),
+        ...(entry.id === 'thank_you_card' ? {structure: thankYouPreviewStructure(entry.defaultDimensions)} : {}),
+        // Frosted ziplock bag: a two-film-face preview structure only —
+        // support stays deferred, no blueprint, rates or production
+        // geometry are inferred from it.
+        ...(entry.id === 'frosted_ziplock_bag' ? {structure: ziplockPreviewStructure(entry.defaultDimensions)} : {}),
         support: 'deferred',
         supportReason: entry.supportReason,
       },
