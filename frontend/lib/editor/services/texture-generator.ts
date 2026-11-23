@@ -4,6 +4,8 @@ import { TEXTURE_PX_PER_MM, pxToMm } from "@/lib/editor/geometry/units"
 
 interface TextureOptions {
   scale?: number
+  // Downloads fail closed on missing assets; 3D preview behavior is unchanged.
+  strictAssets?: boolean
   backgroundColor?: string
   width?: number
   height?: number
@@ -57,14 +59,20 @@ export async function generateTextureFromLayers(
     await Promise.all(
       imageUrls.map(
         (src) =>
-          new Promise<void>((resolve) => {
+          new Promise<void>((resolve, reject) => {
             const img = new Image()
+            const timeout=options.strictAssets ? setTimeout(()=>{img.onload=null;img.onerror=null;img.src="";reject(new Error("Preview unavailable: image loading timed out"))},10000) : undefined
+            const stop=()=>{if(timeout) clearTimeout(timeout)}
             img.crossOrigin = "anonymous"
             img.onload = () => {
+              stop()
+              if (options.strictAssets && (!img.width || !img.height || img.width*img.height>25_000_000)) {reject(new Error("Preview unavailable: image is empty or too large"));return}
               imageCache[src] = img
               resolve()
             }
             img.onerror = () => {
+              stop()
+              if(options.strictAssets) {reject(new Error("Preview unavailable: a design image could not be loaded"));return}
               console.error(`Failed to load image: ${src}`)
               resolve()
             }
@@ -94,11 +102,14 @@ export async function generateTextureFromLayers(
 
     const dim = getFaceDimensions(face.id, model.dimensions)
     const canvas = document.createElement("canvas")
-    canvas.width = dim.width * scale
-    canvas.height = dim.height * scale
+    canvas.width = options.strictAssets ? Math.ceil(dim.width*scale) : dim.width*scale
+    canvas.height = options.strictAssets ? Math.ceil(dim.height*scale) : dim.height*scale
     const ctx = canvas.getContext("2d")
 
-    if (!ctx) continue
+    if (!ctx) {
+      if(options.strictAssets) throw new Error("Preview unavailable: canvas rendering is unavailable")
+      continue
+    }
 
     if (options.includeEmptyFaces) {
       // Export: opaque artboard so the file shows the background the user saw

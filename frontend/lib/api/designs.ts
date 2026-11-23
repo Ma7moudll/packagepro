@@ -20,7 +20,20 @@ export interface DesignRecord {
   updatedAt?: string
 }
 
+export interface ArtworkReviewArtifact {
+  id: string
+  fileName: string
+  snapshotHash: string
+  sha256: string
+  pdfBase64: string
+  productionReady: false
+}
+
 export const designsApi = {
+  createArtworkReview: (id: string, data: {snapshotHash:string;pdfBase64:string}) =>
+    apiPost<Omit<ArtworkReviewArtifact,'pdfBase64'>>(`/designs/${id}/artwork-reviews`, data),
+  getArtworkReview: (id: string, fileId: string) =>
+    apiGet<ArtworkReviewArtifact>(`/designs/${id}/artwork-reviews/${fileId}`),
   list: () =>
     apiGet<DesignRecord[]>('/designs'),
 

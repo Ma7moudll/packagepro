@@ -1,10 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import {editorRequiresQuote} from "@/lib/editor/quote-policy"
+import {useEditorPresetQuote, requestEditorPresetQuote} from "@/lib/editor/hooks/useEditorPresetQuote"
 import { useDesignStore } from '@/lib/editor/state/store';
-import { pricingApi } from '@/lib/api/pricing';
-import type { PricingResponse } from '@shared/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,62 +27,25 @@ export function PriceCalculator({ className }: PriceCalculatorProps) {
   // summary reads the same value, so panel and footer can never disagree.
   const model = useDesignStore((s) => s.model);
   const applyCoreState = useDesignStore((s) => s.applyCoreState);
-  const customQuote = useDesignStore(editorRequiresQuote);
+  const pricing = useEditorPresetQuote();
+  const customQuote = pricing.status === "unpriced";
+  const quote = pricing.quote;
+  const loading = pricing.status === "loading";
   const quantity = model.quantity;
   const setQuantity = (q: number) =>
     applyCoreState((s) => ({ ...s, model: { ...s.model, quantity: q } }));
 
-  const [quote, setQuote] = useState<PricingResponse | null>(null);
   const [tiers, setTiers] = useState<Record<number, number | null>>({});
-  const [loading, setLoading] = useState(false);
 
+  const [tierKey,setTierKey] = useState("");
   useEffect(() => {
     let cancelled = false;
-    if (customQuote) { setQuote(null); setTiers({}); setLoading(false); return; }
-    setLoading(true);
-    const timer = setTimeout(() => {
-      const t = (model.type || '').toLowerCase();
-      const productType = t.includes('bag') || t.includes('pouch') ? 'bag' : t.includes('label') ? 'label' : 'box';
-      const payload = {
-        productType,
-        dimensions: { ...model.dimensions, unit: 'mm' as const },
-        materialCode: model.material,
-      };
-
-      pricingApi
-        .calculate({ ...payload, quantity })
-        .then((res) => {
-          if (!cancelled) setQuote(res.success && res.data ? res.data : null);
-        })
-        .catch(() => {
-          if (!cancelled) setQuote(null);
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-
-      // Unit price at each comparison quantity, from the same engine.
-      Promise.all(
-        COMPARISON_QUANTITIES.map((q) =>
-          pricingApi
-            .calculate({ ...payload, quantity: q })
-            .then((res) => ({ q, unit: res.success && res.data ? res.data.totalPrice / q : null }))
-            .catch(() => ({ q, unit: null })),
-        ),
-      ).then((results) => {
-        if (cancelled) return;
-        const next: Record<number, number | null> = {};
-        results.forEach(({ q, unit }) => {
-          next[q] = unit;
-        });
-        setTiers(next);
-      });
-    }, 400);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [customQuote, quantity, model.type, model.material, model.dimensions.length, model.dimensions.width, model.dimensions.height]);
+    if (!quote) return;
+    Promise.all(COMPARISON_QUANTITIES.map(q => requestEditorPresetQuote(pricing.core,q)
+      .then(result => ({q,unit:result.merchandiseUnit})).catch(()=>({q,unit:null}))))
+      .then(results=>{if(!cancelled){setTiers(Object.fromEntries(results.map(r=>[r.q,r.unit])));setTierKey(pricing.key)}});
+    return()=>{cancelled=true};
+  },[pricing.key,quote]);
 
   const currency = quote?.material?.currency ?? 'EGP';
   const formatPrice = (amount: number) =>
@@ -104,10 +65,10 @@ export function PriceCalculator({ className }: PriceCalculatorProps) {
     { label: language === 'ar' ? 'الضريبة' : 'Tax', value: breakdown?.tax },
   ].filter((r) => r.value !== undefined && r.value !== 0);
 
-  if (customQuote) return <div role="status" className="p-4 text-sm bg-amber-50 rounded border border-amber-200">{language === "ar" ? "هذه المواصفات تحتاج عرض سعر معتمد. لا توجد أسعار معتمدة لتركيبات الخامات والإضافات الجديدة." : "These specifications require an approved quote. No approved rates exist for the new stock combinations and additions."}</div>;
+  if (customQuote) return <div role="status" className="p-4 text-sm bg-amber-50 rounded border border-amber-200">{language === "ar" ? "هذه المواصفات تحتاج عرض سعر معتمد. لا يتوفر تقدير متطابق بين المحرر والسلة. لم تتغير اختياراتك المحفوظة." : "These specifications require an approved quote. A matching editor/cart estimate is unavailable. Your saved choices have not been changed."}</div>;
 
   return (
-    <div className={className}>
+    <div data-testid="editor-price-panel" className={className}>
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -139,9 +100,9 @@ export function PriceCalculator({ className }: PriceCalculatorProps) {
           {/* Price Breakdown */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span>{language === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</span>
-              <span className="font-medium">
-                {quote ? formatPrice(quote.totalPrice / quote.quantity) : '—'}
+              <span>{language === 'ar' ? 'سعر الوحدة (بدون الشحن)' : 'Unit Price (excl. shipping)'}</span>
+              <span className="font-medium" data-testid="editor-merchandise-unit">
+                {quote ? formatPrice(quote.merchandiseUnit) : '—'}
               </span>
             </div>
 
@@ -177,7 +138,7 @@ export function PriceCalculator({ className }: PriceCalculatorProps) {
 
             <div className="flex items-center justify-between text-lg font-bold">
               <span>{language === 'ar' ? 'المجموع' : 'Total'}</span>
-              <span className="text-green-600">{quote ? formatPrice(quote.totalPrice) : '—'}</span>
+              <span data-testid="editor-price-panel-total" className="text-green-600">{quote ? formatPrice(quote.totalPrice) : '—'}</span>
             </div>
             {quote && (
               <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
@@ -188,10 +149,11 @@ export function PriceCalculator({ className }: PriceCalculatorProps) {
             )}
           </div>
 
+          {pricing.status === 'error' && <button type="button" onClick={pricing.retry} className="text-sm underline">{language === 'ar' ? 'إعادة حساب السعر' : 'Retry price'}</button>}
           {/* Unit price by quantity, all from the pricing engine */}
           <div className="space-y-2">
             <Label className="text-xs font-medium">
-              {language === 'ar' ? 'سعر الوحدة حسب الكمية' : 'Unit price by quantity'}
+              {language === 'ar' ? 'سعر الوحدة حسب الكمية (بدون الشحن)' : 'Unit price by quantity (excl. shipping)'}
             </Label>
             <div className="grid grid-cols-2 gap-1 text-xs">
               {COMPARISON_QUANTITIES.map((q) => (
@@ -207,7 +169,7 @@ export function PriceCalculator({ className }: PriceCalculatorProps) {
                 >
                   <div className="font-medium">{q.toLocaleString()}</div>
                   <div className="text-green-600">
-                    {tiers[q] != null ? `${formatPrice(tiers[q] as number)} / ${language === 'ar' ? 'قطعة' : 'pc'}` : '—'}
+                    {tierKey === pricing.key && tiers[q] != null ? `${formatPrice(tiers[q] as number)} / ${language === 'ar' ? 'قطعة' : 'pc'}` : '—'}
                   </div>
                 </button>
               ))}
