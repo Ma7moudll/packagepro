@@ -147,4 +147,14 @@ describe('real saved-design approval snapshot contract',()=>{
   }finally{release();await prisma.handshake.deleteMany({where:{vendorId:vu.vendor!.id}});await prisma.purchaseOrder.deleteMany({where:{vendorId:vu.vendor!.id}});await prisma.user.delete({where:{id:vu.id}}).catch(()=>{})}
  },60000);
 
+ it('unsafe approval frontend configuration fails before durable or external issuance effects',async()=>{
+  const s=await setup();const sent=vi.mocked(emailService.sendApprovalRequest).mock.calls.length;const upload=vi.spyOn(fileUploadService,'uploadFile');const previous=process.env.FRONTEND_URL;
+  try{for(const bad of [undefined,'','relative/path','javascript:alert(1)','https://user:pass@example.test','https://example.test/?secret=yes','https://example.test/#fragment']){if(bad===undefined)delete process.env.FRONTEND_URL;else process.env.FRONTEND_URL=bad;await expect(request(s)).rejects.toMatchObject({statusCode:500});expect(await prisma.approvalRequest.count({where:{orderId:s.o.id}})).toBe(0);expect(await prisma.orderApprovalToken.count({where:{orderId:s.o.id}})).toBe(0);expect((await prisma.order.findUniqueOrThrow({where:{id:s.o.id}})).status).toBe('pending_review')}
+   expect(upload).not.toHaveBeenCalled();expect(vi.mocked(emailService.sendApprovalRequest).mock.calls.length).toBe(sent);
+  }finally{process.env.FRONTEND_URL=previous;upload.mockRestore()}
+ });
+ it('valid configured frontend subpath produces a usable absolute bound approval URL',async()=>{
+  const s=await setup(),previous=process.env.FRONTEND_URL;try{process.env.FRONTEND_URL='https://review.example.test/shop/';const a=await request(s);const call=vi.mocked(emailService.sendApprovalRequest).mock.calls.at(-1)!;expect(new URL(call[1]).pathname).toBe(`/shop/orders/${s.o.id}/approve`);expect(a.token).toHaveLength(64);await approvalService.approveOrder(s.o.id,a.token)}finally{process.env.FRONTEND_URL=previous}
+ });
+
 });

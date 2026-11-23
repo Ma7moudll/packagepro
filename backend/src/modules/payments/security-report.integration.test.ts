@@ -29,6 +29,9 @@ vi.mock('../../services/email/email.service', () => ({
 
 // Real PostgreSQL constraints and real JWT authentication. Stripe, carrier and
 // outbound email are test doubles: these tests cannot charge or message anyone.
+const priorFrontendUrl=process.env.FRONTEND_URL;
+beforeAll(()=>{process.env.FRONTEND_URL='http://localhost:3001'});
+afterAll(()=>{if(priorFrontendUrl===undefined)delete process.env.FRONTEND_URL;else process.env.FRONTEND_URL=priorFrontendUrl});
 describe('security report regressions, real database', () => {
   const app = Fastify();
   const marker = `security-${Date.now()}`;

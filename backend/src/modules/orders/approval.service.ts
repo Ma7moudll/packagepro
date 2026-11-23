@@ -9,6 +9,7 @@ import {
   ConflictError,
   NotFoundError,
   ValidationError,
+  InternalServerError,
 } from "../../utils/errors";
 import { emailService } from "../../services/email/email.service";
 import {
@@ -18,6 +19,16 @@ import {
 import { fetchStoredFile } from "../../services/file-upload/stored-file-fetch";
 import { fileUploadService } from "../../services/file-upload/upload.service";
 import { approvalContentHash, approvalBytesHash } from "./approval-snapshot";
+
+// Validate once before staging anything, then retain this base across async work.
+export function approvalFrontendBase(value=process.env.FRONTEND_URL,production=process.env.NODE_ENV==='production'):string{
+  try{
+    if(!value?.trim())throw new Error();
+    const url=new URL(value);
+    if(!['http:','https:'].includes(url.protocol)||!url.hostname||url.username||url.password||url.search||url.hash||(production&&url.protocol!=='https:'))throw new Error();
+    return url.href.replace(/\/+$/,'');
+  }catch{throw new InternalServerError('Approval frontend URL is not configured safely; no review request was started')}
+}
 
 type Selection = {
   printFileId: string;
@@ -54,6 +65,7 @@ export class ApprovalService {
       throw new ValidationError(
         "Explicit print file and dieline selection (or null) required; legacy requests need admin renewal",
       );
+    const frontendBase=approvalFrontendBase();
     const claim = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`;
       const order = await tx.order.findUnique({
@@ -247,7 +259,7 @@ export class ApprovalService {
         try {
           await emailService.sendApprovalRequest(
             order,
-            `${process.env.FRONTEND_URL}/orders/${orderId}/approve?token=${token}`,
+            `${frontendBase}/orders/${encodeURIComponent(orderId)}/approve?token=${encodeURIComponent(token)}`,
           );
           await prisma.approvalRequest.update({
             where: { id: request.id },
