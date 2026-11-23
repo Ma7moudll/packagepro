@@ -24,6 +24,9 @@ COPY backend/src/modules/catalog/thank-you-preview.ts /app/backend/src/modules/c
 # Pure loyalty-card preview contract, no database/service imports.
 COPY backend/src/modules/catalog/loyalty-preview.ts /app/backend/src/modules/catalog/loyalty-preview.ts
 
+# Pure stand-up-pouch artwork surface safety contract.
+COPY backend/src/modules/catalog/pouch-preview-contract.ts /app/backend/src/modules/catalog/pouch-preview-contract.ts
+
 # Set build-time environment variables
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3000}

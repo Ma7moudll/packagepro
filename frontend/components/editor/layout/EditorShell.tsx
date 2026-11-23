@@ -26,12 +26,13 @@ export function EditorShell({ headerExtra, center, onSessionSaved }: EditorShell
   // inside faces keeps that artwork in the design data, but the preview
   // cannot show it and proof/export stay blocked until it is resolved.
   const unsupportedArtworkNotice = useDesignStore((s) => {
-    const unsupported = unsupportedSheetArtwork(s.model.faces, s.layers)
+    const unsupported = unsupportedSheetArtwork(s.model.faces, s.layers, s.model.type)
     // Same wording as the shared output boundary: it names exactly the
     // outputs that are really blocked, no more and no less.
     return unsupported ? unsupportedArtworkOutputMessage(unsupported) : ""
   })
 
+  const pouchWarning = useDesignStore(s=>s.model.type==='stand_up_pouch')
   const [noticeExpanded, setNoticeExpanded] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
   useKeyboardShortcuts()
@@ -69,7 +70,7 @@ export function EditorShell({ headerExtra, center, onSessionSaved }: EditorShell
           <div className="flex h-full w-full min-w-0 min-h-0 flex-col">
             {unsupportedArtworkNotice && (
               <div data-unsupported-artwork-warning role="alert" className="w-full min-w-0 shrink-0 border-b border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
-                <p>Inside-face artwork is preserved. Outputs are blocked.</p>
+                <p>{pouchWarning ? "Unsupported pouch artwork is preserved. Outputs are blocked." : "Inside-face artwork is preserved. Outputs are blocked."}</p>
                 <button type="button" className="underline" aria-haspopup="dialog" onClick={() => setNoticeExpanded(true)}>Details</button>
                 <Dialog open={noticeExpanded} onOpenChange={setNoticeExpanded}>
                   <DialogContent className="max-h-[80dvh] overflow-y-auto">

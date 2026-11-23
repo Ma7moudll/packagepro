@@ -44,7 +44,7 @@ export interface ProofManifestInput {
   prepress?: { bleedMm?: number; safeMm?: number; dpiMin?: number };
   dieline?: unknown;
   /** Set on two-face sheet designs carrying unsupported inside-face artwork. */
-  unsupportedArtwork?: { faces?: string[]; layerCount?: number };
+  unsupportedArtwork?: { faces?: string[]; layerCount?: number; product?: 'stand_up_pouch' };
 }
 
 const A4_W = 595.28;
@@ -99,7 +99,7 @@ export async function composeProofPdf(
   // reason, until the user moves or removes that artwork and re-saves.
   if (manifest.unsupportedArtwork) {
     throw new Error(
-      `Proof blocked: ${unsupportedArtworkOutputMessage({ faces: manifest.unsupportedArtwork.faces ?? [], layerCount: manifest.unsupportedArtwork.layerCount ?? 0 })}`
+      `Proof blocked: ${unsupportedArtworkOutputMessage({ faces: manifest.unsupportedArtwork.faces ?? [], layerCount: manifest.unsupportedArtwork.layerCount ?? 0, product: manifest.unsupportedArtwork.product })}`
     );
   }
   const faces = manifest.faces ?? {};

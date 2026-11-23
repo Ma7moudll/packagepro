@@ -102,7 +102,7 @@ export function WallViewCanvas() {
   const [outputNotice, setOutputNotice] = useState("")
   const handleExport = () => {
     const live = useDesignStore.getState()
-    const unsupported = unsupportedSheetArtwork(live.model.faces, live.layers)
+    const unsupported = unsupportedSheetArtwork(live.model.faces, live.layers, live.model.type)
     if (unsupported) {
       setOutputNotice(`Export blocked: ${unsupportedArtworkOutputMessage(unsupported)}`)
       return

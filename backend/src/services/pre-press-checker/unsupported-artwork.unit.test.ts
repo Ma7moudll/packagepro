@@ -110,3 +110,22 @@ describe('malformed duplicate sheet faces', () => {
     expect(deriveUnsupportedArtwork({model:{faces:[{id:'front'},{id:'front'},{id:'back'}]},layers:[{faceId:'inside_front'}]})).toEqual({faces:['inside_front'],layerCount:1});
   });
 });
+
+
+describe('stand-up pouch preview-surface boundary',()=>{
+ const data={schemaVersion:2,model:{type:'stand_up_pouch',faces:['front','back','left','right','top','bottom'].map(id=>({id}))},layers:[{faceId:'front'},{faceId:'left'}],manifest:{faces:{front:{w:150,h:220},left:{w:50,h:220}}}}
+ it('derives unsupported saved legacy side artwork without relying on manifest flag',()=>{
+  expect(deriveUnsupportedArtwork(data)).toEqual({faces:['left'],layerCount:1,product:'stand_up_pouch'})
+  expect(deriveUnsupportedArtwork({...data,layers:[{faceId:'front'},{faceId:'back'}]})).toBeUndefined()
+  expect(deriveUnsupportedArtwork({...data,model:{...data.model,type:'doypack_pouch'}})).toBeUndefined()
+  expect(deriveUnsupportedArtwork({...data,model:{...data.model,type:undefined},manifest:{...data.manifest,product:{boxType:'stand-up-pouch'}}})).toMatchObject({product:'stand_up_pouch',faces:['left']})
+  expect(deriveUnsupportedArtwork({...data,model:{...data.model,type:undefined},product:{id:'prod-stand-up-pouch'}})).toMatchObject({product:'stand_up_pouch',faces:['left']})
+ })
+ it('matches legacy missing-face migration but never discards explicit side artwork',()=>{
+  expect(deriveUnsupportedArtwork({...data,layers:[{}, {faceId:undefined}, {faceId:''}]})).toBeUndefined()
+  expect(deriveUnsupportedArtwork({...data,layers:[{}, {faceId:'left'}]})).toMatchObject({faces:['left'],layerCount:1,product:'stand_up_pouch'})
+ })
+ it('blocks actual proof generation for a flagless pouch instead of fabricating side plates',async()=>{
+  await expect(composeProofPdf(Buffer.alloc(0),{orderNumber:'POUCH-TEST',items:[],manifest:readManifest(data)})).rejects.toThrow(/Proof blocked: This stand-up pouch/)
+ })
+})

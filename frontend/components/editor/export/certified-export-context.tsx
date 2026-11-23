@@ -74,7 +74,7 @@ export function CertifiedExportProvider({ children }: { children: ReactNode }) {
       // two-face sheet carrying inside-face artwork gets no certified
       // delivery (a normal card has no dieline and is unavailable here
       // anyway; this stops stale or crafted states at the same boundary).
-      assertNoUnsupportedSheetArtwork(model?.faces, useDesignStore.getState().layers)
+      assertNoUnsupportedSheetArtwork(model?.faces, useDesignStore.getState().layers, model?.type)
 
       // 1) persisted side — session carries the saved designData (v2 manifest).
       const sessionIdValue = sessionId ?? sessionStorage.getItem("designSessionId")
@@ -182,7 +182,7 @@ export function CertifiedExportProvider({ children }: { children: ReactNode }) {
     // assembled earlier must not download for a design that has since
     // become (or was restored as) unsupported.
     const live = useDesignStore.getState()
-    const unsupported = unsupportedSheetArtwork(live.model.faces, live.layers)
+    const unsupported = unsupportedSheetArtwork(live.model.faces, live.layers, live.model.type)
     if (unsupported) {
       const message = `Export blocked: ${unsupportedArtworkOutputMessage(unsupported)}`
       setState((prev) => ({ ...prev, delivery: { status: "error", message }, error: message }))

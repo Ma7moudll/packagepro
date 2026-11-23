@@ -43,3 +43,10 @@ test('actual store layer updates retain newer live selection across repeated edi
  s().setSelectedLayers([a,b]);s().updateLayer(a,(l:any)=>({...l,opacity:0.5}))
  assert.deepEqual(s().selectedLayerIds,[a,b])
 })
+
+
+test('actual store legacy missing face migrates to front while explicit pouch side artwork survives',()=>{
+ const store=loadStore(),s=()=>store.getState()
+ s().applyCoreState((core:any)=>({...core,model:{...core.model,type:'stand_up_pouch'},layers:[{id:'legacy',type:'text',faceId:undefined},{id:'side',type:'text',faceId:'left'}]}))
+ assert.deepEqual(s().layers.map((l:any)=>({id:l.id,faceId:l.faceId})),[{id:'legacy',faceId:'front'},{id:'side',faceId:'left'}])
+})

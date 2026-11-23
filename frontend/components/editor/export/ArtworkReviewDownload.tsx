@@ -27,7 +27,7 @@ export function ArtworkReviewDownload({designId,fileId}:{designId?:string;fileId
       } else {
         const store=useDesignStore.getState()
         // Shared output boundary, derived from the actual design data.
-        assertNoUnsupportedSheetArtwork(store.history.present.model.faces, store.history.present.layers)
+        assertNoUnsupportedSheetArtwork(store.history.present.model.faces, store.history.present.layers, store.history.present.model.type)
         const captured=serializeDesignData(structuredClone(store.history.present))
         assertReviewInput(captured)
         const expected=await reviewHash(reviewSnapshot(captured))

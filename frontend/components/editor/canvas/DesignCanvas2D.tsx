@@ -650,7 +650,7 @@ export function DesignCanvas2D() {
     // not a full-design export): a two-face sheet carrying inside-face
     // artwork must not produce a file that silently omits that artwork.
     const storeState = useDesignStore.getState()
-    const unsupported = unsupportedSheetArtwork(storeState.model.faces, storeState.layers)
+    const unsupported = unsupportedSheetArtwork(storeState.model.faces, storeState.layers, storeState.model.type)
     if (unsupported) {
       setExportNotice(language === "ar" ? "التنزيل محظور: راجع تنبيه التصميم أعلاه." : "Download blocked. See the artwork warning above.")
       return

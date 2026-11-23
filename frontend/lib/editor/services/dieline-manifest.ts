@@ -75,7 +75,7 @@ export interface DesignManifest {
    * this flag is what stops a proof or export from looking complete —
    * proof generation refuses flagged designs until the user resolves it.
    */
-  unsupportedArtwork?: { faces: string[]; layerCount: number }
+  unsupportedArtwork?: { faces: string[]; layerCount: number; product?: "stand_up_pouch" }
 }
 
 export interface DesignDataV2 {
@@ -162,7 +162,7 @@ export function serializeDesignData(state: DesignCoreState): DesignDataV2 {
   delete stateBody.manifestMetadata
 
   const dims = state.model.dimensions
-  const unsupportedArtwork = unsupportedSheetArtwork(state.model.faces, state.layers)
+  const unsupportedArtwork = unsupportedSheetArtwork(state.model.faces, state.layers, state.model.type)
   const manifest: DesignManifest = {
     product: {
       id: state.product?.id ?? "",

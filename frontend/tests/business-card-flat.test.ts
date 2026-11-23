@@ -507,7 +507,7 @@ test("shared output boundary: the guard derives from design data (no manifest in
 
 test("guarded path: exportDesign (PDF/SVG/PNG/JPEG) refuses at the shared boundary before rendering", () => {
   const source = readFileSync("lib/editor/services/export.ts", "utf8")
-  const guardAt = source.indexOf("assertNoUnsupportedSheetArtwork(state.model.faces, state.layers)")
+  const guardAt = source.indexOf("assertNoUnsupportedSheetArtwork(state.model.faces, state.layers, state.model.type)")
   assert.ok(guardAt > 0, "exportDesign calls the shared guard on the store data")
   assert.ok(guardAt < source.indexOf("await generateTextureFromLayers"), "guard runs before any texture rendering")
 })
@@ -516,7 +516,7 @@ test("guarded path: Fabric toolbar current-face PNG refuses at the shared bounda
   const source = readFileSync("components/editor/canvas/DesignCanvas2D.tsx", "utf8")
   const fn = source.match(/const exportDesign = \(\) => \{[\s\S]*?\n  \}/)
   assert.ok(fn, "toolbar exportDesign found")
-  assert.match(fn[0], /unsupportedSheetArtwork\(storeState\.model\.faces, storeState\.layers\)/)
+  assert.match(fn[0], /unsupportedSheetArtwork\(storeState\.model\.faces, storeState\.layers, storeState\.model\.type\)/)
   // Keep the refusal short and outside the drawing. The detailed shared
   // warning remains in the notice above the canvas, not in the PNG handler.
   const blocked = fn[0].match(/if \(unsupported\) \{([\s\S]*?)\n    \}/)
@@ -532,7 +532,7 @@ test("guarded path: Fabric toolbar current-face PNG refuses at the shared bounda
 
 test("guarded path: artwork review download refuses at the shared boundary", () => {
   const source = readFileSync("components/editor/export/ArtworkReviewDownload.tsx", "utf8")
-  assert.match(source, /assertNoUnsupportedSheetArtwork\(store\.history\.present\.model\.faces, store\.history\.present\.layers\)/)
+  assert.match(source, /assertNoUnsupportedSheetArtwork\(store\.history\.present\.model\.faces, store\.history\.present\.layers, store\.history\.present\.model\.type\)/)
   assert.ok(
     source.indexOf("assertNoUnsupportedSheetArtwork") < source.indexOf("serializeDesignData(structuredClone"),
     "guard runs before the review snapshot is captured"
@@ -541,10 +541,10 @@ test("guarded path: artwork review download refuses at the shared boundary", () 
 
 test("guarded path: certified export refuses on refresh and rechecks at download time", () => {
   const source = readFileSync("components/editor/export/certified-export-context.tsx", "utf8")
-  assert.match(source, /assertNoUnsupportedSheetArtwork\(model\?\.faces, useDesignStore\.getState\(\)\.layers\)/)
+  assert.match(source, /assertNoUnsupportedSheetArtwork\(model\?\.faces, useDesignStore\.getState\(\)\.layers, model\?\.type\)/)
   const download = source.match(/const downloadCertified = useCallback\(\(\) => \{[\s\S]*?\n  \}, \[state\.delivery\]\)/)
   assert.ok(download, "downloadCertified found")
-  assert.match(download[0], /unsupportedSheetArtwork\(live\.model\.faces, live\.layers\)/)
+  assert.match(download[0], /unsupportedSheetArtwork\(live\.model\.faces, live\.layers, live\.model\.type\)/)
   assert.match(download[0], /unsupportedArtworkOutputMessage\(unsupported\)/)
 })
 

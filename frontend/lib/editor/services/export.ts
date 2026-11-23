@@ -43,7 +43,7 @@ export async function exportDesign(options: Partial<ExportOptions> = {}): Promis
   // Shared output boundary: a two-face sheet carrying inside-face artwork
   // must not produce a file that omits it (outside coverage) or fabricates
   // inside plates for it (both coverage). Refuse before rendering anything.
-  assertNoUnsupportedSheetArtwork(state.model.faces, state.layers)
+  assertNoUnsupportedSheetArtwork(state.model.faces, state.layers, state.model.type)
   // Capture one immutable local preview, not a later live state or a claimed save.
   const model=structuredClone(state.model),canvas=structuredClone(state.canvas)
   const coverage=model.printCoverage ?? "outside"
