@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { authenticate, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { requireAdmin } from '../../middleware/rbac';
 import { OrderStatus } from '../../types';
+import {prisma} from '../../lib/prisma';
+import {parseCustomerOrderQuery} from './customer-order-query';
 
 const createOrderSchema = z.object({
   items: z.array(
@@ -42,7 +44,7 @@ export class OrderController {
     const body = createOrderSchema.parse(request.body);
 
     // Get customer ID from user
-    const customer = await require('../../lib/prisma').prisma.customer.findUnique({
+    const customer = await prisma.customer.findUnique({
       where: { userId: user.userId },
     });
 
@@ -79,10 +81,10 @@ export class OrderController {
   async getOrders(request: FastifyRequest, reply: FastifyReply) {
     await authenticate(request, reply);
     const user = (request as AuthenticatedRequest).user;
-    const query = request.query as { page?: string; limit?: string };
+    const query = parseCustomerOrderQuery(request.query as {page?:unknown;limit?:unknown;status?:unknown});
 
     // Get customer ID from user
-    const customer = await require('../../lib/prisma').prisma.customer.findUnique({
+    const customer = await prisma.customer.findUnique({
       where: { userId: user.userId },
     });
 
@@ -93,9 +95,7 @@ export class OrderController {
       });
     }
 
-    const page = parseInt(query.page || '1');
-    const limit = parseInt(query.limit || '20');
-    const result = await orderService.getCustomerOrders(customer.id, page, limit);
+    const result = await orderService.getCustomerOrders(customer.id, query.page, query.limit, query.status);
 
     return reply.send({
       success: true,

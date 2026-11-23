@@ -1,3 +1,4 @@
+import {validateCustomerOrderQuery} from './customer-order-query';
 import {approvalContentHash} from './approval-snapshot';
 import { assertSpecificationPriced } from "../../utils/production-specification";
 import { prisma } from '../../lib/prisma';
@@ -369,16 +370,18 @@ export class OrderService {
   async getCustomerOrders(
     customerId: string,
     page: number = 1,
-    limit: number = 20
+    limit: number = 20,
+    status?: OrderStatus
   ): Promise<any> {
-    const skip = (page - 1) * limit;
+    const {skip} = validateCustomerOrderQuery(page,limit,status);
+    const where = {customerId,...(status?{status}:{})};
 
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
-        where: { customerId },
+        where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, {id:'desc'}],
         include: {
           items: true,
           design: {
@@ -398,7 +401,7 @@ export class OrderService {
           payment: true,
         },
       }),
-      prisma.order.count({ where: { customerId } }),
+      prisma.order.count({ where }),
     ]);
 
     return {
