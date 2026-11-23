@@ -11,7 +11,7 @@
 // generation and the local-disk file upload run for real.
 // Modeled after rbac.test.ts — marker-scoped, child-first cleanup.
 
-import { describe, it, expect, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { prisma } from '../../lib/prisma';
 import {approvalContentHash,approvalBytesHash} from '../orders/approval-snapshot';
 import {fileUploadService} from '../../services/file-upload/upload.service';
@@ -26,6 +26,26 @@ vi.mock('../../services/email/email.service', () => ({
 describe('multi-vendor PO splitting (poService.createPO)', () => {
   const marker = `MVPO-${Date.now().toString(36)}`;
   const emails: string[] = [];
+  const eligibleVendorIds: string[] = [];
+  let foreignVendorId: string;
+  const vendorDelegate = prisma.vendor as any;
+  const originalFindMany = vendorDelegate.findMany.bind(vendorDelegate);
+  beforeAll(async () => {
+    // A deliberately attractive active vendor outside this suite's eligible
+    // fixture set. The real router still scores/query-filters owned vendors.
+    const user = await seedUser('VENDOR');
+    const foreign = await prisma.vendor.create({data:{userId:user.id,companyName:`${marker} foreign sentinel`,address:'x',city:'y',country:'z',isActive:true,latitude:30,longitude:31,qualityRating:0,averageLeadTime:1}});
+    foreignVendorId = foreign.id;
+    vendorDelegate.findMany = (args: any = {}) => originalFindMany({...args,where:{AND:[args.where ?? {},{id:{in:eligibleVendorIds}}]}});
+  });
+
+  function assertFixtureOwnership(pos: Array<{vendorId:string}>) {
+    expect(pos.length).toBeGreaterThan(0);
+    for (const po of pos) {
+      expect(eligibleVendorIds).toContain(po.vendorId);
+      expect(po.vendorId).not.toBe(foreignVendorId);
+    }
+  }
 
   async function seedUser(role: 'CUSTOMER' | 'VENDOR'): Promise<any> {
     const email = `${marker.toLowerCase()}-${role.toLowerCase()}-${Math.random()
@@ -40,7 +60,7 @@ describe('multi-vendor PO splitting (poService.createPO)', () => {
 
   async function seedVendor(name: string) {
     const user = await seedUser('VENDOR');
-    return prisma.vendor.create({
+    const vendor = await prisma.vendor.create({
       data: {
         userId: user.id,
         companyName: `${marker} ${name}`,
@@ -49,6 +69,8 @@ describe('multi-vendor PO splitting (poService.createPO)', () => {
         country: 'z',
       },
     });
+    eligibleVendorIds.push(vendor.id);
+    return vendor;
   }
 
   let orderSeq = 0;
@@ -89,6 +111,7 @@ describe('multi-vendor PO splitting (poService.createPO)', () => {
   }
 
   afterAll(async () => {
+    vendorDelegate.findMany = originalFindMany;
     // Child-first: POs (cascades handshakes) -> orders -> users (cascades
     // vendors + customers). Marker-scoped so a previously failed run cleans.
     await prisma.purchaseOrder.deleteMany({
@@ -108,6 +131,7 @@ describe('multi-vendor PO splitting (poService.createPO)', () => {
 
     const result = await poService.createPO(order.id);
 
+    assertFixtureOwnership(result.purchaseOrders);
     expect(result.count).toBe(2);
     expect(result.purchaseOrders).toHaveLength(2);
     expect(result.purchaseOrders.map((po: any) => po.productType)).toEqual(['box', 'bag']);
@@ -136,6 +160,7 @@ describe('multi-vendor PO splitting (poService.createPO)', () => {
 
     const result = await poService.createPO(order.id);
 
+    assertFixtureOwnership(result.purchaseOrders);
     expect(result.purchaseOrder).toBeTruthy();
     expect(result.purchaseOrder.poNumber).toBe(result.purchaseOrders[0].poNumber);
   });
@@ -146,6 +171,7 @@ describe('multi-vendor PO splitting (poService.createPO)', () => {
 
     const result = await poService.createPO(order.id);
 
+    assertFixtureOwnership(result.purchaseOrders);
     expect(result.count).toBe(1);
     expect(String(result.purchaseOrders[0].poNumber)).not.toContain('-BOX');
     expect(result.purchaseOrders[0].productType).toBe('box');
