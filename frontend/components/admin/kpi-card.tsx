@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 
 interface KPICardProps {
   title: string
-  value: string | number
+  value: React.ReactNode;
   icon: LucideIcon
   hint?: string
   tone?: "default" | "positive" | "warning" | "negative"

@@ -1,4 +1,6 @@
 "use client"
+import { FinanceSummary } from "@/components/admin/finance-summary";
+import { MoneySummary } from "@/components/admin/money";
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -22,7 +24,7 @@ import {
   TrendingUp,
   ShoppingCart,
   Package,
-  DollarSign,
+  Banknote,
   Activity,
   AlertCircle,
   Loader2,
@@ -86,7 +88,7 @@ export default function AdminDashboard() {
   }: {
     icon: LucideIcon
     title: string
-    value: string | number
+    value: React.ReactNode;
     hint?: string
   }) => (
     <Card>
@@ -122,23 +124,6 @@ export default function AdminDashboard() {
         {
           name: language === "ar" ? "تم التسليم" : "Delivered",
           count: funnel.ordersDelivered,
-        },
-      ]
-    : []
-
-  const statusPie = report
-    ? [
-        {
-          name: language === "ar" ? "الأرباح" : "Profit",
-          value: Math.max(report.profit, 0),
-        },
-        {
-          name: language === "ar" ? "مدفوعات الموردين" : "Vendor Payments",
-          value: report.vendorPayments,
-        },
-        {
-          name: language === "ar" ? "الضرائب" : "Taxes",
-          value: report.taxes,
         },
       ]
     : []
@@ -180,22 +165,41 @@ export default function AdminDashboard() {
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <StatCard
-          icon={DollarSign}
+          icon={Banknote}
           title={language === "ar" ? "الإيرادات (30 يوم)" : "Revenue (30 days)"}
           value={
             report
-              ? `${report.revenue.toLocaleString()} ${language === "ar" ? "ج.م" : "EGP"}`
-              : "—"
+              ? (
+              <MoneySummary
+                groups={report.byCurrency?.map((g) => ({
+                  currency: g.currency,
+                  amount: g.revenue,
+                }))}
+              />
+            ) : (
+              "—"
+            )
           }
-          hint={report ? `AOV ${report.averageOrderValue.toLocaleString()}` : undefined}
+          hint={report ?.unclassifiedOrderCount
+              ? language === "ar"
+                ? "توجد طلبات مستبعدة بعملة غير معروفة"
+                : "Unknown-currency orders excluded"
+              : undefined}
         />
         <StatCard
           icon={TrendingUp}
-          title={language === "ar" ? "صافي الربح" : "Net Profit"}
+          title={language === "ar" ? "الهامش المسجل" : "Recorded margin"}
           value={
             report
-              ? `${report.profit.toLocaleString()} ${language === "ar" ? "ج.م" : "EGP"}`
-              : "—"
+              ? (
+              <span>
+                {language === "ar"
+                  ? "راجع التفصيل حسب العملة"
+                  : "See currency breakdown"}
+              </span>
+            ) : (
+              "—"
+            )
           }
         />
         <StatCard
@@ -264,52 +268,12 @@ export default function AdminDashboard() {
               <CardTitle>{language === "ar" ? "توزيع الإيرادات" : "Revenue Allocation"}</CardTitle>
               <CardDescription>
                 {language === "ar"
-                  ? "الأرباح ومدفوعات الموردين والضرائب (30 يوم)"
-                  : "Profit, vendor payments and taxes (30 days)"}
+                  ? "المبالغ المسجلة حسب العملة (30 يوم)"
+                  : "Currency-separated recorded amounts (30 days)"}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {statusPie.length === 0 ? (
-                <p className="text-sm text-gray-500 py-16 text-center">
-                  {language === "ar" ? "لا توجد بيانات بعد" : "No data yet"}
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={statusPie}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        dataKey="value"
-                        outerRadius={80}
-                        fill="#8884d8"
-                      >
-                        {statusPie.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-
-                  <div className="space-y-3">
-                    {statusPie.map((entry, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center">
-                          <div
-                            className="w-3 h-3 rounded-full mr-3"
-                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                          ></div>
-                          <span className="text-sm font-medium">{entry.name}</span>
-                        </div>
-                        <p className="font-semibold">{entry.value.toLocaleString()} EGP</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <FinanceSummary report={report} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -342,10 +306,11 @@ export default function AdminDashboard() {
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-sm">
-                          {product.orderCount} {language === "ar" ? "طلب" : "orders"}
+                          {product.orderCount} {" "}
+                          {language === "ar" ? "طلب" : "orders"}
                         </p>
                         <p className="text-xs text-gray-600">
-                          {product.totalQuantity || 0} {language === "ar" ? "قطعة" : "units"}
+                          {product.totalQuantity || 0}{" "} {language === "ar" ? "قطعة" : "units"}
                         </p>
                       </div>
                     </div>

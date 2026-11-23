@@ -1,4 +1,5 @@
 "use client"
+import { FinanceSummary } from "@/components/admin/finance-summary";
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -12,7 +13,7 @@ import { useAuth } from "@/providers/auth-provider"
 import { financeApi, type FinancialReport } from "@/lib/api/finance"
 import { adminApi, type AdminOverview } from "@/lib/api/admin"
 import {
-  DollarSign,
+  Banknote,
   TrendingUp,
   Receipt,
   Clock,
@@ -50,6 +51,8 @@ export default function AdminFinancePage() {
     const end = new Date()
     const start = RANGE_START[range](end)
     setLoading(true)
+    setReport(null);
+    setOverview(null);
     Promise.allSettled([
       financeApi.getReport({ start: start.toISOString(), end: end.toISOString() }),
       adminApi.getOverview(),
@@ -68,14 +71,13 @@ export default function AdminFinancePage() {
 
   if (!user || user.role !== "ADMIN") return null
 
-  const profitMargin = report && report.revenue > 0 ? (report.profit / report.revenue) * 100 : 0
-
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Finance</h1>
-          <p className="text-sm text-slate-500">Revenue, platform profit and settlement pipeline</p>
+          <p className="text-sm text-slate-500">Revenue by currency and settlement records
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <Select value={range} onValueChange={(v) => setRange(v as RangeKey)}>
@@ -101,72 +103,11 @@ export default function AdminFinancePage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <KPICard
-              title="Revenue"
-              value={report ? `$${report.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"}
-              icon={DollarSign}
-              tone="positive"
-              hint={report ? `${report.orderCount} orders` : undefined}
-            />
-            <KPICard
-              title="Platform profit"
-              value={report ? `$${report.profit.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"}
-              icon={TrendingUp}
-              tone={report && report.profit >= 0 ? "positive" : "negative"}
-              hint={report ? `${profitMargin.toFixed(1)}% margin` : undefined}
-            />
-            <KPICard
-              title="Vendor payments"
-              value={report ? `$${report.vendorPayments.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"}
-              icon={Receipt}
-            />
-            <KPICard
-              title="Pending settlements"
-              value={overview?.pendingSettlements ?? "—"}
-              icon={Clock}
-              tone={((overview?.pendingSettlements ?? 0) > 0) ? "warning" : "default"}
-              hint="72h verification window"
-            />
+          <div className="mb-6">
+            <FinanceSummary report={report} />
           </div>
 
           <div className="grid lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-slate-400" />
-                  P&amp;L breakdown
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {report ? (
-                  <dl className="space-y-3">
-                    {[
-                      { label: "Revenue", value: report.revenue, tone: "text-slate-900" },
-                      { label: "Production costs", value: -report.costs, tone: "text-slate-700" },
-                      { label: "Vendor payments", value: -report.vendorPayments, tone: "text-slate-700" },
-                      { label: "Taxes", value: -report.taxes, tone: "text-slate-700" },
-                    ].map((line) => (
-                      <div key={line.label} className="flex items-center justify-between text-sm">
-                        <dt className="text-slate-500">{line.label}</dt>
-                        <dd className={`font-medium ${line.tone}`}>
-                          {line.value < 0 ? "-" : ""}$
-                          {Math.abs(line.value).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </dd>
-                      </div>
-                    ))}
-                    <div className="border-t pt-3 flex items-center justify-between">
-                      <dt className="font-semibold text-slate-900">Net profit</dt>
-                      <dd className={`font-bold ${report.profit >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                        ${report.profit.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </dd>
-                    </div>
-                  </dl>
-                ) : (
-                  <p className="text-sm text-slate-400">No financial data for this period.</p>
-                )}
-              </CardContent>
-            </Card>
 
             <Card>
               <CardHeader>
