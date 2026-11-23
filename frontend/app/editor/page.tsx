@@ -136,9 +136,18 @@ export default function EditorPage() {
   }, [templateId, applyCoreState, initFromEditorConfig, qtyParam])
 
   // Load a previously saved design session from the backend
+  // One-shot marker owned by this mounted editor, set only after its own
+  // cloud save succeeds. URL bookkeeping is not an external restore.
+  const locallySavedSessionRef = useRef<string | null>(null)
   const sessionRestoreRef = useRef<Promise<unknown> | null>(null)
   useEffect(() => {
+    const localHandoff = locallySavedSessionRef.current
+    locallySavedSessionRef.current = null
     if (!sessionIdParam) return
+    if (localHandoff === sessionIdParam) {
+      sessionRestoreRef.current = Promise.resolve(useDesignStore.getState().history.present)
+      return
+    }
     let cancelled = false
     // Keep the restore promise so a simultaneous catalog init can await it
     // instead of racing it and clobbering the restored layers (M7-C).
@@ -233,6 +242,7 @@ export default function EditorPage() {
   if(catalogueLoading)return <div role="status" className="min-h-screen flex items-center justify-center">{language==='ar'?'تحميل إعدادات المنتج...':'Loading product settings...'}</div>
   return (
     <EditorShell
+      onSessionSaved={(sessionId) => {locallySavedSessionRef.current = sessionId}}
       headerExtra={
         (skuData || productParam) && (
           <p className="hidden 2xl:inline max-w-48 truncate text-[10px] text-slate-500">

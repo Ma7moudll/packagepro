@@ -1,3 +1,5 @@
+import {approvalService} from '../orders/approval.service';
+import {approvalContentHash} from '../orders/approval-snapshot';
 import PDFDocument from 'pdfkit';
 // Note: Readable is not needed, PDFDocument handles streaming internally
 import { prisma } from '../../lib/prisma';
@@ -28,6 +30,9 @@ export class POGenerator {
       throw new Error('Purchase Order not found');
     }
 
+    const approval=await prisma.approvalRequest.findFirst({where:{orderId:po.orderId},orderBy:{createdAt:'desc'}});
+    if(!approval||approval.status!=='approved'||!po.order.design||approvalContentHash(po.order.design)!==approval.contentHash||po.printFileUrl!==approval.printSnapshotUrl||po.dielineFileUrl!==approval.dielineSnapshotUrl)throw new Error('PO inputs do not match current approved snapshot');
+    await approvalService.verifyBytes(approval);
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({
         size: 'A4',

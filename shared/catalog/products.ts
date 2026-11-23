@@ -38,7 +38,7 @@ export type PricingStatus = "estimated" | "quote_required"
 export type PreviewFamily =
   | "mailer" | "shipping" | "rigid" | "carton" | "pizza"
   | "cup" | "bag" | "pouch" | "tube" | "envelope" | "label"
-  | "flat" | "mailer-bag"
+  | "flat" | "mailer-bag" | "ziplock-bag"
 
 export interface CatalogueReadiness {
   preview: PreviewStatus
@@ -505,8 +505,9 @@ export const CATALOGUE_PRODUCTS: CatalogueProduct[] = [
     name: { en: "Custom Frosted Ziplock Bag", ar: "كيس بسحاب شفاف" },
     description: { en: "Frosted ziplock bag", ar: "كيس بسحاب شفاف مجمد" },
     category: "bags", subcategory: "mailing-bags", pricingFamily: "bag",
-    plannedFamily: "mailer-bag",
-    readiness: { preview: "unavailable", dieline: "deferred", pricing: "quote_required" },
+    previewFamily: "ziplock-bag",
+    plannedFamily: "ziplock-bag",
+    readiness: { preview: "in_progress", dieline: "deferred", pricing: "quote_required" },
     supportReason: DEFERRED_DIELINE_REASON,
     moq: 50,
     defaultDimensions: { length: 200, width: 5, height: 300 },

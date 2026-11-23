@@ -1,4 +1,5 @@
 "use client"
+import {loyaltyPreviewStockColour} from '../../../../backend/src/modules/catalog/loyalty-preview'
 
 import { useRef, useMemo, type ReactNode } from "react"
 import { useFrame } from "@react-three/fiber"
@@ -9,10 +10,12 @@ import {useProductOpening} from "./useProductOpening"
 import { StockPanel } from "./StockPanel"
 import { ShippingConstruction } from "./ShippingConstruction"
 import { PouchShape } from "./PouchProduct"
+import { ZiplockBagShape } from "./ZiplockProduct"
 import { CupShape, TubeShape } from "./CurvedProducts"
 import { FlatProductShape } from "./FlatProducts"
 import { PaperBagShape, MailerBagShape, EnvelopeShape } from "./SoftProducts"
 import { Html } from "@react-three/drei"
+import {thankYouPreviewStockColour} from "../../../../backend/src/modules/catalog/thank-you-preview"
 import { productPreviewCoverage } from "@/lib/editor/product-preview-coverage"
 
 // ============================================
@@ -107,6 +110,7 @@ function resolveFaceMaterial(
     const finishArtwork = () => {
       ctx.drawImage(img, 0, 0, composite.width, composite.height)
       texture.needsUpdate = true
+      faceMat.userData.artworkReady = true
       // Ink is a separate optical layer from the liner. Keep the glossy stock
       // reflection around artwork, but do not let a white clearcoat reflection
       // replace the ink colour at the lid's open angle. This is an illustrative
@@ -136,6 +140,7 @@ function resolveFaceMaterial(
     img.onload = finishArtwork
     img.src = dataUrl
     mat = fallback.clone()
+    mat.userData = {...mat.userData, artworkReady: false}
     const faceMat = mat
     mat.setValues({
       map: texture,
@@ -879,13 +884,14 @@ function useProductStock({boardSpecification:requestedBoard, material:requestedM
   // Non-paper families use a neutral illustrative film surface until their own
   // material selector is prepared. A saved kraft box material is not film.
   const material=requestedMaterial
+  const cardStockColour=loyaltyPreviewStockColour(type,material??"")??thankYouPreviewStockColour(type,material??"")
   const filmColour=material?.includes("black")?"#242424":"#eeeeec"
   const polyFilm=material?.startsWith("poly-")||material==="bio-poly"
   const legacy = useMemo(() => boardLook(material), [material])
   const exterior = LINERS.find(l => l.id === boardSpecification?.outside)
   const interior = LINERS.find(l => l.id === boardSpecification?.inside)
-  const outsideMap = useMemo(() => paper?createProductPaper(exterior?.colour ?? (material?.includes("kraft")?"#a8855a":"#e9ecef"),subtlePaper):createNeutralFilm(filmColour), [legacy.textureTone, exterior, material,paper,filmColour,subtlePaper])
-  const insideMap = useMemo(() => paper?createProductPaper(interior?.colour ?? (material?.includes("kraft")?"#d9c7a8":"#e9ecef"),subtlePaper):createNeutralFilm(filmColour), [legacy.textureTone, interior, material,paper,filmColour,subtlePaper])
+  const outsideMap = useMemo(() => paper?createProductPaper(exterior?.colour ?? cardStockColour ?? (material?.includes("kraft")?"#a8855a":"#e9ecef"),subtlePaper):createNeutralFilm(filmColour), [legacy.textureTone, exterior, material,paper,filmColour,subtlePaper,cardStockColour])
+  const insideMap = useMemo(() => paper?createProductPaper(interior?.colour ?? cardStockColour ?? (material?.includes("kraft")?"#d9c7a8":"#e9ecef"),subtlePaper):createNeutralFilm(filmColour), [legacy.textureTone, interior, material,paper,filmColour,subtlePaper,cardStockColour])
   const outside = useMemo(() => new THREE.MeshPhysicalMaterial({map:outsideMap,color:!paper||exterior?"#ffffff":legacy.outsideColor,roughness:!paper?(material?.includes("matte")?.8:polyFilm?.58:.45):exterior?.id==="white-imported-gloss"?.12:exterior?.roughness??(material?.includes("gloss")?.12:material?.includes("matte")?.85:legacy.roughness),clearcoat:!paper?(polyFilm?.035:.12):exterior?.id==="white-imported-gloss"||(!exterior&&material?.includes("gloss"))?1:0,clearcoatRoughness:.08,metalness:0}), [outsideMap,exterior,legacy,paper,polyFilm])
   const inside = useMemo(() => new THREE.MeshPhysicalMaterial({map:insideMap,color:!paper||interior?"#ffffff":legacy.insideColor,roughness:interior?.id==="white-imported-gloss"?.12:interior?.roughness??.92,clearcoat:interior?.id==="white-imported-gloss"?1:0,clearcoatRoughness:.08,metalness:0}), [insideMap,interior,legacy,paper])
   const edge = useMemo(() => new THREE.MeshStandardMaterial({color:!paper?"#d8d8d8":exterior?.id.includes("white")?"#cbbfa9":"#aa8c63",roughness:1}), [exterior,paper])
@@ -974,6 +980,7 @@ export function Label(props:BoxModelProps){const stock=useProductStock(props);re
 export function MailerBag(props:BoxModelProps){const stock=useProductStock(props);return <MailerBagShape {...props} stock={stock}/>}
 // Pouch-specific sealed/gusset construction is not prepared yet.
 export function StandUpPouch(props:BoxModelProps){const stock=useProductStock(props);return <PouchShape {...props} stock={stock}/>}
+export function ZiplockBag(props:BoxModelProps){const stock=useProductStock(props);return <ZiplockBagShape {...props} stock={stock}/>}
 
 // ============================================
 // MODEL FACTORY
@@ -998,6 +1005,7 @@ export function getBoxModel(type: string) {
   case "label":return Label
   case "flat":return Label
   case "mailer-bag":return MailerBag
+  case "ziplock-bag":return ZiplockBag
   default:return UnsupportedProductPreview
  }
 }
