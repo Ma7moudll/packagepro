@@ -4,7 +4,7 @@ import { invoiceService } from './invoice.service';
 import { authenticate, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { requireAdmin, requireRoles } from '../../middleware/rbac';
 import { prisma } from '../../lib/prisma';
-import { AuthorizationError } from '../../utils/errors';
+import { AuthorizationError, NotFoundError } from '../../utils/errors';
 
 /**
  * Vendor financial summaries are visible to the vendor itself and to admins.
@@ -55,10 +55,13 @@ export const financeRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
+  // Internal platform economics. Owning an order or supplying a PO does not
+  // grant access to supplier costs or platform margins.
   fastify.get('/orders/:id/financial-summary', async (request, reply) => {
-    await authenticate(request, reply);
+    await requireAdmin(request, reply);
     const orderId = (request.params as { id: string }).id;
     const summary = await financeReportingService.getOrderFinancialSummary(orderId);
+    if (!summary) throw new NotFoundError('Order');
 
     return reply.send({
       success: true,
