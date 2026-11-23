@@ -278,7 +278,7 @@ export default function OrderDetailPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-slate-600 whitespace-pre-line">
-                {order.shippingAddress.firstName} {order.shippingAddress.lastName}
+                {(order.shippingAddress as any).name || [order.shippingAddress.firstName,order.shippingAddress.lastName].filter(Boolean).join(" ")}
                 {"\n"}
                 {order.shippingAddress.street}
                 {"\n"}

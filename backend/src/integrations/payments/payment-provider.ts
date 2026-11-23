@@ -18,11 +18,11 @@
  */
 
 export type PaymentProviderKey =
-  | 'stripe'
-  | 'fawry'
-  | 'instapay'
-  | 'vodafone_cash'
-  | 'bank_transfer';
+  | "stripe"
+  | "fawry"
+  | "instapay"
+  | "vodafone_cash"
+  | "bank_transfer";
 
 export interface CreatePaymentRequest {
   orderId: string;
@@ -41,10 +41,10 @@ export interface ProviderPayment {
 }
 
 export type ProviderPaymentStatus =
-  | 'succeeded'
-  | 'failed'
-  | 'pending'
-  | 'canceled';
+  | "succeeded"
+  | "failed"
+  | "pending"
+  | "canceled";
 
 export interface PaymentProvider {
   readonly key: PaymentProviderKey;
@@ -55,6 +55,27 @@ export interface PaymentProvider {
    * the local Payment row. Returns what the frontend needs to collect money.
    */
   createPayment(data: CreatePaymentRequest): Promise<ProviderPayment>;
+  /** Read an already persisted payment for this order. MUST NOT create a payment.
+   * Owner authorization is enforced by the calling checkout/controller boundary. */
+  recoverPayment?(
+    orderId: string,
+  ): Promise<(ProviderPayment & { status: ProviderPaymentStatus }) | null>;
+  /** Read-only explicit reference investigation. No bearer secrets or provider writes. */
+  inspectPaymentReference?(
+    orderId: string,
+    reference: string,
+  ): Promise<{
+    providerRef: string;
+    amount: number;
+    currency: string;
+    status: ProviderPaymentStatus;
+    localReference: { stripePaymentIntentId: string };
+  }>;
+  /** Re-read and project an existing provider payment status locally. No capture/create/refund. */
+  reconcileExistingStatus?(
+    orderId: string,
+    expectedReference?: string,
+  ): Promise<void>;
   /** Provider-authoritative status for a previously created payment. */
   getStatus(providerRef: string): Promise<ProviderPaymentStatus>;
   /** Refund a captured payment (full when amount is omitted). */
@@ -69,13 +90,23 @@ export interface PaymentProvider {
 export class PaymentProviderNotConfiguredError extends Error {
   constructor(
     public readonly provider: PaymentProviderKey,
-    public readonly missing: string[]
+    public readonly missing: string[],
   ) {
     super(
       `Payment provider "${provider}" is selected but not configured. Missing: ${missing.join(
-        ', '
-      )}. See .env.example for the full setup list.`
+        ", ",
+      )}. See .env.example for the full setup list.`,
     );
-    this.name = 'PaymentProviderNotConfiguredError';
+    this.name = "PaymentProviderNotConfiguredError";
+  }
+}
+
+/** Adapter proves this failure occurred before invoking any local status projector. */
+export class PaymentStatusPreEffectError extends Error {
+  constructor() {
+    super(
+      "Existing provider status could not be verified before local progression",
+    );
+    this.name = "PaymentStatusPreEffectError";
   }
 }

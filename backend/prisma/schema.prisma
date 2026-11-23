@@ -268,6 +268,7 @@ model Order {
 
   // New-order quote currency only. Historical unknown rows remain null.
   currency String?
+  checkoutAttempt CheckoutAttempt?
 
   // Shipping
   shippingAddress Json // Full address object
@@ -353,6 +354,7 @@ model Cart {
 }
 
 model CartItem {
+  revision Int @default(0)
   id           String   @id @default(cuid())
   cartId       String
   productType  String // "box", "bag", "label"
@@ -943,4 +945,51 @@ model ApprovalRequest {
 
   @@index([orderId, createdAt])
   @@map("approval_requests")
+}
+
+model CheckoutAttempt {
+  statusOperations CheckoutStatusOperation[]
+  attachment Json?
+  isolation Json?
+  reconciliation Json?
+  id String @id @default(cuid())
+  customerId String
+  snapshotHash String
+  intentHash String
+  provider String
+  orderId String @unique
+  order Order @relation(fields: [orderId], references: [id])
+  cartSnapshot Json
+  state String @default("reserved")
+  result Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  keys CheckoutRequestKey[]
+  @@unique([customerId, snapshotHash])
+  @@index([customerId, state])
+  @@map("checkout_attempts")
+}
+model CheckoutRequestKey {
+  customerId String
+  key String
+  attemptId String
+  attempt CheckoutAttempt @relation(fields: [attemptId], references: [id])
+  @@id([customerId, key])
+  @@map("checkout_request_keys")
+}
+
+model CheckoutStatusOperation {
+ id String @id @default(cuid())
+ attemptId String
+ attempt CheckoutAttempt @relation(fields:[attemptId],references:[id])
+ actorId String
+ reason String
+ providerRef String
+ observedProviderStatus String
+ state String @default("started")
+ outcome Json?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@index([attemptId,state])
+ @@map("checkout_status_operations")
 }
