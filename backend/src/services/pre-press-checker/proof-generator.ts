@@ -13,11 +13,9 @@
 // The endpoint contract (ProofResult / upload / DesignFile record / approval
 // token) is unchanged.
 
-import {issueApprovalToken, verifyApprovalToken} from './approval-tokens';
+import {verifyApprovalToken} from './approval-tokens';
 import { prisma } from '../../lib/prisma';
-import { NotFoundError, AppError } from '../../utils/errors';
-import { fileUploadService } from '../file-upload/upload.service';
-import { fetchStoredFile, StoredFileFetchError } from '../file-upload/stored-file-fetch';
+import { AppError } from '../../utils/errors';
 import {
   PDFDocument,
   StandardFonts,
@@ -494,97 +492,13 @@ async function addArtworkSection(
 }
 
 export class ProofGeneratorService {
-  async generateProof(orderId: string): Promise<ProofResult> {
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      include: {
-        design: {
-          include: {
-            files: true,
-          },
-        },
-        items: true,
-        customer: {
-          include: {
-            user: true,
-          },
-        },
-      },
-    });
-
-    if (!order || !order.design) {
-      throw new NotFoundError('Order or design not found');
-    }
-
-    const printFile = order.design.files.find((f) => f.fileType === 'print_file');
-    if (!printFile) {
-      throw new NotFoundError('Print file not found');
-    }
-
-    let fileBuffer: Buffer;
-    try {
-      fileBuffer = await fetchStoredFile(printFile.fileUrl);
-    } catch (error) {
-      throw new AppError(422, `Print file cannot be read (${error instanceof StoredFileFetchError ? error.code : 'DOWNLOAD_FAILED'})`);
-    }
-
-    const proofBuffer = await composeProofPdf(fileBuffer, {
-      orderNumber: order.orderNumber,
-      items: order.items.map((it) => ({ description: it.productType, quantity: it.quantity })),
-      manifest: readManifest(order.design.designData),
-    });
-
-    const proofUpload = await fileUploadService.uploadFile(
-      proofBuffer,
-      `proof-${order.orderNumber}.pdf`,
-      'application/pdf',
-      `proofs/${orderId}`
-    );
-
-    await prisma.designFile.create({
-      data: {
-        designId: order.design.id,
-        fileType: 'proof',
-        fileName: proofUpload.fileName,
-        fileUrl: proofUpload.fileUrl,
-        fileSize: proofUpload.fileSize,
-        mimeType: proofUpload.mimeType,
-      },
-    });
-
-    const approvalToken = await issueApprovalToken(orderId);
-
-    return {
-      proofUrl: proofUpload.fileUrl,
-      approvalToken,
-    };
+  // Proof generation with capability minting belongs solely to ApprovalService.
+  async generateProof(_orderId: string): Promise<ProofResult> {
+    throw new AppError(409, 'Use an admin snapshot-bound approval request');
   }
-
-  async getProof(orderId: string): Promise<ProofResult | null> {
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      include: {
-        design: {
-          include: {
-            files: {
-              where: { fileType: 'proof' },
-            },
-          },
-        },
-      },
-    });
-
-    if (!order || !order.design || order.design.files.length === 0) {
-      return null;
-    }
-
-    const proofFile = order.design.files[0];
-    const approvalToken = await issueApprovalToken(orderId);
-
-    return {
-      proofUrl: proofFile.fileUrl,
-      approvalToken,
-    };
+  async getProof(orderId: string): Promise<{proofUrl:string}|null> {
+    const request=await prisma.approvalRequest.findFirst({where:{orderId,status:{in:['pending','approved']}},orderBy:{createdAt:'desc'}});
+    return request?.proofUrl ? {proofUrl:request.proofUrl}:null;
   }
 
   async verifyApprovalToken(token: string): Promise<{ orderId: string } | null> {

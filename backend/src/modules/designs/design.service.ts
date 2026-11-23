@@ -1,3 +1,4 @@
+import {approvalContentHash} from '../orders/approval-snapshot';
 import { prisma } from '../../lib/prisma';
 import { NotFoundError, AppError } from '../../utils/errors';
 import { randomUUID } from 'crypto';
@@ -211,9 +212,14 @@ export class DesignService {
       }
     }
 
+    const design = await prisma.$transaction(async (tx) => {
+      // Serialize the first-save session race, then existing design content.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${data.sessionId}, 0))`;
+      const row = await tx.design.findUnique({where:{sessionId:data.sessionId},select:{id:true}});
+      if (row) await tx.$queryRaw`SELECT id FROM designs WHERE id = ${row.id} FOR UPDATE`;
     // Upsert the design record. The editor session is self-sufficient (no
     // order required); if an orderId is attached later the record is linked.
-    let design = await prisma.design.findUnique({
+    let design = await tx.design.findUnique({
       where: { sessionId: data.sessionId },
       include: { files: true },
     });
@@ -244,7 +250,7 @@ export class DesignService {
               : { orderId: null }),
           }
         : { ownerId: null };
-      const written = await prisma.design.updateMany({
+      const written = await tx.design.updateMany({
         where: { id: design.id, lifecycleStatus: 'DRAFT', ...ownerGuard },
         data: {
           designData: data.designData as any,
@@ -258,20 +264,20 @@ export class DesignService {
       });
       if (written.count !== 1) {
         // Distinguish a lost race on state from an ownership refusal.
-        const current = await prisma.design.findUnique({ where: { id: design.id }, select: { lifecycleStatus: true } });
+        const current = await tx.design.findUnique({ where: { id: design.id }, select: { lifecycleStatus: true } });
         if (current && current.lifecycleStatus !== 'DRAFT') {
           throw new AppError(400, `Cannot save design in ${current.lifecycleStatus} status. Only DRAFT designs can be edited.`);
         }
         throw new AppError(403, 'You do not have access to this design');
       }
-      design = await prisma.design.findUnique({ where: { id: design.id }, include: { files: true } });
+      design = await tx.design.findUnique({ where: { id: design.id }, include: { files: true } });
       if (!design) {
         // Deleted right after the guarded write: never report success with no design.
         throw new AppError(409, 'Design was removed while saving; retry');
       }
     } else {
       try {
-      design = await prisma.design.create({
+      design = await tx.design.create({
         data: {
           orderId: session.orderId ?? null,
           ownerId: ownerId ?? null,
@@ -297,6 +303,28 @@ export class DesignService {
       }
     }
 
+    // Save files if provided
+    if (data.files && data.files.length > 0 && design) {
+      await Promise.all(
+        data.files.map((file) =>
+          tx.designFile.create({
+            data: {
+              designId: design.id,
+              fileType: file.fileType,
+              fileName: file.fileName,
+              fileUrl: file.fileUrl,
+              fileSize: file.fileSize,
+              mimeType: file.mimeType,
+              metadata: { ...(file.metadata as any), approvalContentHash: approvalContentHash(design) },
+            },
+          })
+        )
+      );
+    }
+
+      return design;
+    });
+
     // Mirror session in Redis
     if (redis) {
       try {
@@ -314,24 +342,6 @@ export class DesignService {
       }
     }
 
-    // Save files if provided
-    if (data.files && data.files.length > 0 && design) {
-      await Promise.all(
-        data.files.map((file) =>
-          prisma.designFile.create({
-            data: {
-              designId: design.id,
-              fileType: file.fileType,
-              fileName: file.fileName,
-              fileUrl: file.fileUrl,
-              fileSize: file.fileSize,
-              mimeType: file.mimeType,
-              metadata: file.metadata as any,
-            },
-          })
-        )
-      );
-    }
 
     return design;
   }
@@ -383,7 +393,8 @@ export class DesignService {
   ): Promise<any> {
     if (file.fileType === 'artwork_review') throw new AppError(400, 'Review artifacts must use the owner-bound review endpoint');
     // Verify design exists
-    await this.getDesign(designId);
+    const initialDesign = await this.getDesign(designId);
+    const initialHash = approvalContentHash(initialDesign);
 
     // Upload to S3
     const uploadResult = await fileUploadService.uploadFile(
@@ -394,7 +405,11 @@ export class DesignService {
     );
 
     // Save file record
-    const designFile = await prisma.designFile.create({
+    const designFile = await prisma.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM designs WHERE id = ${designId} FOR UPDATE`;
+      const current=await tx.design.findUniqueOrThrow({where:{id:designId}});
+      if(approvalContentHash(current)!==initialHash)throw new AppError(409,'Design changed while uploading; retry against the saved design');
+    const result = await tx.designFile.create({
       data: {
         designId,
         fileType: file.fileType,
@@ -402,7 +417,11 @@ export class DesignService {
         fileUrl: uploadResult.fileUrl,
         fileSize: uploadResult.fileSize,
         mimeType: uploadResult.mimeType,
+        metadata: {approvalContentHash:approvalContentHash(current)},
       },
+    });
+
+      return result;
     });
 
     return designFile;

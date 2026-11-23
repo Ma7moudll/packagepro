@@ -7,15 +7,15 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Loader2, FileText, ExternalLink, CheckCircle2, AlertTriangle, RotateCcw } from "lucide-react"
+import { Loader2, FileText, ExternalLink, CheckCircle2, AlertTriangle } from "lucide-react"
 import { useLanguage } from "@/providers/language-provider"
 import { useAuth } from "@/providers/auth-provider"
+import { approvalProofUrl } from "@/lib/orders/approval-proof"
 import { approvalsApi } from "@/lib/api/approvals"
 import { ApiClientError } from "@/lib/api/client"
 import { currencyOf, orderTotal } from "@/lib/orders/projections"
-import type { DesignFile, Order } from "@shared/types"
+import type { Order } from "@shared/types"
 
 type PageState =
   | "idle"
@@ -24,11 +24,6 @@ type PageState =
   | "done" // order already moved past awaiting_approval
   | "ready"
   | "success"
-  | "changes-sent"
-
-function byType(files: DesignFile[] | undefined, type: string): DesignFile | undefined {
-  return files?.find((f) => f.fileType === type)
-}
 
 export default function OrderApprovePage() {
   const { language } = useLanguage()
@@ -45,8 +40,7 @@ export default function OrderApprovePage() {
   const [pageError, setPageError] = useState("")
   const [actionError, setActionError] = useState("")
   const [legalAccepted, setLegalAccepted] = useState(false)
-  const [changeReason, setChangeReason] = useState("")
-  const [busy, setBusy] = useState<"approve" | "changes" | null>(null)
+  const [busy, setBusy] = useState<"approve" | null>(null)
 
   useEffect(() => {
     if (authLoading) return
@@ -61,7 +55,7 @@ export default function OrderApprovePage() {
       .then((res) => {
         if (res.success && res.data) {
           setOrder(res.data)
-          setState(res.data.status === "awaiting_approval" ? "ready" : "done")
+          setState(res.data.status === "awaiting_approval" && res.data.currentApprovalRequest?.status === "pending" && res.data.currentApprovalRequest.current && !!res.data.currentApprovalRequest.proofUrl ? "ready" : "done")
         }
       })
       .catch((error) => {
@@ -82,12 +76,16 @@ export default function OrderApprovePage() {
       })
   }, [authLoading, user, orderId, language, router])
 
-  const preview = useMemo(() => byType(order?.design?.files, "preview"), [order])
-  const proofFile = useMemo(() => byType(order?.design?.files, "proof"), [order])
+  // Historical preview files are not the approved proof. Show only the bound PDF.
+  const proofFile = useMemo(() => {
+    const value=order?.currentApprovalRequest?.proofUrl
+    const url=value ? approvalProofUrl(value, process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api", typeof window !== "undefined" ? window.location.origin : undefined) : null
+    return url ? {fileUrl:url} : undefined
+  }, [order])
   const firstItem = order?.items?.[0]
 
   const handleApprove = async () => {
-    if (state !== "ready") return
+    if (state !== "ready" || !proofFile) return
     setActionError("")
     if (!legalAccepted) {
       setActionError(
@@ -101,28 +99,6 @@ export default function OrderApprovePage() {
     try {
       await approvalsApi.approve(orderId, token)
       setState("success")
-    } catch (error) {
-      setActionError(mapApprovalError(error, language))
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  const handleRequestChanges = async () => {
-    if (state !== "ready") return
-    setActionError("")
-    if (changeReason.trim().length < 10) {
-      setActionError(
-        language === "ar"
-          ? "يرجى وصف التعديلات المطلوبة بتفصيل كافٍ"
-          : "Please describe the requested changes in enough detail",
-      )
-      return
-    }
-    setBusy("changes")
-    try {
-      await approvalsApi.requestChanges(orderId)
-      setState("changes-sent")
     } catch (error) {
       setActionError(mapApprovalError(error, language))
     } finally {
@@ -169,8 +145,8 @@ export default function OrderApprovePage() {
                 {t("This order is currently", "هذا الطلب حالياً بحالة")}{" "}
                 <Badge variant="outline">{(order.status ?? "unknown").replace(/_/g, " ")}</Badge>.{" "}
                 {t(
-                  "Either it was already approved, or it has not reached the approval step yet.",
-                  "إما تمت الموافقة عليه مسبقاً أو لم يصل إلى خطوة الموافقة بعد.",
+                  "There is no current proof ready to approve. The design may have changed. Ask for a new review.",
+                  "لا يوجد ملف مراجعة حالي جاهز للموافقة. ربما تغير التصميم. اطلب مراجعة جديدة.",
                 )}
               </>
             ) : null}
@@ -212,37 +188,11 @@ export default function OrderApprovePage() {
     )
   }
 
-  if (state === "changes-sent") {
-    return (
-      <div className="max-w-lg mx-auto p-8 text-center">
-        <RotateCcw className="h-16 w-16 text-amber-600 mx-auto mb-4" />
-        <h1 className="text-2xl font-bold mb-2">{t("Changes Requested", "تم طلب التعديلات")}</h1>
-        <p className="text-slate-600 mb-6">
-          {order ? (
-            <>
-              {t("Requested changes for order", "تم إرسال طلب التعديلات للطلب")}{" "}
-              <span className="font-semibold">{order.orderNumber}</span>{" "}
-              {t(
-                "have been sent back to the vendor for revision.",
-                "ويعاد الآن إلى المورّد للمراجعة.",
-              )}
-            </>
-          ) : null}
-        </p>
-        {order && (
-          <Link href={`/orders/${order.id}`}>
-            <Button variant="outline">{t("View Order", "عرض الطلب")}</Button>
-          </Link>
-        )}
-      </div>
-    )
-  }
-
   // state === "ready" — show the proof + approve/request-changes actions
   return (
-    <div className="max-w-5xl mx-auto p-6 lg:p-10">
+    <div className="max-w-5xl min-w-0 mx-auto p-4 sm:p-6 lg:p-10">
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex flex-wrap gap-3 items-start justify-between mb-8">
         <div>
           <Badge className="mb-2 bg-emerald-100 text-emerald-800">
             {t("Design Proof Approval", "الموافقة على التصميم")}
@@ -264,42 +214,12 @@ export default function OrderApprovePage() {
             <CardTitle className="text-sm">{t("Design Preview", "معاينة التصميم")}</CardTitle>
           </CardHeader>
           <CardContent>
-            {preview ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={preview.fileUrl}
-                alt={preview.fileName || "Design preview"}
-                className="w-full rounded-lg border border-slate-200 bg-white object-contain"
-                style={{ maxHeight: 340 }}
-              />
-            ) : (
-              <div className="rounded-lg border border-dashed border-slate-300 h-48 flex items-center justify-center">
-                <FileText className="h-8 w-8 text-slate-300" />
-                <p className="ml-2 text-sm text-slate-400">{t("No preview available", "لا توجد معاينة متاحة")}</p>
-              </div>
-            )}
-
-            {proofFile && (
-              <a
-                href={proofFile.fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-emerald-700 hover:text-emerald-800"
-              >
-                <FileText className="h-4 w-4" />
-                {t("Download PDF proof", "تحميل نموذج PDF")}
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            )}
-
-            {!proofFile && (
-              <p className="mt-4 text-xs text-slate-400">
-                {t(
-                  "A print-ready proof PDF will be attached when the vendor sends the artwork.",
-                  "سيتم إرفاق نموذج PDF جاهز للطباعة عند إرسال المورّد للتصميم النهائي.",
-                )}
-              </p>
-            )}
+            <p className="text-sm text-slate-500">{t("Open the exact proof PDF below. Historical preview images are not approval evidence.", "افتح ملف المراجعة المحدد أدناه. صور المعاينة القديمة ليست مرجعا للموافقة.")}</p>
+            {!proofFile && <Alert variant="destructive"><AlertDescription>{t("The current proof cannot be opened. Approval is blocked. Ask for a new review link.", "تعذر فتح ملف المراجعة الحالي. الموافقة متوقفة. اطلب رابط مراجعة جديد.")}</AlertDescription></Alert>}
+            {proofFile && <a data-testid="current-approval-proof" href={proofFile.fileUrl} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex max-w-full min-h-11 items-center gap-2 rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50">
+              <ExternalLink className="h-4 w-4" />{t("Open this request's proof PDF", "افتح ملف المراجعة لهذا الطلب")}
+            </a>}
+            <p className="mt-3 break-all text-xs text-slate-500">{t("Review request", "طلب المراجعة")}: {order?.currentApprovalRequest?.id}</p>
           </CardContent>
         </Card>
 
@@ -373,31 +293,15 @@ export default function OrderApprovePage() {
               <Button
                 className="w-full bg-emerald-600 hover:bg-emerald-700"
                 onClick={handleApprove}
-                disabled={busy !== null}
+                disabled={!proofFile || busy !== null}
               >
                 {busy === "approve" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 {t("Approve Design", "اعتماد التصميم")}
               </Button>
 
               <div className="border-t border-slate-100 pt-4 space-y-2">
-                <Label htmlFor="change-reason" className="text-sm font-medium">
-                  {t("Request changes (optional)", "طلب تعديلات (اختياري)")}
-                </Label>
-                <textarea
-                  id="change-reason"
-                  value={changeReason}
-                  onChange={(e) => setChangeReason(e.target.value)}
-                  placeholder={t(
-                    "Describe what should be changed to match your requirement...",
-                    "صف التعديلات المطلوبة لتطابق متطلباتك...",
-                  )}
-                  className="w-full min-h-[90px] rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-                <Button variant="outline" className="w-full" onClick={handleRequestChanges} disabled={busy !== null}>
-                  {busy === "changes" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  {t("Send back for revision", "إرسال للمراجعة")}
-                </Button>
+                <p className="text-sm text-amber-800">{t("Do not approve if changes are needed. Ask the order administrator to reopen for fresh review. Only an admin can reopen, and only before any purchase order.", "لا توافق إذا احتجت تعديلات. اطلب من مسؤول الطلب إرجاعه لمراجعة جديدة. الرجوع للأدمن فقط وقبل إنشاء أي أمر تصنيع.")}</p>
+                <Link href={`/orders/${orderId}`} className="inline-flex min-h-11 items-center underline text-sm">{t("View order details", "عرض تفاصيل الطلب")}</Link>
               </div>
             </CardContent>
           </Card>

@@ -59,6 +59,7 @@ export interface Design {
 }
 
 export interface Order {
+  currentApprovalRequest?: {id:string;status:string;proofFileId:string|null;proofUrl:string|null;expiresAt:string;deliveryState:string;current:boolean}|null
   id: string
   orderNumber: string
   userId: string

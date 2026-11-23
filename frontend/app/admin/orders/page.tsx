@@ -144,7 +144,7 @@ export default function AdminOrdersPage() {
       header: "",
       cell: (o) => (
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/manufacturer/orders/${o.id}`}>View</Link>
+          <Link href={`/admin/orders/${o.id}/approval`}>Review approval</Link>
         </Button>
       ),
     },

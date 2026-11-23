@@ -1,3 +1,4 @@
+import {approvalContentHash} from './approval-snapshot';
 import { assertSpecificationPriced } from "../../utils/production-specification";
 import { prisma } from '../../lib/prisma';
 import {
@@ -41,6 +42,11 @@ export function serializeOrder<T extends Record<string, any>>(order: T): T {
   const rawPaymentStatus = order.payment?.status as string | undefined;
   return {
     ...order,
+    currentApprovalRequest: (()=>{
+      const r=order.approvalRequests?.[0];
+      return r ? {id:r.id,status:r.status,contentHash:r.contentHash,proofFileId:r.proofFileId,proofUrl:r.proofUrl,expiresAt:r.expiresAt,deliveryState:r.deliveryState,current:!!order.design&&approvalContentHash(order.design)===r.contentHash} : null;
+    })(),
+    approvalRequests: undefined,
     paymentStatus: rawPaymentStatus
       ? (PAYMENT_STATUS_MAP[rawPaymentStatus] ?? rawPaymentStatus)
       : 'pending',
@@ -278,7 +284,7 @@ export class OrderService {
     // Link design if session ID provided
     if (data.designSessionId) {
       await prisma.design.updateMany({
-        where: { sessionId: data.designSessionId },
+        where: { sessionId: data.designSessionId, orderId:null, ownerId: customer.userId, lifecycleStatus:'DRAFT' },
         data: { orderId: order.id },
       });
     }
@@ -293,6 +299,7 @@ export class OrderService {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
+        approvalRequests: {orderBy:{createdAt:'desc'},take:1},
         items: true,
         design: {
           include: {
