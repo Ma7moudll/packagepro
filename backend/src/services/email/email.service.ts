@@ -8,6 +8,20 @@ import { join } from 'path';
 const createTransporter = () => {
   const provider = process.env.EMAIL_PROVIDER || 'sendgrid';
 
+  if (provider === 'test') {
+    // Test-only containment: nodemailer's JSON transport renders the message
+    // in-process and never opens a network connection, so CI/tests cannot
+    // contact an external SMTP host or send real email. Fail closed: refuse
+    // this transport outside NODE_ENV=test so a production config mistake is
+    // a loud startup error, never a silent "email sent" that delivered nothing.
+    if (process.env.NODE_ENV !== 'test') {
+      throw new Error(
+        'EMAIL_PROVIDER=test is only allowed with NODE_ENV=test; refusing to build a non-delivering email transport'
+      );
+    }
+    return nodemailer.createTransport({ jsonTransport: true });
+  }
+
   if (provider === 'sendgrid') {
     // SendGrid via SMTP
     return nodemailer.createTransport({

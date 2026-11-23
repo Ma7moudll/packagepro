@@ -1,13 +1,13 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { shipmentService } from './shipment.service';
-import { authenticate } from '../../middleware/auth.middleware';
+import { authenticate, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { handleDHLWebhook } from '../../integrations/dhl/webhooks';
 
 export class ShipmentController {
   async createShipment(request: FastifyRequest, reply: FastifyReply) {
     await authenticate(request, reply);
     const orderId = (request.params as { id: string }).id;
-    const shipment = await shipmentService.createShipment(orderId);
+    const shipment = await shipmentService.createShipment(orderId, (request as AuthenticatedRequest).user);
 
     return reply.status(201).send({
       success: true,
@@ -18,7 +18,7 @@ export class ShipmentController {
   async getTracking(request: FastifyRequest, reply: FastifyReply) {
     await authenticate(request, reply);
     const shipmentId = (request.params as { id: string }).id;
-    const tracking = await shipmentService.getTracking(shipmentId);
+    const tracking = await shipmentService.getTracking(shipmentId, (request as AuthenticatedRequest).user);
 
     return reply.send({
       success: true,
@@ -29,7 +29,7 @@ export class ShipmentController {
   async getShipmentByOrder(request: FastifyRequest, reply: FastifyReply) {
     await authenticate(request, reply);
     const orderId = (request.params as { orderId: string }).orderId;
-    const shipment = await shipmentService.getShipmentByOrder(orderId);
+    const shipment = await shipmentService.getShipmentByOrder(orderId, (request as AuthenticatedRequest).user);
 
     return reply.send({
       success: true,

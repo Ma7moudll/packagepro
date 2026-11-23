@@ -96,22 +96,23 @@ export function calculateConversionCost(
   surfaceArea: number,
   complexity: 'simple' | 'medium' | 'complex' = 'medium'
 ): number {
-  // Base conversion costs per unit (in USD)
+  // Base conversion costs per unit (in EGP), calibrated to Egyptian
+  // die-cutting/printing labor at low quantities.
   const baseCosts: Record<string, Record<string, number>> = {
     box: {
-      simple: 0.15,
-      medium: 0.25,
-      complex: 0.40,
+      simple: 5,
+      medium: 8,
+      complex: 12,
     },
     bag: {
-      simple: 0.10,
-      medium: 0.18,
-      complex: 0.30,
+      simple: 3,
+      medium: 4.5,
+      complex: 7,
     },
     label: {
-      simple: 0.05,
-      medium: 0.08,
-      complex: 0.12,
+      simple: 0.4,
+      medium: 0.6,
+      complex: 0.9,
     },
   };
 
@@ -160,14 +161,16 @@ export function estimateShippingCost(
   // In production, this should integrate with shipping APIs
   const totalWeight = quantity * weightPerUnit;
 
-  let baseShipping = 5; // Base shipping cost in USD
+  // Base shipping cost in EGP, in line with Egyptian courier rates
+  // (Bosta/Mylerz class): ~55 EGP light parcels up to ~150 EGP heavy.
+  let baseShipping = 55;
 
   if (totalWeight > 10) {
-    baseShipping = 15;
+    baseShipping = 150;
   } else if (totalWeight > 5) {
-    baseShipping = 10;
+    baseShipping = 100;
   } else if (totalWeight > 2) {
-    baseShipping = 7;
+    baseShipping = 75;
   }
 
   // Add dimensional weight calculation
@@ -190,7 +193,7 @@ export function estimateShippingCost(
   const chargeableWeight = Math.max(totalWeight, dimensionalWeight);
 
   if (chargeableWeight > 5) {
-    baseShipping += (chargeableWeight - 5) * 2;
+    baseShipping += (chargeableWeight - 5) * 10; // EGP per extra kg
   }
 
   return Math.round(baseShipping * 100) / 100;
@@ -227,6 +230,24 @@ export function groupShippingByProductType(
 /**
  * Calculate tax (simplified - adjust based on business logic)
  */
+/**
+ * Server-configured default tax rate (DEFAULT_TAX_RATE env, decimal 0-1,
+ * e.g. 0.14 for Egyptian VAT). Applied whenever a caller does not pass an
+ * explicit taxRate, so cart quotes, order totals and the public calculator
+ * all agree. Unset means 0 (pre-change behavior).
+ */
+export function getConfiguredTaxRate(): number {
+  const raw = process.env.DEFAULT_TAX_RATE;
+  if (!raw) {
+    return 0;
+  }
+  const rate = Number(raw);
+  if (!Number.isFinite(rate) || rate < 0 || rate > 1) {
+    throw new Error('DEFAULT_TAX_RATE must be a decimal between 0 and 1');
+  }
+  return rate;
+}
+
 export function calculateTax(subtotal: number, taxRate: number = 0.0): number {
   return subtotal * taxRate;
 }

@@ -1,0 +1,1270 @@
+{
+  "schemaVersion": 2,
+  "manifestSource": "blueprint",
+  "reproducibility": "exact",
+  "manifest": {
+    "product": {
+      "id": "synthetic-f42",
+      "slug": "custom-mailer-box",
+      "boxType": "mailer-box"
+    },
+    "variant": {
+      "dimensions": {
+        "length": 115,
+        "width": 70,
+        "height": 38,
+        "unit": "mm"
+      }
+    },
+    "faces": {
+      "left": {
+        "w": 70,
+        "h": 38
+      },
+      "front": {
+        "w": 115,
+        "h": 38
+      },
+      "right": {
+        "w": 70,
+        "h": 38
+      },
+      "back": {
+        "w": 115,
+        "h": 38
+      },
+      "top": {
+        "w": 115,
+        "h": 70
+      },
+      "bottom": {
+        "w": 115,
+        "h": 70
+      },
+      "inside_back": {
+        "w": 115,
+        "h": 38
+      },
+      "inside_bottom": {
+        "w": 115,
+        "h": 70
+      },
+      "inside_front": {
+        "w": 115,
+        "h": 38
+      },
+      "inside_left": {
+        "w": 70,
+        "h": 38
+      },
+      "inside_right": {
+        "w": 70,
+        "h": 38
+      },
+      "inside_top": {
+        "w": 115,
+        "h": 70
+      }
+    },
+    "zones": {},
+    "prepress": {
+      "bleedMm": 3,
+      "safeMm": 5,
+      "dpiMin": 300
+    },
+    "dieline": {
+      "schemaVersion": 1,
+      "boxType": "mailer-box",
+      "dims": {
+        "length": 115,
+        "width": 70,
+        "height": 38,
+        "unit": "mm"
+      },
+      "panels": {
+        "left": {
+          "faceId": "left",
+          "x": 0,
+          "y": 70,
+          "w": 70,
+          "h": 38,
+          "rotation": 0,
+          "edges": {
+            "top": {
+              "class": "glue",
+              "to": "glue_flap"
+            },
+            "right": {
+              "class": "fold",
+              "to": "front"
+            },
+            "bottom": {
+              "class": "glue",
+              "to": "glue_flap"
+            },
+            "left": {
+              "class": "cut"
+            }
+          }
+        },
+        "front": {
+          "faceId": "front",
+          "x": 70,
+          "y": 70,
+          "w": 115,
+          "h": 38,
+          "rotation": 0,
+          "edges": {
+            "top": {
+              "class": "fold",
+              "to": "top"
+            },
+            "right": {
+              "class": "fold",
+              "to": "right"
+            },
+            "bottom": {
+              "class": "fold",
+              "to": "bottom"
+            },
+            "left": {
+              "class": "fold",
+              "to": "left"
+            }
+          }
+        },
+        "right": {
+          "faceId": "right",
+          "x": 185,
+          "y": 70,
+          "w": 70,
+          "h": 38,
+          "rotation": 0,
+          "edges": {
+            "top": {
+              "class": "glue",
+              "to": "glue_flap"
+            },
+            "right": {
+              "class": "fold",
+              "to": "back"
+            },
+            "bottom": {
+              "class": "glue",
+              "to": "glue_flap"
+            },
+            "left": {
+              "class": "fold",
+              "to": "front"
+            }
+          }
+        },
+        "back": {
+          "faceId": "back",
+          "x": 255,
+          "y": 70,
+          "w": 115,
+          "h": 38,
+          "rotation": 0,
+          "edges": {
+            "top": {
+              "class": "cut"
+            },
+            "right": {
+              "class": "glue",
+              "to": "left"
+            },
+            "bottom": {
+              "class": "cut"
+            },
+            "left": {
+              "class": "fold",
+              "to": "right"
+            }
+          }
+        },
+        "top": {
+          "faceId": "top",
+          "x": 70,
+          "y": 0,
+          "w": 115,
+          "h": 70,
+          "rotation": 0,
+          "edges": {
+            "top": {
+              "class": "cut"
+            },
+            "right": {
+              "class": "cut"
+            },
+            "bottom": {
+              "class": "fold",
+              "to": "front"
+            },
+            "left": {
+              "class": "cut"
+            }
+          }
+        },
+        "bottom": {
+          "faceId": "bottom",
+          "x": 70,
+          "y": 108,
+          "w": 115,
+          "h": 70,
+          "rotation": 0,
+          "edges": {
+            "top": {
+              "class": "fold",
+              "to": "front"
+            },
+            "right": {
+              "class": "cut"
+            },
+            "bottom": {
+              "class": "cut"
+            },
+            "left": {
+              "class": "cut"
+            }
+          }
+        },
+        "inside_back": {
+          "faceId": "inside_back",
+          "x": 255,
+          "y": 70,
+          "w": 115,
+          "h": 38,
+          "rotation": 0,
+          "edges": {}
+        },
+        "inside_bottom": {
+          "faceId": "inside_bottom",
+          "x": 70,
+          "y": 108,
+          "w": 115,
+          "h": 70,
+          "rotation": 0,
+          "edges": {}
+        },
+        "inside_front": {
+          "faceId": "inside_front",
+          "x": 70,
+          "y": 70,
+          "w": 115,
+          "h": 38,
+          "rotation": 0,
+          "edges": {}
+        },
+        "inside_left": {
+          "faceId": "inside_left",
+          "x": 0,
+          "y": 70,
+          "w": 70,
+          "h": 38,
+          "rotation": 0,
+          "edges": {}
+        },
+        "inside_right": {
+          "faceId": "inside_right",
+          "x": 185,
+          "y": 70,
+          "w": 70,
+          "h": 38,
+          "rotation": 0,
+          "edges": {}
+        },
+        "inside_top": {
+          "faceId": "inside_top",
+          "x": 70,
+          "y": 0,
+          "w": 115,
+          "h": 70,
+          "rotation": 0,
+          "edges": {}
+        }
+      },
+      "cutPaths": [
+        {
+          "id": "left-left",
+          "faceId": "left",
+          "class": "cut",
+          "points": [
+            {
+              "x": 0,
+              "y": 70
+            },
+            {
+              "x": 0,
+              "y": 108
+            }
+          ]
+        },
+        {
+          "id": "back-top",
+          "faceId": "back",
+          "class": "cut",
+          "points": [
+            {
+              "x": 255,
+              "y": 70
+            },
+            {
+              "x": 370,
+              "y": 70
+            }
+          ]
+        },
+        {
+          "id": "back-bottom",
+          "faceId": "back",
+          "class": "cut",
+          "points": [
+            {
+              "x": 255,
+              "y": 108
+            },
+            {
+              "x": 370,
+              "y": 108
+            }
+          ]
+        },
+        {
+          "id": "top-top",
+          "faceId": "top",
+          "class": "cut",
+          "points": [
+            {
+              "x": 70,
+              "y": 0
+            },
+            {
+              "x": 185,
+              "y": 0
+            }
+          ]
+        },
+        {
+          "id": "top-right",
+          "faceId": "top",
+          "class": "cut",
+          "points": [
+            {
+              "x": 185,
+              "y": 0
+            },
+            {
+              "x": 185,
+              "y": 70
+            }
+          ]
+        },
+        {
+          "id": "top-left",
+          "faceId": "top",
+          "class": "cut",
+          "points": [
+            {
+              "x": 70,
+              "y": 0
+            },
+            {
+              "x": 70,
+              "y": 70
+            }
+          ]
+        },
+        {
+          "id": "bottom-right",
+          "faceId": "bottom",
+          "class": "cut",
+          "points": [
+            {
+              "x": 185,
+              "y": 108
+            },
+            {
+              "x": 185,
+              "y": 178
+            }
+          ]
+        },
+        {
+          "id": "bottom-bottom",
+          "faceId": "bottom",
+          "class": "cut",
+          "points": [
+            {
+              "x": 70,
+              "y": 178
+            },
+            {
+              "x": 185,
+              "y": 178
+            }
+          ]
+        },
+        {
+          "id": "bottom-left",
+          "faceId": "bottom",
+          "class": "cut",
+          "points": [
+            {
+              "x": 70,
+              "y": 108
+            },
+            {
+              "x": 70,
+              "y": 178
+            }
+          ]
+        }
+      ],
+      "foldPaths": [
+        {
+          "id": "left-right",
+          "faceId": "left",
+          "class": "fold",
+          "points": [
+            {
+              "x": 70,
+              "y": 70
+            },
+            {
+              "x": 70,
+              "y": 108
+            }
+          ]
+        },
+        {
+          "id": "front-top",
+          "faceId": "front",
+          "class": "fold",
+          "points": [
+            {
+              "x": 70,
+              "y": 70
+            },
+            {
+              "x": 185,
+              "y": 70
+            }
+          ]
+        },
+        {
+          "id": "front-right",
+          "faceId": "front",
+          "class": "fold",
+          "points": [
+            {
+              "x": 185,
+              "y": 70
+            },
+            {
+              "x": 185,
+              "y": 108
+            }
+          ]
+        },
+        {
+          "id": "front-bottom",
+          "faceId": "front",
+          "class": "fold",
+          "points": [
+            {
+              "x": 70,
+              "y": 108
+            },
+            {
+              "x": 185,
+              "y": 108
+            }
+          ]
+        },
+        {
+          "id": "right-right",
+          "faceId": "right",
+          "class": "fold",
+          "points": [
+            {
+              "x": 255,
+              "y": 70
+            },
+            {
+              "x": 255,
+              "y": 108
+            }
+          ]
+        }
+      ],
+      "scorePaths": [],
+      "gluePaths": [
+        {
+          "id": "left-top",
+          "faceId": "left",
+          "class": "glue",
+          "points": [
+            {
+              "x": 0,
+              "y": 70
+            },
+            {
+              "x": 70,
+              "y": 70
+            }
+          ]
+        },
+        {
+          "id": "left-bottom",
+          "faceId": "left",
+          "class": "glue",
+          "points": [
+            {
+              "x": 0,
+              "y": 108
+            },
+            {
+              "x": 70,
+              "y": 108
+            }
+          ]
+        },
+        {
+          "id": "right-top",
+          "faceId": "right",
+          "class": "glue",
+          "points": [
+            {
+              "x": 185,
+              "y": 70
+            },
+            {
+              "x": 255,
+              "y": 70
+            }
+          ]
+        },
+        {
+          "id": "right-bottom",
+          "faceId": "right",
+          "class": "glue",
+          "points": [
+            {
+              "x": 185,
+              "y": 108
+            },
+            {
+              "x": 255,
+              "y": 108
+            }
+          ]
+        },
+        {
+          "id": "back-right",
+          "faceId": "back",
+          "class": "glue",
+          "points": [
+            {
+              "x": 370,
+              "y": 70
+            },
+            {
+              "x": 370,
+              "y": 108
+            }
+          ]
+        }
+      ],
+      "perfPaths": [],
+      "outline": [
+        {
+          "id": "outline",
+          "class": "cut",
+          "points": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 370,
+              "y": 0
+            },
+            {
+              "x": 370,
+              "y": 178
+            },
+            {
+              "x": 0,
+              "y": 178
+            }
+          ],
+          "closed": true
+        }
+      ],
+      "adjacency": [
+        {
+          "a": "front",
+          "b": "left",
+          "via": "right",
+          "class": "fold"
+        },
+        {
+          "a": "front",
+          "b": "top",
+          "via": "top",
+          "class": "fold"
+        },
+        {
+          "a": "front",
+          "b": "right",
+          "via": "right",
+          "class": "fold"
+        },
+        {
+          "a": "bottom",
+          "b": "front",
+          "via": "bottom",
+          "class": "fold"
+        },
+        {
+          "a": "back",
+          "b": "right",
+          "via": "right",
+          "class": "fold"
+        },
+        {
+          "a": "back",
+          "b": "left",
+          "via": "right",
+          "class": "glue"
+        }
+      ],
+      "faceRelationships": [
+        {
+          "faceId": "left",
+          "meshPartIds": [
+            "left_panel"
+          ]
+        },
+        {
+          "faceId": "front",
+          "meshPartIds": [
+            "front_panel"
+          ]
+        },
+        {
+          "faceId": "right",
+          "meshPartIds": [
+            "right_panel"
+          ]
+        },
+        {
+          "faceId": "back",
+          "meshPartIds": [
+            "back_panel"
+          ]
+        },
+        {
+          "faceId": "top",
+          "meshPartIds": [
+            "top_panel"
+          ]
+        },
+        {
+          "faceId": "bottom",
+          "meshPartIds": [
+            "bottom_panel"
+          ]
+        },
+        {
+          "faceId": "inside_back",
+          "meshPartIds": [
+            "inside_back_panel"
+          ]
+        },
+        {
+          "faceId": "inside_bottom",
+          "meshPartIds": [
+            "inside_bottom_panel"
+          ]
+        },
+        {
+          "faceId": "inside_front",
+          "meshPartIds": [
+            "inside_front_panel"
+          ]
+        },
+        {
+          "faceId": "inside_left",
+          "meshPartIds": [
+            "inside_left_panel"
+          ]
+        },
+        {
+          "faceId": "inside_right",
+          "meshPartIds": [
+            "inside_right_panel"
+          ]
+        },
+        {
+          "faceId": "inside_top",
+          "meshPartIds": [
+            "inside_top_panel"
+          ]
+        }
+      ]
+    }
+  },
+  "canvas": {
+    "width": 345,
+    "height": 114,
+    "backgroundColor": "#ffffff"
+  },
+  "model": {
+    "type": "mailer_box",
+    "category": "boxes",
+    "dimensions": {
+      "length": 115,
+      "width": 70,
+      "height": 38
+    },
+    "material": "cardboard-kraft",
+    "faces": [
+      {
+        "id": "front",
+        "name": "FRONT"
+      },
+      {
+        "id": "back",
+        "name": "BACK"
+      },
+      {
+        "id": "left",
+        "name": "LEFT"
+      },
+      {
+        "id": "right",
+        "name": "RIGHT"
+      },
+      {
+        "id": "top",
+        "name": "TOP"
+      },
+      {
+        "id": "bottom",
+        "name": "BOTTOM"
+      }
+    ],
+    "printCoverage": "outside",
+    "adhesiveStrip": "none",
+    "finishing": "none",
+    "lamination": "none",
+    "colorVariant": "one_colour",
+    "sizePreset": "f42",
+    "quantity": 30
+  },
+  "product": {
+    "id": "synthetic-f42",
+    "slug": "custom-mailer-box",
+    "boxType": "mailer-box",
+    "name": "Synthetic mailer",
+    "type": "box",
+    "support": "supported",
+    "dieline": {
+      "schemaVersion": 1,
+      "boxType": "mailer-box",
+      "faceOrder": [
+        "left",
+        "front",
+        "right",
+        "back",
+        "top",
+        "bottom"
+      ],
+      "panels": {
+        "left": {
+          "faceId": "left",
+          "x": 0,
+          "y": 70,
+          "w": 70,
+          "h": 38,
+          "rotation": 0,
+          "edges": {
+            "top": {
+              "class": "glue",
+              "to": "glue_flap"
+            },
+            "right": {
+              "class": "fold",
+              "to": "front"
+            },
+            "bottom": {
+              "class": "glue",
+              "to": "glue_flap"
+            },
+            "left": {
+              "class": "cut"
+            }
+          }
+        },
+        "front": {
+          "faceId": "front",
+          "x": 70,
+          "y": 70,
+          "w": 115,
+          "h": 38,
+          "rotation": 0,
+          "edges": {
+            "top": {
+              "class": "fold",
+              "to": "top"
+            },
+            "right": {
+              "class": "fold",
+              "to": "right"
+            },
+            "bottom": {
+              "class": "fold",
+              "to": "bottom"
+            },
+            "left": {
+              "class": "fold",
+              "to": "left"
+            }
+          }
+        },
+        "right": {
+          "faceId": "right",
+          "x": 185,
+          "y": 70,
+          "w": 70,
+          "h": 38,
+          "rotation": 0,
+          "edges": {
+            "top": {
+              "class": "glue",
+              "to": "glue_flap"
+            },
+            "right": {
+              "class": "fold",
+              "to": "back"
+            },
+            "bottom": {
+              "class": "glue",
+              "to": "glue_flap"
+            },
+            "left": {
+              "class": "fold",
+              "to": "front"
+            }
+          }
+        },
+        "back": {
+          "faceId": "back",
+          "x": 255,
+          "y": 70,
+          "w": 115,
+          "h": 38,
+          "rotation": 0,
+          "edges": {
+            "top": {
+              "class": "cut"
+            },
+            "right": {
+              "class": "glue",
+              "to": "left"
+            },
+            "bottom": {
+              "class": "cut"
+            },
+            "left": {
+              "class": "fold",
+              "to": "right"
+            }
+          }
+        },
+        "top": {
+          "faceId": "top",
+          "x": 70,
+          "y": 0,
+          "w": 115,
+          "h": 70,
+          "rotation": 0,
+          "edges": {
+            "top": {
+              "class": "cut"
+            },
+            "right": {
+              "class": "cut"
+            },
+            "bottom": {
+              "class": "fold",
+              "to": "front"
+            },
+            "left": {
+              "class": "cut"
+            }
+          }
+        },
+        "bottom": {
+          "faceId": "bottom",
+          "x": 70,
+          "y": 108,
+          "w": 115,
+          "h": 70,
+          "rotation": 0,
+          "edges": {
+            "top": {
+              "class": "fold",
+              "to": "front"
+            },
+            "right": {
+              "class": "cut"
+            },
+            "bottom": {
+              "class": "cut"
+            },
+            "left": {
+              "class": "cut"
+            }
+          }
+        },
+        "inside_front": {
+          "faceId": "inside_front",
+          "x": 70,
+          "y": 70,
+          "w": 115,
+          "h": 38,
+          "rotation": 0,
+          "edges": {}
+        },
+        "inside_back": {
+          "faceId": "inside_back",
+          "x": 255,
+          "y": 70,
+          "w": 115,
+          "h": 38,
+          "rotation": 0,
+          "edges": {}
+        },
+        "inside_left": {
+          "faceId": "inside_left",
+          "x": 0,
+          "y": 70,
+          "w": 70,
+          "h": 38,
+          "rotation": 0,
+          "edges": {}
+        },
+        "inside_right": {
+          "faceId": "inside_right",
+          "x": 185,
+          "y": 70,
+          "w": 70,
+          "h": 38,
+          "rotation": 0,
+          "edges": {}
+        },
+        "inside_top": {
+          "faceId": "inside_top",
+          "x": 70,
+          "y": 0,
+          "w": 115,
+          "h": 70,
+          "rotation": 0,
+          "edges": {}
+        },
+        "inside_bottom": {
+          "faceId": "inside_bottom",
+          "x": 70,
+          "y": 108,
+          "w": 115,
+          "h": 70,
+          "rotation": 0,
+          "edges": {}
+        }
+      },
+      "outline": {
+        "w": 370,
+        "h": 178
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "marker-front",
+      "type": "text",
+      "name": "FRONT",
+      "faceId": "front",
+      "visible": true,
+      "locked": false,
+      "opacity": 1,
+      "blendMode": "normal",
+      "position": {
+        "x": 172.5,
+        "y": 57
+      },
+      "rotation": 0,
+      "scale": {
+        "x": 1,
+        "y": 1
+      },
+      "textProperties": {
+        "content": "FRONT / مرحبا",
+        "fontFamily": "Arial",
+        "fontSize": 16,
+        "fontWeight": 700,
+        "lineHeight": 1.2,
+        "letterSpacing": 0,
+        "align": "center",
+        "color": "#be123c"
+      }
+    },
+    {
+      "id": "marker-back",
+      "type": "text",
+      "name": "BACK",
+      "faceId": "back",
+      "visible": true,
+      "locked": false,
+      "opacity": 1,
+      "blendMode": "normal",
+      "position": {
+        "x": 172.5,
+        "y": 57
+      },
+      "rotation": 0,
+      "scale": {
+        "x": 1,
+        "y": 1
+      },
+      "textProperties": {
+        "content": "BACK",
+        "fontFamily": "Arial",
+        "fontSize": 16,
+        "fontWeight": 700,
+        "lineHeight": 1.2,
+        "letterSpacing": 0,
+        "align": "center",
+        "color": "#0e7490"
+      }
+    },
+    {
+      "id": "marker-left",
+      "type": "text",
+      "name": "LEFT",
+      "faceId": "left",
+      "visible": true,
+      "locked": false,
+      "opacity": 1,
+      "blendMode": "normal",
+      "position": {
+        "x": 105,
+        "y": 57
+      },
+      "rotation": 0,
+      "scale": {
+        "x": 1,
+        "y": 1
+      },
+      "textProperties": {
+        "content": "LEFT",
+        "fontFamily": "Arial",
+        "fontSize": 16,
+        "fontWeight": 700,
+        "lineHeight": 1.2,
+        "letterSpacing": 0,
+        "align": "center",
+        "color": "#15803d"
+      }
+    },
+    {
+      "id": "marker-right",
+      "type": "text",
+      "name": "RIGHT",
+      "faceId": "right",
+      "visible": true,
+      "locked": false,
+      "opacity": 1,
+      "blendMode": "normal",
+      "position": {
+        "x": 105,
+        "y": 57
+      },
+      "rotation": 0,
+      "scale": {
+        "x": 1,
+        "y": 1
+      },
+      "textProperties": {
+        "content": "RIGHT",
+        "fontFamily": "Arial",
+        "fontSize": 16,
+        "fontWeight": 700,
+        "lineHeight": 1.2,
+        "letterSpacing": 0,
+        "align": "center",
+        "color": "#a16207"
+      }
+    },
+    {
+      "id": "marker-top",
+      "type": "text",
+      "name": "TOP",
+      "faceId": "top",
+      "visible": true,
+      "locked": false,
+      "opacity": 1,
+      "blendMode": "normal",
+      "position": {
+        "x": 172.5,
+        "y": 105
+      },
+      "rotation": 0,
+      "scale": {
+        "x": 1,
+        "y": 1
+      },
+      "textProperties": {
+        "content": "TOP",
+        "fontFamily": "Arial",
+        "fontSize": 16,
+        "fontWeight": 700,
+        "lineHeight": 1.2,
+        "letterSpacing": 0,
+        "align": "center",
+        "color": "#6d28d9"
+      }
+    },
+    {
+      "id": "marker-bottom",
+      "type": "text",
+      "name": "BOTTOM",
+      "faceId": "bottom",
+      "visible": true,
+      "locked": false,
+      "opacity": 1,
+      "blendMode": "normal",
+      "position": {
+        "x": 172.5,
+        "y": 105
+      },
+      "rotation": 0,
+      "scale": {
+        "x": 1,
+        "y": 1
+      },
+      "textProperties": {
+        "content": "BOTTOM",
+        "fontFamily": "Arial",
+        "fontSize": 16,
+        "fontWeight": 700,
+        "lineHeight": 1.2,
+        "letterSpacing": 0,
+        "align": "center",
+        "color": "#c2410c"
+      }
+    },
+    {
+      "visible": true,
+      "locked": false,
+      "opacity": 1,
+      "blendMode": "normal",
+      "rotation": 0,
+      "scale": {
+        "x": 1,
+        "y": 1
+      },
+      "id": "review-image",
+      "name": "Embedded asymmetric PNG",
+      "type": "image",
+      "faceId": "front",
+      "position": {
+        "x": 35,
+        "y": 30
+      },
+      "imageProperties": {
+        "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAUCAYAAADskT9PAAAABmJLR0QA/wD/AP+gvaeTAAAAPElEQVRIiWOU9bvxnwEPeLxJgxGfPKWAiZaGjzpg1AGjDhh1wKgDiAGMD2U98NYFtAYDHgKjDhh1wKgDAAEDBmwxQiqAAAAAAElFTkSuQmCC"
+      }
+    },
+    {
+      "visible": true,
+      "locked": false,
+      "opacity": 1,
+      "blendMode": "normal",
+      "rotation": 0,
+      "scale": {
+        "x": 0.3,
+        "y": 0.2
+      },
+      "id": "review-rect",
+      "name": "Rectangle marker",
+      "type": "shape",
+      "faceId": "top",
+      "position": {
+        "x": 40,
+        "y": 40
+      },
+      "shapeProperties": {
+        "shape": "rect",
+        "fill": "#0891b2",
+        "stroke": "#172554",
+        "strokeWidth": 1,
+        "cornerRadius": 3
+      }
+    },
+    {
+      "visible": true,
+      "locked": false,
+      "opacity": 1,
+      "blendMode": "normal",
+      "rotation": 0,
+      "scale": {
+        "x": 0.22,
+        "y": 0.22
+      },
+      "id": "review-circle",
+      "name": "Circle marker",
+      "type": "shape",
+      "faceId": "bottom",
+      "position": {
+        "x": 45,
+        "y": 150
+      },
+      "shapeProperties": {
+        "shape": "circle",
+        "fill": "#eab308",
+        "stroke": "#713f12",
+        "strokeWidth": 1,
+        "cornerRadius": 0
+      }
+    }
+  ],
+  "selectedLayerIds": [],
+  "camera": {
+    "position": [
+      0,
+      0,
+      1
+    ],
+    "target": [
+      0,
+      0,
+      0
+    ],
+    "zoom": 1
+  },
+  "activeTool": "select",
+  "ui": {
+    "leftSidebarOpen": true,
+    "rightSidebarOpen": true,
+    "gridVisible": false,
+    "guidesVisible": false,
+    "selectedFace": "front",
+    "viewMode": "2d",
+    "boxOpenState": 0
+  },
+  "lifecycleStatus": "DRAFT",
+  "zones": {}
+}

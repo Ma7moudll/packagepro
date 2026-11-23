@@ -13,6 +13,8 @@
 
 import { describe, it, expect, afterAll, vi } from 'vitest';
 import { prisma } from '../../lib/prisma';
+import {approvalContentHash,approvalBytesHash} from '../orders/approval-snapshot';
+import {fileUploadService} from '../../services/file-upload/upload.service';
 import { poService } from './po.service';
 
 vi.mock('../../services/email/email.service', () => ({
@@ -79,6 +81,10 @@ describe('multi-vendor PO splitting (poService.createPO)', () => {
       },
       include: { items: true },
     });
+    // Explicit approved snapshot fixture. Legacy/unbound orders must fail closed.
+    const design=await prisma.design.create({data:{orderId:order.id,sessionId:`${marker}-design-${orderSeq}`,ownerId:user.id,designData:{layers:[]}}});
+    const bytes=Buffer.from('test-only approved input');const file=await fileUploadService.uploadFile(bytes,'fixture.txt','text/plain','test-approval');
+    await prisma.approvalRequest.create({data:{orderId:order.id,designId:design.id,status:'approved',contentHash:approvalContentHash(design),designSnapshot:{designData:design.designData} as any,printFileId:'explicit-fixture',printSha256:approvalBytesHash(bytes),printSnapshotUrl:file.fileUrl,expiresAt:new Date(Date.now()+86400000),approvedAt:new Date()}});
     return order;
   }
 
@@ -89,6 +95,7 @@ describe('multi-vendor PO splitting (poService.createPO)', () => {
       // only the POs this run created: orders under the marker
       where: { order: { orderNumber: { startsWith: marker } } },
     });
+    await prisma.design.deleteMany({where:{order:{orderNumber:{startsWith:marker}}}});
     await prisma.order.deleteMany({ where: { orderNumber: { startsWith: marker } } });
     await prisma.user.deleteMany({
       where: { email: { in: emails } },

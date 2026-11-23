@@ -59,6 +59,7 @@ export interface BaseLayer {
   rotation: number
   scale: { x: number; y: number }
   faceId: FaceId
+  raisedPrint?: { text: string; method: "unspecified" }
 }
 
 export interface TextShadow {
@@ -189,7 +190,7 @@ export type ProductType =
 // Product category for filtering
 export type ProductCategory = 
   | "all" | "boxes" | "mailing_bags" | "pouches" | "bags" 
-  | "envelopes" | "food_packaging" | "accessories" | "labels" | "cards"
+  | "envelopes" | "food_packaging" | "accessories" | "labels" | "cards" | "cups-tubes" | "paper-tape" | "labels-stickers"
 
 export const PRODUCT_CATEGORY_TO_TEMPLATE: Record<ProductCategory, string[]> = {
   all: [],
@@ -202,6 +203,9 @@ export const PRODUCT_CATEGORY_TO_TEMPLATE: Record<ProductCategory, string[]> = {
   labels: ["label"],
   cards: ["other"],
   accessories: ["other"],
+  "cups-tubes": ["other"],
+  "paper-tape": ["other"],
+  "labels-stickers": ["label"],
 }
 
 // Size presets
@@ -213,13 +217,17 @@ export interface SizePreset {
 
 // Color variant
 export type ColorVariant = 
-  | "one_colour" | "white" | "multicolour_muted" | "multicolour_saturated" | "multicolour_premium"
+  | "none" | "full_colour" | "one_colour" | "white" | "multicolour_muted" | "multicolour_saturated" | "multicolour_premium"
 
 export interface ModelState {
   type: ProductType
   category: ProductCategory
   dimensions: ModelDimensions
   material: string
+  boardSpecification?: import("../material-specification").BoardSpecification
+  carrierHandle?: "none"|"twisted_paper"|"cotton_ropes"|"ribbon"
+  carrierHandleCandidates?: string[]
+  materialSpecification?: {version:1;productType:string;code:string;status:"requested";supplierConfirmed:false}
   faces: Face[]
   printCoverage: "outside" | "inside" | "both"
   adhesiveStrip: "none" | "single" | "double"

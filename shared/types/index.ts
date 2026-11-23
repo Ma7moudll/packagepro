@@ -38,6 +38,7 @@ export interface DesignFile {
     | 'dieline'
     | 'proof'
     | 'export'
+    | 'artwork_review'
   fileName: string
   fileUrl: string
   fileSize?: number | null
@@ -58,6 +59,7 @@ export interface Design {
 }
 
 export interface Order {
+  currentApprovalRequest?: {id:string;status:string;proofFileId:string|null;proofUrl:string|null;expiresAt:string;deliveryState:string;current:boolean}|null
   id: string
   orderNumber: string
   userId: string
@@ -66,6 +68,7 @@ export interface Order {
   shippingAddress: ShippingAddress
   paymentMethod: PaymentMethod
   paymentStatus: PaymentStatus
+  /** New tax-exclusive-v1 orders: sum of pre-tax, shipping-exclusive lines. */
   subtotal: number
   tax: number
   shipping: number
@@ -99,7 +102,11 @@ export interface OrderItem {
   material?: string | null
   color?: string
   finish?: string
+  /** New tax-exclusive-v1 orders: rounded pre-tax display unit, excluding shipping. */
   unitPrice: number
+  /** New tax-exclusive-v1 orders: authoritative pre-tax line, excluding shipping.
+   * Do not reconstruct from rounded unitPrice times quantity or reinterpret
+   * unmarked historical rows as having this prospective convention. */
   totalPrice: number
   // Traceability: catalog + design references persisted on the order line.
   productId?: string | null
@@ -145,6 +152,10 @@ export interface PricingResponse {
     code: string
     name: string
     unitPrice: number
+    /** ISO currency of the material rate card ("EGP" — the pricing engine
+     *  rejects non-EGP rate cards); the backend has always returned it, the
+     *  type just didn't say so. */
+    currency?: string
   }
   productType: string
   quantity: number
@@ -369,7 +380,9 @@ export interface CartItem {
   finish?: string | null
   name?: string | null
   thumbnail?: string | null
+  /** Display unit price after pricing adjustments, excluding tax and shipping. */
   unitPrice: number
+  /** Authoritative line amount excluding tax and shipping; not rounded unitPrice x quantity. */
   totalPrice: number
   shipping: number
   tax: number
@@ -377,7 +390,9 @@ export interface CartItem {
 }
 
 export interface CartSummary {
+  /** Sum of tax-exclusive, shipping-exclusive cart line amounts. */
   subtotal: number
+  /** Separate line taxes, added once to subtotal. */
   tax: number
   shipping: number
   total: number
@@ -459,6 +474,13 @@ export interface ApiResponse<T> {
 
 export type ProductCustomisation = 'custom' | 'plain' | 'pre_printed'
 
+/** Unified-catalogue readiness verdict (shared/catalog/products.ts). */
+export interface CatalogReadiness {
+  preview: 'supported' | 'in_progress' | 'unavailable'
+  dieline: 'supported' | 'deferred'
+  pricing: 'estimated' | 'quote_required'
+}
+
 export interface CatalogProductSummary {
   id: string
   slug: string
@@ -474,6 +496,15 @@ export interface CatalogProductSummary {
   gallery: string[]
   ecoFlags?: Record<string, unknown> | null
   editorDefaults?: Record<string, unknown> | null
+  /** Currency of priceFrom — always EGP (pricing-engine enforced). */
+  currency?: string
+  /** Editor picker ProductType this catalogue row unifies with. */
+  editorType?: string
+  /** Three-axis readiness; listing never implies sale-readiness. */
+  readiness?: CatalogReadiness
+  /** Explicit production support verdict ('supported' | 'deferred'). */
+  support?: string
+  supportReason?: string
 }
 
 export interface CatalogSubcategory {
@@ -769,6 +800,11 @@ export interface EditorConfig {
     name: string
     type: string
     boxType?: string
+    candidateMaterials?: string[]
+    candidateHandles?: string[]
+    defaultHandle?: string
+    editorType?: string
+    readiness?: {preview:string;dieline:string;pricing:string}
     structure?: ProductStructure
     /** M8-B: additive blueprint passthrough — present when the product has one. */
     schemaVersion?: number
@@ -803,9 +839,10 @@ export interface EditorConfig {
   }
   quantity: number
   pricing: {
-    unitPrice: number
-    totalPrice: number
+    unitPrice: number|null
+    totalPrice: number|null
     currency: string
+    status?: "estimated"|"quote_required"
   }
   sessionId?: string
 }

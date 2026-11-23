@@ -171,7 +171,9 @@ describe('Auth Login & Logout Tests', () => {
     });
 
     it('should apply exponential backoff after failed attempts', async () => {
-      // Vitest has no live Redis, so mock the attempt counter to force backoff.
+      // Reset this test's live Redis keys so prior runs cannot leave CAPTCHA armed.
+      await authRedisService.clearFailedLoginAttempts(testEmailForBackoff, 'unknown');
+      await authRedisService.clearCaptchaRequirement(testEmailForBackoff, 'unknown');
       const getAttemptsSpy = vi
         .spyOn(authRedisService, 'getFailedLoginAttempts')
         .mockResolvedValue(2); // attemptCount=2 => 2^(2-2)=1s delay per login
