@@ -300,6 +300,8 @@ export function EditorBottomBar() {
             {currentFaces.map((face) => (
               <Button
                 key={face.id}
+                aria-pressed={selectedFace===face.id}
+                style={model.type==='loyalty_card'?{backgroundColor:selectedFace===face.id?'#0f172a':'#ffffff',color:selectedFace===face.id?'#ffffff':'#475569',border:selectedFace===face.id?'2px solid #0f172a':'2px solid transparent'}:undefined}
                 variant="ghost"
                 size="sm"
                 onClick={() => setSelectedFace(face.id as any)}

@@ -1,3 +1,4 @@
+import {loyaltyPreviewStockColour} from './loyalty-preview'
 import {thankYouPreviewStockColour} from './thank-you-preview';
 import { prisma } from '../../lib/prisma';
 import { NotFoundError } from '../../utils/errors';
@@ -241,7 +242,7 @@ export class CatalogService {
 
     const dims = variant.dimensions as any;
     const materialCode = variant.materialCode ?? 'cardboard-kraft';
-    const materialHex = thankYouPreviewStockColour(product.boxType ?? '', materialCode) ?? (materialRecord?.metadata
+    const materialHex = loyaltyPreviewStockColour(product.boxType ?? '',materialCode) ?? thankYouPreviewStockColour(product.boxType ?? '', materialCode) ?? (materialRecord?.metadata
       ? ((materialRecord.metadata as any).hex ?? MATERIAL_HEX[materialCode] ?? '#b8936a')
       : MATERIAL_HEX[materialCode] ?? '#b8936a');
 

@@ -1,3 +1,4 @@
+import {loyaltyPreviewStructure} from '../src/modules/catalog/loyalty-preview';
 import {thankYouPreviewStructure} from '../src/modules/catalog/thank-you-preview';
 import { Prisma, PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
@@ -1622,8 +1623,9 @@ async function main() {
       filters: null,
       editorDefaults: {
         boxType: entry.boxType,
-        // Only the proven thank-you-card slice receives a two-face preview.
+        // Explicitly qualified card slices receive two-face previews.
         // No production blueprint, rates or sibling support is inferred.
+        ...(entry.id === 'loyalty_card' ? {structure: loyaltyPreviewStructure(entry.defaultDimensions)} : {}),
         ...(entry.id === 'thank_you_card' ? {structure: thankYouPreviewStructure(entry.defaultDimensions)} : {}),
         support: 'deferred',
         supportReason: entry.supportReason,

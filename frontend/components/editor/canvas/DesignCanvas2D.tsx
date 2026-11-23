@@ -167,6 +167,9 @@ export function DesignCanvas2D() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null)
 
+  const viewportRef=useRef<HTMLDivElement>(null)
+  const loyaltySheet=useDesignStore(s=>s.model.type==='loyalty_card')
+  const [sheetScale,setSheetScale]=useState(1)
   const layers = useDesignStore((s) => s.layers)
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds)
   const selectedFace = useDesignStore((s) => s.ui.selectedFace)
@@ -182,6 +185,13 @@ export function DesignCanvas2D() {
   const guidesVisible = useDesignStore((s) => s.ui.guidesVisible)
   const toggleGuides = useDesignStore((s) => s.toggleGuides)
   
+  useEffect(()=>{
+    const viewport=viewportRef.current
+    if(!viewport||!loyaltySheet){setSheetScale(1);return}
+    const fit=()=>setSheetScale(Math.min(1,Math.max(1,viewport.clientWidth-48)/(canvasState.width+24),Math.max(1,viewport.clientHeight-48)/(canvasState.height+24)))
+    const observer=new ResizeObserver(fit);observer.observe(viewport);fit();return()=>observer.disconnect()
+  },[loyaltySheet,canvasState.width,canvasState.height])
+
   // Zone visibility state
   const [showBleed, setShowBleed] = useState(true)
   const [showSafeZone, setShowSafeZone] = useState(true)
@@ -861,8 +871,9 @@ export function DesignCanvas2D() {
       </div>
 
       {/* 2D Canvas */}
-      <div className="min-h-0 min-w-0 flex-1 flex items-center justify-center bg-slate-50 overflow-auto p-8">
-        <div className="relative" style={{ padding: showBleed ? "12px" : 0 }}>
+      <div ref={viewportRef} data-sheet-viewport className="min-h-0 min-w-0 flex-1 flex items-center justify-center bg-slate-50 overflow-auto p-8">
+        <div dir={loyaltySheet?"ltr":undefined} style={loyaltySheet?{width:(canvasState.width+(showBleed?24:0))*sheetScale,height:(canvasState.height+(showBleed?24:0))*sheetScale,flexShrink:0}:undefined}>
+        <div data-sheet-surface className="relative" style={{ padding: showBleed ? "12px" : 0,...(loyaltySheet?{width:canvasState.width+(showBleed?24:0),transform:`scale(${sheetScale})`,transformOrigin:"top left"}: {}) }}>
           {/* Zone Overlays */}
           <ZoneOverlays
             canvasWidth={canvasState.width}
@@ -888,6 +899,7 @@ export function DesignCanvas2D() {
             }}
           />
           <canvas ref={canvasRef} className="shadow-xl border border-slate-300 relative z-0" />
+        </div>
         </div>
       </div>
     </div>

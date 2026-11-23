@@ -21,6 +21,9 @@ COPY backend/src/modules/designs/artwork-review-contract.ts /app/backend/src/mod
 # Pure scoped thank-you-card preview contract, no database/service imports.
 COPY backend/src/modules/catalog/thank-you-preview.ts /app/backend/src/modules/catalog/thank-you-preview.ts
 
+# Pure loyalty-card preview contract, no database/service imports.
+COPY backend/src/modules/catalog/loyalty-preview.ts /app/backend/src/modules/catalog/loyalty-preview.ts
+
 # Set build-time environment variables
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3000}

@@ -331,6 +331,9 @@ export const useDesignStore = create<DesignStore>((set, get) => {
       const nextCore: DesignCoreState = {
         ...core,
         layers: nextLayers,
+        // Selection is live UI state and may be newer than history.present.
+        // Keep it during an edit so Fabric does not cancel an active drag.
+        selectedLayerIds: get().selectedLayerIds,
       }
       pushToHistory(nextCore)
     },
