@@ -36,9 +36,15 @@ import {
 
 type Unit = "cm" | "mm" | "inch"
 
-function fmtMoney(n: number | null | undefined): string {
+// Format with the API-verified currency (EGP, enforced by the pricing
+// engine). Never assume another currency and never convert rates.
+function fmtMoney(n: number | null | undefined, currency: string = "EGP"): string {
   if (n === null || n === undefined) return "—"
-  return `$${Number(n).toFixed(2)}`
+  return new Intl.NumberFormat("en", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(Number(n))
 }
 
 function clampDim(
@@ -75,6 +81,9 @@ export default function ProductDetailPage() {
   })
 
   const product = data as CatalogProductDetail | undefined
+  // Unified catalogue: products without product-specific rates are visible
+  // and classifiable but not sold at an invented price.
+  const quoteRequired = product?.readiness?.pricing === "quote_required"
 
   const unit: Unit = (product?.sizeUnit as Unit) ?? "cm"
   const minD = (product?.minDimensions ?? { length: 0, width: 0, height: 0 }) as Dimensions
@@ -151,11 +160,14 @@ export default function ProductDetailPage() {
     queryKey: ["catalog-quote", slug, debounced ? JSON.stringify(debounced) : "pending"],
     queryFn: () =>
       catalogApi.quote(slug, debounced as CatalogQuoteRequest).then((res) => res.data),
-    enabled: Boolean(debounced && product),
+    enabled: Boolean(debounced && product && !quoteRequired),
     retry: false,
   })
   const quote = quoteQuery.data as CatalogQuote | undefined
   const quoteError = quoteQuery.isError ? quoteQuery.error : null
+  // Verified currency: quote material rate card first, then the product
+  // summary's engine-enforced currency.
+  const moneyCurrency = quote?.material?.currency ?? product?.currency ?? "EGP"
 
   const optionValue = (key: string): string | undefined => config[key]
 
@@ -239,18 +251,13 @@ export default function ProductDetailPage() {
             ) : (
               <Package className="h-24 w-24 text-muted-foreground/50" />
             )}
-            {product.customisable && (
+            {product.customisable && !quoteRequired && (
               <Badge className="absolute left-4 top-4 gap-1">
                 <Icons.sparkles />
-                Fully customisable
+                Customisable
               </Badge>
             )}
-            {product.ecoFlags && Object.keys(product.ecoFlags).length > 0 && (
-              <Badge variant="secondary" className="absolute right-4 top-4 gap-1 bg-emerald-600 text-white">
-                <Icons.leaf />
-                Eco
-              </Badge>
-            )}
+            {/* No Eco badge: no verified eco certifications on file. */}
           </div>
 
           <div className="mt-6">
@@ -273,8 +280,10 @@ export default function ProductDetailPage() {
                 <p className="text-xs text-muted-foreground">MOQ</p>
               </div>
               <div className="rounded-xl border p-3">
-                <p className="text-lg font-bold">{fmtMoney(product.priceFrom)}</p>
-                <p className="text-xs text-muted-foreground">From / unit</p>
+                <p className="text-lg font-bold">
+                  {quoteRequired ? "On request" : fmtMoney(product.priceFrom, moneyCurrency)}
+                </p>
+                <p className="text-xs text-muted-foreground">Est. from / unit</p>
               </div>
               <div className="rounded-xl border p-3">
                 <p className="text-lg font-bold">{unit}</p>
@@ -285,19 +294,13 @@ export default function ProductDetailPage() {
             <div className="mt-6 flex flex-wrap gap-2">
               <Badge variant="secondary" className="gap-1">
                 <Icons.truck />
-                DHL shipping
+                Shipping calculated per order
               </Badge>
               <Badge variant="secondary" className="gap-1">
                 <Icons.shield />
                 Made to order
               </Badge>
-              {product.ecoFlags &&
-                Object.entries(product.ecoFlags).map(([k, v]) => (
-                  <Badge key={k} variant="outline" className="gap-1">
-                    <Icons.leaf />
-                    {String(v)}
-                  </Badge>
-                ))}
+
             </div>
           </div>
         </div>
@@ -305,6 +308,18 @@ export default function ProductDetailPage() {
         <div className="lg:pl-4">
           <div className="sticky top-6 space-y-6 rounded-2xl border bg-card p-6 shadow-sm">
             <h2 className="text-lg font-semibold">Configure &amp; price</h2>
+
+            {!quoteRequired && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
+                <p className="font-medium text-amber-800">Estimated pricing</p>
+                <p className="mt-0.5 text-amber-700">
+                  Prices are estimated from our configured rate cards and are pending
+                  supplier confirmation.
+                  {product.readiness?.dieline === "deferred" &&
+                    " Dieline and prepress support for this product is still in preparation."}
+                </p>
+              </div>
+            )}
 
             {/* Size */}
             <div>
@@ -414,16 +429,39 @@ export default function ProductDetailPage() {
                 onChange={(v) =>
                   setConfig((c) => ({ ...c, [option.key]: v }))
                 }
+                currency={moneyCurrency}
               />
             ))}
 
             <Separator />
 
             {/* Quote */}
-            {(quoteQuery.isLoading || !debounced) && (
+            {quoteRequired && (
+              <div className="space-y-3 rounded-xl border border-amber-500/50 bg-amber-500/10 p-4">
+                <p className="text-sm font-medium text-amber-700">
+                  This product is newly listed and still under preparation.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  We don&apos;t have a verified price for it yet, so it can&apos;t be
+                  ordered online at an invented figure. Send us your size and
+                  quantity and we&apos;ll come back with a real quote.
+                </p>
+                <Button
+                  className="w-full"
+                  size="lg"
+                  variant="outline"
+                  onClick={() => router.push(`/contact?product=${product.slug}&qty=${effectiveQty}`)}
+                >
+                  Request a quote
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            {!quoteRequired && (quoteQuery.isLoading || !debounced) && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Calculating live price…
+                Calculating estimated price…
               </div>
             )}
 
@@ -438,11 +476,11 @@ export default function ProductDetailPage() {
                 <div className="rounded-xl border bg-muted/40 p-4">
                   <div className="flex items-baseline justify-between">
                     <span className="text-sm text-muted-foreground">Unit price</span>
-                    <span className="text-2xl font-bold">{fmtMoney(quote.unitPrice)}</span>
+                    <span className="text-2xl font-bold">{fmtMoney(quote.unitPrice, moneyCurrency)}</span>
                   </div>
                   <div className="mt-1 flex items-baseline justify-between">
                     <span className="text-sm text-muted-foreground">Total ({effectiveQty} pcs)</span>
-                    <span className="text-lg font-semibold">{fmtMoney(quote.totalPrice)}</span>
+                    <span className="text-lg font-semibold">{fmtMoney(quote.totalPrice, moneyCurrency)}</span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     SKU: <span className="font-mono">{quote.variant.sku}</span>
@@ -450,34 +488,36 @@ export default function ProductDetailPage() {
                 </div>
 
                 <div className="space-y-1.5 text-sm">
-                  <Row label={`Material · ${quote.material.name ?? quote.material.code}`} value={fmtMoney(bd.materialCost)} />
-                  <Row label="Production" value={fmtMoney(bd.conversionCost)} />
-                  {bd.optionsMarkup ? <Row label="Print & finish options" value={fmtMoney(bd.optionsMarkup)} /> : null}
+                  <Row label={`Material · ${quote.material.name ?? quote.material.code}`} value={fmtMoney(bd.materialCost, moneyCurrency)} />
+                  <Row label="Production" value={fmtMoney(bd.conversionCost, moneyCurrency)} />
+                  {bd.optionsMarkup ? <Row label="Print & finish options" value={fmtMoney(bd.optionsMarkup, moneyCurrency)} /> : null}
                   {bd.discountApplied ? (
                     <Row
                       label={`Quantity discount (${bd.discountFactor ? `−${Math.round((1 - bd.discountFactor) * 100)}%` : ""})`}
-                      value={`−${fmtMoney(bd.discountApplied)}`}
+                      value={`−${fmtMoney(bd.discountApplied, moneyCurrency)}`}
                       accent="text-emerald-600"
                     />
                   ) : null}
-                  <Row label="Platform margin" value={fmtMoney(bd.marginAmount)} muted />
-                  <Row label="VAT" value={fmtMoney(bd.tax)} muted />
-                  <Row label="Shipping (expedited)" value={fmtMoney(bd.shippingEstimate)} />
+                  <Row label="Platform margin" value={fmtMoney(bd.marginAmount, moneyCurrency)} muted />
+                  <Row label="VAT" value={fmtMoney(bd.tax, moneyCurrency)} muted />
+                  <Row label="Shipping (estimated)" value={fmtMoney(bd.shippingEstimate, moneyCurrency)} />
                   <Separator className="my-1" />
-                  <Row label="Total" value={fmtMoney(bd.total)} strong />
+                  <Row label="Total" value={fmtMoney(bd.total, moneyCurrency)} strong />
                 </div>
               </div>
             )}
 
-            <Button
-              className="w-full"
-              size="lg"
-              disabled={!debounced || !quote || !!quoteError}
-              onClick={handleAddToCart}
-            >
-              <Icons.package className="mr-2 h-4 w-4" />
-              Add to cart · {quote ? fmtMoney(quote.totalPrice) : "…"}
-            </Button>
+            {!quoteRequired && (
+              <Button
+                className="w-full"
+                size="lg"
+                disabled={!debounced || !quote || !!quoteError}
+                onClick={handleAddToCart}
+              >
+                <Icons.package className="mr-2 h-4 w-4" />
+                Add to cart · {quote ? fmtMoney(quote.totalPrice, moneyCurrency) : "…"}
+              </Button>
+            )}
             <Button
               variant="outline"
               className="w-full"
@@ -525,10 +565,12 @@ function OptionGroup({
   option,
   value,
   onChange,
+  currency,
 }: {
   option: CatalogOption
   value: string
   onChange: (v: string) => void
+  currency: string
 }) {
   return (
     <div>
@@ -541,7 +583,7 @@ function OptionGroup({
           const active = v.value === value
           const delta =
             v.priceDelta !== null && v.priceDelta !== undefined && v.priceDelta !== 0
-              ? `${v.priceDelta > 0 ? "+" : ""}${fmtMoney(v.priceDelta)}`
+              ? `${v.priceDelta > 0 ? "+" : ""}${fmtMoney(v.priceDelta, currency)}`
               : null
           return (
             <button

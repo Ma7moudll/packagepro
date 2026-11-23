@@ -1,14 +1,21 @@
 import { Layer, Face, ModelState, ModelDimensions } from "@/lib/editor/state/types"
+import {faceIsPrinted} from "../print-coverage"
 import { TEXTURE_PX_PER_MM, pxToMm } from "@/lib/editor/geometry/units"
 
 interface TextureOptions {
   scale?: number
+  // Downloads fail closed on missing assets; 3D preview behavior is unchanged.
+  strictAssets?: boolean
   backgroundColor?: string
   width?: number
   height?: number
+  // Exports set this: every face is rendered (artboard filled with
+  // backgroundColor) so downloaded files never come out empty. The 3D
+  // preview leaves it off so empty faces keep the raw board material.
+  includeEmptyFaces?: boolean
 }
 
-function getFaceDimensions(faceId: string, dimensions: ModelDimensions) {
+export function getFaceDimensions(faceId: string, dimensions: ModelDimensions) {
   const { length, width, height } = dimensions
   // Normalize faceId if it's internal
   const id = faceId.replace("inside_", "")
@@ -52,14 +59,20 @@ export async function generateTextureFromLayers(
     await Promise.all(
       imageUrls.map(
         (src) =>
-          new Promise<void>((resolve) => {
+          new Promise<void>((resolve, reject) => {
             const img = new Image()
+            const timeout=options.strictAssets ? setTimeout(()=>{img.onload=null;img.onerror=null;img.src="";reject(new Error("Preview unavailable: image loading timed out"))},10000) : undefined
+            const stop=()=>{if(timeout) clearTimeout(timeout)}
             img.crossOrigin = "anonymous"
             img.onload = () => {
+              stop()
+              if (options.strictAssets && (!img.width || !img.height || img.width*img.height>25_000_000)) {reject(new Error("Preview unavailable: image is empty or too large"));return}
               imageCache[src] = img
               resolve()
             }
             img.onerror = () => {
+              stop()
+              if(options.strictAssets) {reject(new Error("Preview unavailable: a design image could not be loaded"));return}
               console.error(`Failed to load image: ${src}`)
               resolve()
             }
@@ -71,6 +84,7 @@ export async function generateTextureFromLayers(
 
   // 3. Render each face (ONLY if it has visible layers)
   for (const face of model.faces) {
+    if (!faceIsPrinted(model.printCoverage, face.id)) continue
     // Get layers for this face FIRST
     const faceLayers = layers
       .filter((l) => l.faceId === face.id && l.visible)
@@ -80,21 +94,31 @@ export async function generateTextureFromLayers(
         return aIndex - bIndex
       })
 
-    // Skip faces without layers - let the 3D model use its default material
-    if (faceLayers.length === 0) {
+    // Skip faces without layers in the 3D preview - the model shows its
+    // default material there. Exports (includeEmptyFaces) render them.
+    if (faceLayers.length === 0 && !options.includeEmptyFaces) {
       continue
     }
 
     const dim = getFaceDimensions(face.id, model.dimensions)
     const canvas = document.createElement("canvas")
-    canvas.width = dim.width * scale
-    canvas.height = dim.height * scale
+    canvas.width = options.strictAssets ? Math.ceil(dim.width*scale) : dim.width*scale
+    canvas.height = options.strictAssets ? Math.ceil(dim.height*scale) : dim.height*scale
     const ctx = canvas.getContext("2d")
 
-    if (!ctx) continue
+    if (!ctx) {
+      if(options.strictAssets) throw new Error("Preview unavailable: canvas rendering is unavailable")
+      continue
+    }
 
-    // Transparent background so the base material shows through
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    if (options.includeEmptyFaces) {
+      // Export: opaque artboard so the file shows the background the user saw
+      ctx.fillStyle = backgroundColor
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+    } else {
+      // Transparent background so the base material shows through in 3D
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+    }
 
     // Render each layer
     for (const layer of faceLayers) {

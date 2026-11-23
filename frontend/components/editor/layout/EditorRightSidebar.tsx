@@ -1,7 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { BoardSpecificationPanel } from "@/components/editor/panels/BoardSpecificationPanel"
+import { RaisedPrintControl } from "@/components/editor/panels/RaisedPrintControl"
+import { useState, useEffect, useRef } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
+import {useEditorPresetQuote} from "@/lib/editor/hooks/useEditorPresetQuote"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,9 +22,12 @@ import {
   Image as ImageIcon,
   Box,
   Trash2,
+  Undo2,
 } from "lucide-react"
-import { PRODUCTS, PRODUCT_CATEGORIES, COLOR_VARIANTS, FINISHING_OPTIONS, LAMINATION_OPTIONS, MATERIAL_TYPES, getProductById } from "@/lib/editor/data/products-data"
-import { ProductCategory } from "@/lib/editor/state/types"
+import { COLOR_VARIANTS, FINISHING_OPTIONS, LAMINATION_OPTIONS, MATERIAL_TYPES, getProductById } from "@/lib/editor/data/products-data"
+import {CATALOGUE_PRODUCTS,CATALOGUE_CATEGORIES,CATALOGUE_CANDIDATE_MATERIALS,canonicalEditorType} from "../../../../shared/catalog/products"
+import {catalogApi} from "@/lib/api/catalog"
+import {productConfiguration,productDimensionChange,materialCandidateLabel,readinessLabel,requestProductMaterial} from "@/lib/editor/product-configuration"
 import { useLanguage } from "@/providers/language-provider"
 import { ValidationPanel } from "@/components/editor/panels/ValidationPanel"
 import { ColorPicker } from "@/components/editor/panels/ColorPicker"
@@ -48,7 +54,7 @@ const SIDEBAR_TABS = [
 
 type TabId = (typeof SIDEBAR_TABS)[number]["id"]
 
-export function EditorRightSidebar() {
+export function EditorRightSidebar({onContinue}:{onContinue:()=>void}) {
   const { language, isRTL } = useLanguage()
   const layers = useDesignStore((s) => s.layers)
   const selectedIds = useDesignStore((s) => s.selectedLayerIds)
@@ -56,36 +62,39 @@ export function EditorRightSidebar() {
   const updateLayer = useDesignStore((s) => s.updateLayer)
   const removeLayer = useDesignStore((s) => s.removeLayer)
   const applyCoreState = useDesignStore((s) => s.applyCoreState)
+  const pricing = useEditorPresetQuote()
+  const customQuote = pricing.status === "unpriced"
+  const quote = pricing.quote
+  const quoteLoading = pricing.status === "loading"
+  const initProduct=useDesignStore(s=>s.initFromEditorConfig)
   const selected = layers.find((l) => l.id === selectedIds[0])
 
   const [activeTab, setActiveTab] = useState<TabId>("design")
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
-  const [productCategory, setProductCategory] = useState<ProductCategory>("all")
+  const [productCategory, setProductCategory] = useState("all")
+  const [productLoading,setProductLoading]=useState(false)
+  const [productError,setProductError]=useState("")
+  const productRequest=useRef(0)
 
-  // Price calculation
-  const getBasePrice = (type: string) => {
-    switch (type) {
-      case "mailer_box": return 1.25
-      case "rigid_box": return 4.50
-      case "pouch": return 0.45
-      case "tube": return 1.50
-      case "cup": return 0.25
-      case "bag": return 0.65
-      case "folding_carton": return 0.85
-      case "envelope": return 0.35
-      default: return 1.00
-    }
+  const canonicalType=canonicalEditorType(model.type)
+  const currentProduct = getProductById(canonicalType as any)
+  const currentCatalogue=CATALOGUE_PRODUCTS.find(p=>p.id===canonicalType)
+  const candidates=CATALOGUE_CANDIDATE_MATERIALS[canonicalType]??[]
+  const configuration=productConfiguration(model.type,candidates)
+  const filteredProducts=CATALOGUE_PRODUCTS.filter(p=>productCategory==="all"||p.category===productCategory)
+  const changeProduct=async(id:string)=>{
+   const entry=CATALOGUE_PRODUCTS.find(p=>p.id===id);if(!entry)return
+   const request=++productRequest.current;setProductLoading(true);setProductError("")
+   try{
+    const response=await catalogApi.getEditorConfig(entry.slug,Math.max(model.quantity,entry.moq))
+    if(request!==productRequest.current)return
+    if(!response.success||!response.data)throw new Error('No editor configuration')
+    const config=response.data,policy=productConfiguration(entry.id,CATALOGUE_CANDIDATE_MATERIALS[entry.id])
+    const native=policy.materials.includes(config.material.code)?config.material.code:policy.materials[0]
+    initProduct(config as any,{preserveHistory:true,transform:core=>({...core,model:{...core.model,boardSpecification:policy.boardStock?core.model.boardSpecification:undefined,material:policy.boardStock?core.model.material:(native??core.model.material),materialSpecification:policy.boardStock?undefined:native?{version:1,productType:entry.id,code:native,status:'requested',supplierConfirmed:false}:undefined,printCoverage:getProductById(entry.id as any)?.supportsPrintCoverage[0]??'outside'},selectedLayerIds:[]})})
+   }catch{if(request===productRequest.current)setProductError(language==='ar'?'تعذر تحميل إعدادات المنتج. لم يتغير التصميم.':'Could not load this product. Your design is unchanged.')}
+   finally{if(request===productRequest.current)setProductLoading(false)}
   }
-
-  const basePrice = getBasePrice(model.type)
-  const discountPercent = Math.min(25, Math.floor((model.quantity / 500) * 5))
-  const finalUnitPrice = basePrice * (1 - discountPercent / 100)
-  const totalPrice = finalUnitPrice * model.quantity
-
-  const currentProduct = getProductById(model.type)
-  const filteredProducts = productCategory === "all" 
-    ? PRODUCTS 
-    : PRODUCTS.filter(p => p.category === productCategory)
 
   // Layer Properties Panel
   const renderLayerProperties = () => {
@@ -97,14 +106,26 @@ export function EditorRightSidebar() {
           <h3 className="text-xs font-bold text-slate-600">
             {language === "ar" ? "خصائص العنصر" : "Element Properties"}
           </h3>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-red-500 hover:bg-red-50"
-            onClick={() => removeLayer(selected.id)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              title={language === "ar" ? "رجوع لإعدادات المنتج" : "Back to product settings"}
+              aria-label={language === "ar" ? "رجوع لإعدادات المنتج" : "Back to product settings"}
+              onClick={() => applyCoreState((core) => ({ ...core, selectedLayerIds: [] }))}
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-red-500 hover:bg-red-50"
+              onClick={() => removeLayer(selected.id)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
 
         {/* Name */}
@@ -241,6 +262,7 @@ export function EditorRightSidebar() {
               />
                       </div>
             <TextStylesPanel />
+            <RaisedPrintControl layer={selected} arabic={language === "ar"} update={updateLayer} />
                     </div>
         )}
 
@@ -323,7 +345,7 @@ export function EditorRightSidebar() {
                   </h3>
       </div>
 
-      <Accordion type="multiple" defaultValue={["product", "dimensions"]} className="space-y-1">
+      <Accordion type="single" collapsible defaultValue="product" className="space-y-1">
         {/* Product Type */}
         <AccordionItem value="product" className="border rounded-lg px-3">
           <AccordionTrigger className="text-[11px] font-semibold py-2 hover:no-underline">
@@ -332,44 +354,33 @@ export function EditorRightSidebar() {
           <AccordionContent className="pb-3 space-y-3">
             {/* Category Filter */}
             <div className="flex flex-wrap gap-1">
-              {PRODUCT_CATEGORIES.slice(0, 5).map((cat) => (
+              {[{slug:"all",name:"All"},...CATALOGUE_CATEGORIES].map((cat) => (
                 <Button
-                  key={cat.id}
-                  variant={productCategory === cat.id ? "secondary" : "ghost"}
+                  key={cat.slug}
+                  variant={productCategory === cat.slug ? "secondary" : "ghost"}
                   size="sm"
                   className={cn(
                     "h-6 text-[9px] px-2",
-                    productCategory === cat.id && "bg-slate-900 text-white"
+                    productCategory === cat.slug && "bg-slate-900 text-white"
                   )}
-                  onClick={() => setProductCategory(cat.id)}
+                  onClick={() => setProductCategory(cat.slug)}
                 >
-                  {cat.icon} {language === "ar" ? cat.name.ar : cat.name.en}
+                  {cat.name}
                 </Button>
               ))}
                     </div>
 
             <Select
-              value={model.type}
-              onValueChange={(v: any) => {
-                const product = getProductById(v)
-                if (product) {
-                  applyCoreState((s) => ({
-                    ...s,
-                    model: {
-                      ...s.model,
-                      type: v,
-                      dimensions: product.defaultDimensions,
-                    },
-                  }))
-                }
-              }}
+              value={canonicalType}
+              disabled={productLoading}
+              onValueChange={changeProduct}
             >
-              <SelectTrigger className="h-9 text-xs">
+              <SelectTrigger aria-label="Product type" className="h-9 text-xs min-w-0 overflow-hidden">
                 <SelectValue>
                   {currentProduct && (
-                    <span className="flex items-center gap-2">
+                    <span className="flex min-w-0 items-center gap-2">
                       <span>{currentProduct.icon}</span>
-                      {language === "ar" ? currentProduct.name.ar : currentProduct.name.en}
+                      <span className="truncate">{language === "ar" ? (currentCatalogue?.name.ar??currentProduct.name.ar) : (currentCatalogue?.name.en??currentProduct.name.en)}</span>
                     </span>
                   )}
                 </SelectValue>
@@ -378,13 +389,16 @@ export function EditorRightSidebar() {
                 {filteredProducts.map((product) => (
                   <SelectItem key={product.id} value={product.id} className="text-xs">
                     <span className="flex items-center gap-2">
-                      <span>{product.icon}</span>
+                      <span>{getProductById(product.id as any)?.icon??"□"}</span>
                       {language === "ar" ? product.name.ar : product.name.en}
                     </span>
                   </SelectItem>
                 ))}
                         </SelectContent>
                       </Select>
+            {productLoading&&<p role="status" className="text-xs">{language==='ar'?'تحميل إعدادات المنتج...':'Loading product settings...'}</p>}
+            {productError&&<p role="alert" className="text-xs text-red-700">{productError}</p>}
+            {currentCatalogue&&<p className="text-[10px] text-slate-600">{language==='ar'?'المعاينة':'Preview'}: {readinessLabel(currentCatalogue.readiness.preview,language)} · {language==='ar'?'مخطط الإنتاج':'Production dieline'}: {readinessLabel(currentCatalogue.readiness.dieline,language)} · {language==='ar'?'التسعير':'Pricing'}: {readinessLabel(currentCatalogue.readiness.pricing,language)}</p>}
           </AccordionContent>
         </AccordionItem>
 
@@ -394,107 +408,26 @@ export function EditorRightSidebar() {
             <div className="flex items-center gap-2">
               <span 
                 className="w-5 h-5 rounded-full border-2 border-slate-200 shadow-sm" 
-                style={{ backgroundColor: MATERIAL_TYPES.find(m => m.id === model.material)?.color || '#C4A574' }}
+                style={{ backgroundColor: configuration.boardStock?(MATERIAL_TYPES.find(m => m.id === model.material)?.color || '#C4A574'):model.material.includes("black")?"#242424":"#eeeeec" }}
               />
               {language === "ar" ? "المادة" : "Material"}
                         </div>
           </AccordionTrigger>
           <AccordionContent className="pb-3 space-y-3">
-            {/* Material Type Selection */}
-            <Select
-              value={model.material}
-              onValueChange={(v) =>
-                applyCoreState((s) => ({ ...s, model: { ...s.model, material: v } }))
-              }
-            >
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue>
-                  <span className="flex items-center gap-2">
-                    <span 
-                      className="w-4 h-4 rounded-full border" 
-                      style={{ backgroundColor: MATERIAL_TYPES.find(m => m.id === model.material)?.color || '#C4A574' }}
-                    />
-                    {MATERIAL_TYPES.find(m => m.id === model.material)?.name[language === "ar" ? "ar" : "en"] || model.material}
-                  </span>
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="max-h-64">
-                {/* Kraft Options */}
-                <div className="px-2 py-1 text-[10px] font-bold bg-gradient-to-r from-amber-100 to-amber-50 text-amber-800 border-l-4 border-amber-500">
-                  📦 {language === "ar" ? "كرافت (بني)" : "Kraft (Brown)"}
-                        </div>
-                {MATERIAL_TYPES.filter(m => m.category === "kraft").map((mat) => (
-                  <SelectItem key={mat.id} value={mat.id} className="text-xs">
-                    <span className="flex items-center gap-2">
-                      <span 
-                        className="w-3 h-3 rounded-full border" 
-                        style={{ backgroundColor: mat.color }}
-                      />
-                      {language === "ar" ? mat.name.ar : mat.name.en}
-                    </span>
-                  </SelectItem>
-                ))}
-                
-                {/* White Imported Options */}
-                <div className="px-2 py-1 text-[10px] font-bold bg-gradient-to-r from-blue-100 to-blue-50 text-blue-800 border-l-4 border-blue-500 mt-1">
-                  ✨ {language === "ar" ? "أبيض مستورد" : "White (Imported)"}
-                        </div>
-                {MATERIAL_TYPES.filter(m => m.category === "white-imported").map((mat) => (
-                  <SelectItem key={mat.id} value={mat.id} className="text-xs">
-                    <span className="flex items-center gap-2">
-                      <span 
-                        className="w-3 h-3 rounded-full border" 
-                        style={{ backgroundColor: mat.color }}
-                      />
-                      {language === "ar" ? mat.name.ar : mat.name.en}
-                    </span>
-                  </SelectItem>
-                ))}
-                
-                {/* White Local Options */}
-                <div className="px-2 py-1 text-[10px] font-bold bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 border-l-4 border-gray-400 mt-1">
-                  💰 {language === "ar" ? "أبيض محلي (اقتصادي)" : "White (Local/Economic)"}
-                      </div>
-                {MATERIAL_TYPES.filter(m => m.category === "white-local").map((mat) => (
-                  <SelectItem key={mat.id} value={mat.id} className="text-xs">
-                    <span className="flex items-center gap-2">
-                      <span 
-                        className="w-3 h-3 rounded-full border" 
-                        style={{ backgroundColor: mat.color }}
-                      />
-                      {language === "ar" ? mat.name.ar : mat.name.en}
-                    </span>
-                  </SelectItem>
-                ))}
-                
-                {/* Premium Options */}
-                <div className="px-2 py-1 text-[10px] font-bold bg-gradient-to-r from-purple-100 to-purple-50 text-purple-800 border-l-4 border-purple-500 mt-1">
-                  🏆 {language === "ar" ? "فاخر" : "Premium"}
-                </div>
-                {MATERIAL_TYPES.filter(m => m.category === "premium").map((mat) => (
-                  <SelectItem key={mat.id} value={mat.id} className="text-xs">
-                    <span className="flex items-center gap-2">
-                      <span 
-                        className="w-3 h-3 rounded-full border" 
-                        style={{ backgroundColor: mat.color }}
-                      />
-                      {language === "ar" ? mat.name.ar : mat.name.en}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-            {/* Material description */}
-            {MATERIAL_TYPES.find(m => m.id === model.material) && (
-              <p className="text-[10px] text-slate-500">
-                {language === "ar" 
-                  ? MATERIAL_TYPES.find(m => m.id === model.material)?.description.ar
-                  : MATERIAL_TYPES.find(m => m.id === model.material)?.description.en
-                }
-              </p>
-            )}
-
+            <BoardSpecificationPanel arabic={language === "ar"} />
+            {!configuration.boardStock&&<div className="space-y-2">
+             <Label htmlFor="product-material-candidate" className="text-[11px]">{language==='ar'?'الخامة المقترحة لهذا المنتج':'Candidate material for this product'}</Label>
+             <select id="product-material-candidate" className="w-full border rounded-md p-2 text-xs" value={candidates.includes(model.material)?model.material:''} onChange={e=>{const code=e.target.value;if(!candidates.includes(code))return;applyCoreState(core=>requestProductMaterial(core,code,candidates))}}>
+              <option value="" disabled>{language==='ar'?'اختر خامة خاصة بالمنتج':'Choose a product-listed material'}</option>
+              {candidates.map(code=><option key={code} value={code}>{materialCandidateLabel(code,language)}</option>)}
+             </select>
+             <p role="status" className="text-[10px] text-amber-800">{language==='ar'?'اختيارات مقترحة وليست اعتماد مورد. السُمك والعزل وملامسة الطعام والطباعة تحتاج تأكيدا وعرض سعر.':'Catalogue candidates, not supplier approval. Thickness, barrier, food-contact and print suitability need confirmation and a quote.'}</p>
+            </div>}
+            {canonicalType==='paper_bag'&&<label className="block space-y-1 text-[11px]">{language==='ar'?'تركيب اليد (طلب عرض سعر)':'Handle construction (quote request)'}
+             <select aria-label="Carrier handle construction" className="w-full border rounded-md p-2" value={model.carrierHandle??'twisted_paper'} onChange={e=>{const code=e.target.value;if(!['none','twisted_paper','cotton_ropes','ribbon'].includes(code))return;applyCoreState(core=>({...core,model:{...core.model,carrierHandle:code as NonNullable<typeof model.carrierHandle>}}))}}>
+              {(model.carrierHandleCandidates??['none','twisted_paper','cotton_ropes','ribbon']).filter(code=>['none','twisted_paper','cotton_ropes','ribbon'].includes(code)).map(code=><option key={code} value={code}>{({none:language==='ar'?'بدون يد':'No handle',twisted_paper:language==='ar'?'ورق ملفوف':'Twisted paper',cotton_ropes:language==='ar'?'حبل قطن':'Cotton rope',ribbon:language==='ar'?'شريط قماش':'Ribbon'} as Record<string,string>)[code]}</option>)}
+             </select><span className="block text-[10px] text-amber-800">{language==='ar'?'شكل تقريبي. مقاس اليد وطريقة تثبيتها تحتاج تأكيد المورد.':'Illustrative proportions. Handle size and attachment need supplier confirmation.'}</span>
+            </label>}
             {/* Print Coverage */}
             {currentProduct?.supportsPrintCoverage && currentProduct.supportsPrintCoverage.length > 1 && (
               <div className="space-y-1 pt-2 border-t">
@@ -533,9 +466,9 @@ export function EditorRightSidebar() {
           </AccordionTrigger>
           <AccordionContent className="pb-3">
             <div className="grid grid-cols-3 gap-2">
-              {(["length", "width", "height"] as const).map((dim) => (
+              {configuration.dimensions.map(({key:dim,en,ar}) => (
                 <div key={dim}>
-                  <Label className="text-[9px] text-slate-400 mb-1 block uppercase">{dim[0]}</Label>
+                  <Label className="text-[9px] text-slate-400 mb-1 block uppercase">{language==="ar"?ar:en}</Label>
                   <Input
                     type="number"
                     value={model.dimensions[dim]}
@@ -544,7 +477,7 @@ export function EditorRightSidebar() {
                         ...s,
                         model: {
                           ...s.model,
-                          dimensions: { ...s.model.dimensions, [dim]: parseFloat(e.target.value) || 0 },
+                          dimensions: productDimensionChange(model.type,s.model.dimensions,dim,parseFloat(e.target.value)),
                         },
                       }))
                     }
@@ -557,7 +490,7 @@ export function EditorRightSidebar() {
         </AccordionItem>
 
         {/* Advanced Options */}
-        <AccordionItem value="advanced" className="border rounded-lg px-3">
+        {configuration.boardStock&&<AccordionItem value="advanced" className="border rounded-lg px-3">
           <AccordionTrigger className="text-[11px] font-semibold py-2 hover:no-underline">
             {language === "ar" ? "خيارات متقدمة" : "Advanced Options"}
           </AccordionTrigger>
@@ -634,7 +567,7 @@ export function EditorRightSidebar() {
               </Select>
             </div>
           </AccordionContent>
-        </AccordionItem>
+        </AccordionItem>}
       </Accordion>
     </div>
   )
@@ -737,18 +670,32 @@ export function EditorRightSidebar() {
             </Select>
           </div>
           <div className="text-right">
-            {discountPercent > 0 && (
-              <span className="text-[8px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded-full">
-                -{discountPercent}%
-              </span>
-            )}
-            <div className="text-xl font-bold text-slate-900">
-              {totalPrice.toFixed(0)} <span className="text-xs font-normal">{language === "ar" ? "ر.س" : "SAR"}</span>
+            <div data-testid="editor-summary-total" className="text-xl font-bold text-slate-900">
+              {customQuote ? (<span className="text-sm font-normal text-amber-700">{language === "ar" ? "يتطلب عرض سعر" : "Quote required"}</span>) : quoteLoading && !quote ? (
+                <span className="text-sm font-normal text-slate-400">…</span>
+              ) : quote ? (
+                <>
+                  {quote.total.toFixed(2)}{" "}
+                  <span className="text-xs font-normal">{quote.currency}</span>
+                </>
+              ) : (
+                <span className="text-sm font-normal text-slate-400">
+                  {customQuote ? (language === "ar" ? "يتطلب عرض سعر" : "Quote required") : (language === "ar" ? "السعر غير متاح" : "Price unavailable")}
+                </span>
+              )}
             </div>
+            {quote && !customQuote && (
+              <div className="text-[10px] text-slate-400">
+                {quote.unit.toFixed(2)} {quote.currency}/{language === "ar" ? "قطعة" : "pc"}
+                {language === "ar" ? " (شامل الشحن)" : " (incl. shipping)"}
+                <span className="text-amber-600"> · {language === "ar" ? "تقديري" : "est."}</span>
+              </div>
+            )}
           </div>
         </div>
-        <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white h-10">
-          {language === "ar" ? "متابعة الطلب" : "Continue"} →
+        {pricing.status === "error" && <Button variant="outline" size="sm" onClick={pricing.retry}>{language === "ar" ? "إعادة حساب السعر" : "Retry price"}</Button>}
+        <Button onClick={onContinue} disabled={customQuote} className="w-full bg-slate-900 hover:bg-slate-800 text-white h-10">
+          {customQuote?(language === "ar" ? "يتطلب عرض سعر" : "Quote required"):(language === "ar" ? "متابعة الطلب" : "Continue")}
         </Button>
       </div>
     </aside>

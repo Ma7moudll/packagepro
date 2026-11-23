@@ -14,7 +14,7 @@ export const reminderWorker = redis && isRedisEnabled() ? new Worker(
 
     try {
       switch (type) {
-        case 'approval-reminder':
+        case 'approval-reminder': {
           const emailQueue = getEmailQueue();
           if (emailQueue) {
             await emailQueue.add('email', {
@@ -26,6 +26,7 @@ export const reminderWorker = redis && isRedisEnabled() ? new Worker(
             logger.info(`Approval reminder sent for order ${data.orderId}`);
           }
           break;
+        }
 
         case 'auto-cancel-order':
           await approvalService.autoCancelOrder(data.orderId);
