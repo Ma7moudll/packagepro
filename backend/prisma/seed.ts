@@ -1,5 +1,6 @@
 import {loyaltyPreviewStructure} from '../src/modules/catalog/loyalty-preview';
 import {thankYouPreviewStructure} from '../src/modules/catalog/thank-you-preview';
+import {ziplockPreviewStructure} from '../src/modules/catalog/ziplock-preview';
 import { Prisma, PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import EGP_RATES from '../src/services/pricing-bootstrap/egp-rates.json';
@@ -1627,6 +1628,10 @@ async function main() {
         // No production blueprint, rates or sibling support is inferred.
         ...(entry.id === 'loyalty_card' ? {structure: loyaltyPreviewStructure(entry.defaultDimensions)} : {}),
         ...(entry.id === 'thank_you_card' ? {structure: thankYouPreviewStructure(entry.defaultDimensions)} : {}),
+        // Frosted ziplock bag: a two-film-face preview structure only —
+        // support stays deferred, no blueprint, rates or production
+        // geometry are inferred from it.
+        ...(entry.id === 'frosted_ziplock_bag' ? {structure: ziplockPreviewStructure(entry.defaultDimensions)} : {}),
         support: 'deferred',
         supportReason: entry.supportReason,
       },

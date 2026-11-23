@@ -1,9 +1,11 @@
 import {unsupportedStandUpPouchArtwork,unsupportedPouchOutputMessage} from "../../../backend/src/modules/catalog/pouch-preview-contract.ts"
+import {unsupportedZiplockArtwork,unsupportedZiplockOutputMessage} from "../../../backend/src/modules/catalog/ziplock-preview.ts"
 import { isTwoFaceSheet } from "./geometry/units.ts"
 
 /**
  * Legacy API name retained for sheet consumers. Optional modelType adds only
- * the stand_up_pouch front/back preview-surface boundary; no face data changes.
+ * the stand_up_pouch and frosted_ziplock_bag front/back preview-surface
+ * boundaries; no face data changes.
  * Artwork a two-face sheet cannot represent: layers sitting on inside
  * faces (inside_front / inside_back). A card's preview has no inside
  * surface, so this artwork is preserved in the design data but flagged —
@@ -14,9 +16,11 @@ export function unsupportedSheetArtwork(
   faces: readonly { id: string }[] | undefined,
   layers: readonly { faceId: string }[] | undefined,
   modelType?: string
-): { faces: string[]; layerCount: number; product?: "stand_up_pouch" } | null {
+): { faces: string[]; layerCount: number; product?: "stand_up_pouch" | "frosted_ziplock_bag" } | null {
   const pouch=unsupportedStandUpPouchArtwork(modelType,layers)
   if(pouch)return pouch
+  const ziplock=unsupportedZiplockArtwork(modelType,layers)
+  if(ziplock)return ziplock
   if (!isTwoFaceSheet(faces) || !layers) return null
   const inside = layers.filter((layer) => layer.faceId === "inside_front" || layer.faceId === "inside_back")
   if (inside.length === 0) return null
@@ -32,8 +36,9 @@ export function unsupportedSheetArtwork(
  * download, the certified export, and (mirrored in the backend) proof
  * generation. The message names exactly what is blocked.
  */
-export function unsupportedArtworkOutputMessage(unsupported: { faces: string[]; layerCount: number; product?: "stand_up_pouch" }): string {
+export function unsupportedArtworkOutputMessage(unsupported: { faces: string[]; layerCount: number; product?: "stand_up_pouch" | "frosted_ziplock_bag" }): string {
   if(unsupported.product==='stand_up_pouch')return unsupportedPouchOutputMessage(unsupported)
+  if(unsupported.product==='frosted_ziplock_bag')return unsupportedZiplockOutputMessage(unsupported)
   return `This card design has ${unsupported.layerCount} artwork layer(s) on inside faces (${unsupported.faces.join(", ")}), which this preview does not support. The artwork is preserved in the design and the design still saves, but every design output is blocked until you move or remove that artwork: PDF, SVG, PNG and JPEG export, the current-face PNG reference, the artwork review download, certified export and proof generation.`
 }
 

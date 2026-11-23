@@ -170,7 +170,7 @@ export function DesignCanvas2D() {
 
   const viewportRef=useRef<HTMLDivElement>(null)
   // Display-only fit: keep Fabric's logical artwork/export coordinates intact.
-  const fitSheet=useDesignStore(s=>s.model.type==='loyalty_card'||s.model.type==='stand_up_pouch')
+  const fitSheet=useDesignStore(s=>s.model.type==='loyalty_card'||s.model.type==='stand_up_pouch'||s.model.type==='frosted_ziplock_bag')
   const [sheetScale,setSheetScale]=useState(1)
   const layers = useDesignStore((s) => s.layers)
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds)

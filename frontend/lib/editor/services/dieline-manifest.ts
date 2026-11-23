@@ -75,7 +75,7 @@ export interface DesignManifest {
    * this flag is what stops a proof or export from looking complete —
    * proof generation refuses flagged designs until the user resolves it.
    */
-  unsupportedArtwork?: { faces: string[]; layerCount: number; product?: "stand_up_pouch" }
+  unsupportedArtwork?: { faces: string[]; layerCount: number; product?: "stand_up_pouch" | "frosted_ziplock_bag" }
 }
 
 export interface DesignDataV2 {

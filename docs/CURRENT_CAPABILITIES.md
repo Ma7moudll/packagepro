@@ -9,7 +9,7 @@ The block below is checked by `frontend/tests/catalogue-capability-docs.test.ts`
 <!-- capability-snapshot:start -->
 Catalogue entries: 55; starting-point design presets: 15.
 
-Preview: in_progress: 30, supported: 1, unavailable: 24.
+Preview: in_progress: 31, supported: 1, unavailable: 23.
 
 Production dieline: deferred: 50, supported: 5.
 
@@ -49,7 +49,7 @@ Declared dependencies: Fastify ^5.12.8; Next.js ^15.5.18; React ^19.2.6.
 | paper_mailer_bag | in_progress | mailer-bag | deferred | quote_required |
 | poly_mailer_bag | in_progress | mailer-bag | deferred | estimated |
 | bio_poly_mailer_bag | in_progress | mailer-bag | deferred | quote_required |
-| frosted_ziplock_bag | unavailable | none | deferred | quote_required |
+| frosted_ziplock_bag | in_progress | ziplock-bag | deferred | quote_required |
 | stand_up_pouch | in_progress | pouch | deferred | quote_required |
 | doypack_pouch | in_progress | pouch | deferred | quote_required |
 | compostable_doypack | in_progress | pouch | deferred | quote_required |

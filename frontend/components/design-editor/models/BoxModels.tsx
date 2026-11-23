@@ -10,6 +10,7 @@ import {useProductOpening} from "./useProductOpening"
 import { StockPanel } from "./StockPanel"
 import { ShippingConstruction } from "./ShippingConstruction"
 import { PouchShape } from "./PouchProduct"
+import { ZiplockBagShape } from "./ZiplockProduct"
 import { CupShape, TubeShape } from "./CurvedProducts"
 import { FlatProductShape } from "./FlatProducts"
 import { PaperBagShape, MailerBagShape, EnvelopeShape } from "./SoftProducts"
@@ -979,6 +980,7 @@ export function Label(props:BoxModelProps){const stock=useProductStock(props);re
 export function MailerBag(props:BoxModelProps){const stock=useProductStock(props);return <MailerBagShape {...props} stock={stock}/>}
 // Pouch-specific sealed/gusset construction is not prepared yet.
 export function StandUpPouch(props:BoxModelProps){const stock=useProductStock(props);return <PouchShape {...props} stock={stock}/>}
+export function ZiplockBag(props:BoxModelProps){const stock=useProductStock(props);return <ZiplockBagShape {...props} stock={stock}/>}
 
 // ============================================
 // MODEL FACTORY
@@ -1003,6 +1005,7 @@ export function getBoxModel(type: string) {
   case "label":return Label
   case "flat":return Label
   case "mailer-bag":return MailerBag
+  case "ziplock-bag":return ZiplockBag
   default:return UnsupportedProductPreview
  }
 }
