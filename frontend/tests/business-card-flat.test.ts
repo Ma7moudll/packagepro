@@ -517,7 +517,13 @@ test("guarded path: Fabric toolbar current-face PNG refuses at the shared bounda
   const fn = source.match(/const exportDesign = \(\) => \{[\s\S]*?\n  \}/)
   assert.ok(fn, "toolbar exportDesign found")
   assert.match(fn[0], /unsupportedSheetArtwork\(storeState\.model\.faces, storeState\.layers\)/)
-  assert.match(fn[0], /unsupportedArtworkOutputMessage\(unsupported\)/)
+  // Keep the refusal short and outside the drawing. The detailed shared
+  // warning remains in the notice above the canvas, not in the PNG handler.
+  const blocked = fn[0].match(/if \(unsupported\) \{([\s\S]*?)\n    \}/)
+  assert.ok(blocked, "unsupported-artwork refusal branch found")
+  assert.match(blocked[1], /setExportNotice\(language === "ar" \? "[^"\n]+" : "Download blocked\. See the artwork warning above\."\)/)
+  assert.match(blocked[1], /\breturn\b/)
+  assert.ok(fn[0].indexOf(blocked[0]) < fn[0].indexOf("toDataURL"), "refusal returns before the canvas is captured")
   assert.ok(fn[0].indexOf("unsupportedSheetArtwork") < fn[0].indexOf("toDataURL"), "guard runs before the canvas is captured")
   // The button is honestly labeled: one face, a PNG reference — not a
   // full-design export.
