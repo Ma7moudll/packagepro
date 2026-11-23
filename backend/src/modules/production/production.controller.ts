@@ -9,7 +9,7 @@ import { prisma } from '../../lib/prisma';
 import { z } from 'zod';
 
 const updateProgressSchema = z.object({
-  progressPercent: z.number().min(0).max(100),
+  progressPercent: z.number().int().min(0).max(100),
   notes: z.string().max(2000).optional(),
 });
 
@@ -29,7 +29,7 @@ export class ProductionController {
       }
     }
 
-    const production = await productionService.startProduction(poId);
+    const production = await productionService.startProduction(poId, {userId:user.userId,role:user.role});
 
     return reply.send({
       success: true,
