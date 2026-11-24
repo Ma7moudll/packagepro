@@ -1,6 +1,10 @@
 "use client"
+import {
+  Money,
+  MoneySummary,
+} from "@/components/admin/money";
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,11 +14,12 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable, type Column } from "@/components/admin/data-table"
 import { KPICard } from "@/components/admin/kpi-card"
+import { useLanguage } from "@/providers/language-provider"
 import { useAuth } from "@/providers/auth-provider"
 import { useDebounce } from "@/hooks/use-debounce"
 import { adminApi, type AdminOrder, type AdminOverview, type Pagination } from "@/lib/api/admin"
-import { num } from "@/lib/api/vendors"
-import { Search, ShoppingCart, DollarSign, Clock, Truck, Loader2 } from "lucide-react"
+import { Search, ShoppingCart,
+  Banknote, Clock, Truck, Loader2 } from "lucide-react"
 
 const ORDER_STATUSES = [
   "pending_review",
@@ -36,6 +41,7 @@ function statusTone(status: string): "default" | "secondary" | "destructive" | "
 
 export default function AdminOrdersPage() {
   const { user, isLoading: authLoading } = useAuth()
+  const { language } = useLanguage()
   const router = useRouter()
 
   const [overview, setOverview] = useState<AdminOverview | null>(null)
@@ -46,6 +52,11 @@ export default function AdminOrdersPage() {
   const [search, setSearch] = useState("")
   const debouncedSearch = useDebounce(search, 350)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  // Request ownership: only the latest load may commit rows, pagination,
+  // error and loading state. A slower older response (or its failure)
+  // must never overwrite the result of a newer request.
+  const loadSeq = useRef(0)
 
   useEffect(() => {
     if (!authLoading && (!user || user.role !== "ADMIN")) {
@@ -54,7 +65,9 @@ export default function AdminOrdersPage() {
   }, [user, authLoading, router])
 
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current
     setLoading(true)
+    setError(null)
     try {
       const res = await adminApi.getOrders({
         page,
@@ -62,20 +75,31 @@ export default function AdminOrdersPage() {
         status: status === "all" ? undefined : status,
         search: debouncedSearch || undefined,
       })
+      if (seq !== loadSeq.current) return
       if (res.success && res.data) {
         setOrders(res.data)
         setPagination(res.pagination ?? null)
+        setError(null)
+      } else {
+        setOrders([])
+        setPagination(null)
+        setError("Failed to load orders. Please try again.")
       }
     } catch (err) {
+      if (seq !== loadSeq.current) return
       console.error("Failed to load admin orders:", err)
+      setOrders([])
+      setPagination(null)
+      setError("Failed to load orders. Please try again.")
     } finally {
-      setLoading(false)
+      if (seq === loadSeq.current) setLoading(false)
     }
   }, [page, status, debouncedSearch])
 
   useEffect(() => {
     if (!user || user.role !== "ADMIN") return
     load()
+    return () => { loadSeq.current++ }
   }, [user, load])
 
   useEffect(() => {
@@ -114,7 +138,7 @@ export default function AdminOrdersPage() {
       header: "Total",
       cell: (o) => (
         <span className="font-medium">
-          ${num(o.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          <Money amount={o.total} currency={o.currency} />
         </span>
       ),
     },
@@ -162,12 +186,17 @@ export default function AdminOrdersPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <KPICard title="Orders Today" value={overview?.ordersToday ?? "—"} icon={ShoppingCart} loading={!overview} />
         <KPICard
-          title="Revenue Today"
-          value={overview ? `$${overview.revenueToday.toLocaleString()}` : "—"}
-          icon={DollarSign}
+          title="Order value today (not cancelled)"
+          value={overview ? (
+              <MoneySummary groups={overview.revenueTodayByCurrency} unclassifiedCount={overview.unclassifiedTodayOrderCount} />
+            ) : (
+              "—"
+            )
+          }
+          icon={Banknote}
           tone="positive"
           loading={!overview}
         />
@@ -175,14 +204,14 @@ export default function AdminOrdersPage() {
           title="Pending Handshakes"
           value={overview?.pendingHandshakes ?? "—"}
           icon={Clock}
-          tone={((overview?.pendingHandshakes ?? 0) > 0) ? "warning" : "default"}
+          tone={(overview?.pendingHandshakes ?? 0) > 0 ? "warning" : "default"}
           loading={!overview}
         />
         <KPICard
           title="Pending Settlements"
           value={overview?.pendingSettlements ?? "—"}
           icon={Truck}
-          tone={((overview?.pendingSettlements ?? 0) > 0) ? "warning" : "default"}
+          tone={(overview?.pendingSettlements ?? 0) > 0 ? "warning" : "default"}
           loading={!overview}
         />
       </div>
@@ -225,6 +254,11 @@ export default function AdminOrdersPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {error && (
+            <div role="alert" className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {language === "ar" ? "تعذر تحميل الطلبات. حاول مرة أخرى." : error}
+            </div>
+          )}
           {loading && orders.length === 0 ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-slate-400" />

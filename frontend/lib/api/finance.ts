@@ -1,6 +1,19 @@
 import { apiGet, API_BASE, ApiClientError } from './client'
 
+export interface CurrencyFinancialMetrics {
+  currency: string | null;
+  revenue: number;
+  taxes: number;
+  orderCount: number;
+  averageOrderValue: number;
+  vendorPayments: number | null;
+  costs: number | null;
+  profit: number | null;
+  costStatus: "same-currency" | "unreconciled";
+}
 export interface FinancialReport {
+  byCurrency?: CurrencyFinancialMetrics[];
+  unclassifiedOrderCount?: number;
   period: {
     start: string
     end: string

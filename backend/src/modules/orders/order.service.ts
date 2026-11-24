@@ -1,3 +1,4 @@
+import {validateCustomerOrderQuery} from './customer-order-query';
 import {approvalContentHash} from './approval-snapshot';
 import { assertSpecificationPriced } from "../../utils/production-specification";
 import { prisma } from '../../lib/prisma';
@@ -124,9 +125,10 @@ export class OrderService {
   /**
    * Create a new order
    */
-  async createOrder(data: CreateOrderData): Promise<any> {
+  async createOrder(data: CreateOrderData, options: {db?: import('@prisma/client').Prisma.TransactionClient; notify?: boolean} = {}): Promise<any> {
+    const db = options.db ?? prisma;
     // Validate customer exists
-    const customer = await prisma.customer.findUnique({
+    const customer = await db.customer.findUnique({
       where: { id: data.customerId },
     });
 
@@ -146,7 +148,7 @@ export class OrderService {
           ...Array.from(new Set([item.sessionId, data.designSessionId].filter(Boolean))).map(sessionId => ({sessionId})),
         ];
         for (const where of references) {
-          const design = await prisma.design.findUnique({where, select: {designData: true}});
+          const design = await db.design.findUnique({where, select: {designData: true}});
           if (!design) throw new NotFoundError('Design');
           assertSpecificationPriced(design.designData);
         }
@@ -216,7 +218,7 @@ export class OrderService {
     const currency = [...currencies][0];
 
     // Create order
-    const order = await prisma.order.create({
+    const order = await db.order.create({
       data: {
         customerId: data.customerId,
         orderNumber: this.generateOrderNumber(),
@@ -275,7 +277,7 @@ export class OrderService {
       },
     });
 
-    if (order.customer.user.id) {
+    if (options.notify !== false && order.customer.user.id) {
       await notificationService.createIfUnseen(
         order.customer.user.id,
         { entityType: 'order', entityId: order.id },
@@ -290,7 +292,7 @@ export class OrderService {
 
     // Link design if session ID provided
     if (data.designSessionId) {
-      await prisma.design.updateMany({
+      await db.design.updateMany({
         where: { sessionId: data.designSessionId, orderId:null, ownerId: customer.userId, lifecycleStatus:'DRAFT' },
         data: { orderId: order.id },
       });
@@ -369,16 +371,18 @@ export class OrderService {
   async getCustomerOrders(
     customerId: string,
     page: number = 1,
-    limit: number = 20
+    limit: number = 20,
+    status?: OrderStatus
   ): Promise<any> {
-    const skip = (page - 1) * limit;
+    const {skip} = validateCustomerOrderQuery(page,limit,status);
+    const where = {customerId,...(status?{status}:{})};
 
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
-        where: { customerId },
+        where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, {id:'desc'}],
         include: {
           items: true,
           design: {
@@ -398,7 +402,7 @@ export class OrderService {
           payment: true,
         },
       }),
-      prisma.order.count({ where: { customerId } }),
+      prisma.order.count({ where }),
     ]);
 
     return {

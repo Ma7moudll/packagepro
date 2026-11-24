@@ -127,10 +127,18 @@ describe('security report regressions, real database', () => {
     await stripeService.confirmPayment(payment.stripePaymentIntentId!);
     expect((await prisma.order.findUniqueOrThrow({where:{id:o.id}})).status).toBe('awaiting_approval');
   });
-  it('HTTP creation ignores client currency', async () => {
+  it('HTTP creation ignores client currency and uses the saved order currency', async () => {
     const o = await order();
+    await prisma.order.update({where:{id:o.id},data:{currency:'USD'}});
     const res = await app.inject({ method: 'POST', url: '/api/payments/create-intent', headers: headers(owner), payload: { orderId: o.id, currency: 'jpy' } });
     expect(res.statusCode, res.body).toBe(200); expect(stripeState.creates[0].data.currency).toBe('usd');
+  });
+  it('HTTP creation refuses a currency-unknown historical order before provider effects', async () => {
+    const o = await order();
+    const res = await app.inject({method:'POST',url:'/api/payments/create-intent',headers:headers(owner),payload:{orderId:o.id,currency:'usd'}});
+    expect(res.statusCode,res.body).toBe(409);
+    expect(stripeState.creates).toHaveLength(0);
+    expect(await prisma.payment.findUnique({where:{orderId:o.id}})).toBeNull();
   });
   it.each(['CUSTOMER', 'VENDOR'])('non-admin %s cannot purchase a shipment label', async role => {
     const o = await order('ready_to_ship');

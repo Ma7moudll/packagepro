@@ -158,6 +158,10 @@ model User {
   designs       Design[]
   notifications Notification[]
   auditLogs     AuditLog[]
+  consolidationCapabilities ConsolidationCapability[]
+  consolidationPlans ConsolidationManifest[]
+  consolidationReceipts ConsolidationReceiptEvent[]
+  consolidationConfirmations ConsolidationConfirmation[]
 
   @@map("users")
 }
@@ -268,6 +272,7 @@ model Order {
 
   // New-order quote currency only. Historical unknown rows remain null.
   currency String?
+  checkoutAttempt CheckoutAttempt?
 
   // Shipping
   shippingAddress Json // Full address object
@@ -293,6 +298,7 @@ model Order {
   // Multi-vendor orders: one order can fulfill through several vendors,
   // one PurchaseOrder per vendor item-group (Step-4 Piece 4a).
   purchaseOrders  PurchaseOrder[]
+  consolidationManifest ConsolidationManifest?
   shipment        Shipment?
   payment         Payment?
   // SEC-03a: a delivered order settles every vendor — the relation is
@@ -353,6 +359,7 @@ model Cart {
 }
 
 model CartItem {
+  revision Int @default(0)
   id           String   @id @default(cuid())
   cartId       String
   productType  String // "box", "bag", "label"
@@ -534,6 +541,7 @@ model Production {
 }
 
 model Sample {
+  submissionId String @default(uuid())
   id            String       @id @default(cuid())
   productionId  String
   status        SampleStatus @default(pending)
@@ -943,4 +951,122 @@ model ApprovalRequest {
 
   @@index([orderId, createdAt])
   @@map("approval_requests")
+}
+
+model CheckoutAttempt {
+  statusOperations CheckoutStatusOperation[]
+  attachment Json?
+  isolation Json?
+  reconciliation Json?
+  id String @id @default(cuid())
+  customerId String
+  snapshotHash String
+  intentHash String
+  provider String
+  orderId String @unique
+  order Order @relation(fields: [orderId], references: [id])
+  cartSnapshot Json
+  state String @default("reserved")
+  result Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  keys CheckoutRequestKey[]
+  @@unique([customerId, snapshotHash])
+  @@index([customerId, state])
+  @@map("checkout_attempts")
+}
+model CheckoutRequestKey {
+  customerId String
+  key String
+  attemptId String
+  attempt CheckoutAttempt @relation(fields: [attemptId], references: [id])
+  @@id([customerId, key])
+  @@map("checkout_request_keys")
+}
+
+model CheckoutStatusOperation {
+ id String @id @default(cuid())
+ attemptId String
+ attempt CheckoutAttempt @relation(fields:[attemptId],references:[id])
+ actorId String
+ reason String
+ providerRef String
+ observedProviderStatus String
+ state String @default("started")
+ outcome Json?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@index([attemptId,state])
+ @@map("checkout_status_operations")
+}
+
+// Local consolidation candidate. No routes or carrier dispatch wiring.
+model ConsolidationHub {
+ id String @id
+ revision Int @default(1)
+ enabled Boolean @default(false)
+ capabilities ConsolidationCapability[]
+ manifests ConsolidationManifest[]
+ @@map("consolidation_hubs")
+}
+model ConsolidationCapability {
+ id String @id @default(cuid())
+ userId String
+ hubId String
+ canPlan Boolean @default(false)
+ canReceive Boolean @default(false)
+ user User @relation(fields:[userId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_capability_user_fk")
+ hub ConsolidationHub @relation(fields:[hubId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_capability_hub_fk")
+ @@unique([userId,hubId])
+ @@map("consolidation_capabilities")
+}
+model ConsolidationManifest {
+ id String @id @default(cuid())
+ orderId String @unique
+ hubId String
+ hubRevision Int
+ revision Int @default(1)
+ receiptRevision Int @default(0)
+ sourceHash String
+ allocations Json
+ createdBy String
+ updatedAt DateTime @updatedAt
+ order Order @relation(fields:[orderId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_manifest_order_fk")
+ hub ConsolidationHub @relation(fields:[hubId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_manifest_hub_fk")
+ creator User @relation(fields:[createdBy],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_manifest_actor_fk")
+ receipts ConsolidationReceiptEvent[]
+ confirmations ConsolidationConfirmation[]
+ @@map("consolidation_manifests")
+}
+model ConsolidationReceiptEvent {
+ id String @id @default(cuid())
+ manifestId String
+ manifestRevision Int
+ receiptRevision Int
+ eventKey String
+ requestHash String
+ actorId String
+ allocationId String
+ snapshot Json
+ reason String
+ createdAt DateTime @default(now())
+ manifest ConsolidationManifest @relation(fields:[manifestId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_receipt_manifest_fk")
+ actor User @relation(fields:[actorId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_receipt_actor_fk")
+ @@unique([manifestId,eventKey])
+ @@unique([manifestId,receiptRevision])
+ @@map("consolidation_receipt_events")
+}
+model ConsolidationConfirmation {
+ id String @id @default(cuid())
+ manifestId String
+ manifestRevision Int
+ receiptRevision Int
+ sourceHash String
+ hubRevision Int
+ actorId String
+ createdAt DateTime @default(now())
+ manifest ConsolidationManifest @relation(fields:[manifestId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_confirmation_manifest_fk")
+ actor User @relation(fields:[actorId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_confirmation_actor_fk")
+ @@unique([manifestId,manifestRevision,receiptRevision])
+ @@map("consolidation_confirmations")
 }

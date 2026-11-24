@@ -39,6 +39,8 @@ export function Navbar() {
   // The design editor is a full-screen app surface: the marketing nav only
   // crowds it (Packhelp-style editor has no site chrome over the canvas).
   if (pathname?.startsWith("/editor")) return null
+  // Bounded receiver workspace uses compact operator chrome at320px.
+  if (pathname === "/receiving") return <header className="border-b bg-white"><nav aria-label={isRTL ? "التنقل" : "Navigation"} className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-3"><Link href="/" className="font-bold text-slate-900">PackagePro</Link><LanguageSwitcher /></nav></header>
 
   return (
     <header

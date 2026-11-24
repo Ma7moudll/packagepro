@@ -250,7 +250,7 @@ Get financial report for a period.
 - `end` - End date (ISO format)
 
 ### GET /api/orders/:id/financial-summary
-Get financial summary for an order.
+ADMIN only. Returns internal supplier cost and platform margin fields. Owning the order or supplying a purchase order does not grant access. Missing/invalid authentication returns 401; authenticated non-admin callers return 403 before order lookup. An admin requesting an unknown order receives 404 with the standard NOT_FOUND error envelope.
 
 ### GET /api/vendors/:id/payment-summary
 Get payment summary for a vendor.

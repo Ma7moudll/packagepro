@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  devIndicators: process.env.NEXT_PUBLIC_CONSOLIDATION_RECEIPTS_ENABLED === 'true' ? false : undefined,
   // tsc and eslint run as separate verified steps; running them inside the
   // build doubles its memory peak and gets the worker OOM-killed on small boxes.
   typescript: { ignoreBuildErrors: true },

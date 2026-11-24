@@ -1,3 +1,4 @@
+import type { MoneyGroup } from "@/components/admin/money";
 import { apiGet, apiPatch } from './client'
 
 /**
@@ -10,6 +11,10 @@ export interface AdminOverview {
   ordersToday: number
   totalOrders: number
   totalRevenue: number
+  unclassifiedOrderCount?: number
+  unclassifiedTodayOrderCount?: number
+  revenueByCurrency?: MoneyGroup[];
+  revenueTodayByCurrency?: MoneyGroup[];
   revenueToday: number
   activeVendors: number
   totalCustomers: number
@@ -26,7 +31,7 @@ export interface AdminOrder {
   tax: string | number
   shippingCost: string | number
   total: string | number
-  currency: string
+  currency: string | null;
   createdAt: string
   customer?: {
     user?: { email?: string; firstName?: string | null; lastName?: string | null } | null
@@ -56,6 +61,8 @@ export interface AdminCustomer {
   lastName?: string | null
   memberSince?: string | null
   ordersCount: number
+  unclassifiedOrderCount?: number
+  lifetimeValueByCurrency?: MoneyGroup[];
   lifetimeValue: number
 }
 
@@ -107,6 +114,7 @@ export const adminApi = {
 }
 
 export interface AdminSample {
+  submissionId: string
   id: string
   status: string
   photoUrls: string[]

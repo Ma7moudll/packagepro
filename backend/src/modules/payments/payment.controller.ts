@@ -1,3 +1,4 @@
+import { ConflictError } from '../../utils/errors';
 import { prisma } from '../../lib/prisma';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { stripeService } from '../../integrations/stripe/stripe.service';
@@ -38,10 +39,13 @@ export class PaymentController {
       });
     }
 
+    const attempt=await prisma.checkoutAttempt.findUnique({where:{orderId:body.orderId}});
+    if(attempt)throw new ConflictError('This order has a saved checkout. Recover that attempt instead of creating another payment');
+
     const payment = await getPaymentProvider().createPayment({
       orderId: body.orderId,
       amount: Number(order.total),
-      currency: process.env.DEFAULT_CURRENCY || 'usd',
+      currency: order.currency?.toLowerCase() || (()=>{throw new ConflictError('Order currency requires review before payment')})(),
       customerEmail: user.email,
     });
 

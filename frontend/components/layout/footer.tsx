@@ -1,9 +1,13 @@
+"use client"
+import {usePathname} from "next/navigation"
 import Link from "next/link"
 import { Package, Mail, Phone, MapPin, MessageCircle, Camera, MessageSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 export function Footer() {
+  const pathname=usePathname()
+  if(pathname === "/receiving") return null
   return (
     <footer className="bg-slate-900 text-white">
       <div className="container mx-auto px-4 py-16">

@@ -1,12 +1,13 @@
-import { prisma } from '../../lib/prisma';
-import { stripeService } from '../stripe/stripe.service';
-import { NotFoundError } from '../../utils/errors';
+import { prisma } from "../../lib/prisma";
+import { stripeService } from "../stripe/stripe.service";
+import { NotFoundError } from "../../utils/errors";
 import {
+  PaymentStatusPreEffectError,
   CreatePaymentRequest,
   PaymentProvider,
   ProviderPayment,
   ProviderPaymentStatus,
-} from './payment-provider';
+} from "./payment-provider";
 
 /**
  * Stripe implementation of the payment provider boundary. Behavior is
@@ -14,9 +15,10 @@ import {
  * module boundary so `PAYMENT_PROVIDER` can swap it out.
  */
 export class StripePaymentProvider implements PaymentProvider {
-  readonly key = 'stripe' as const;
+  readonly key = "stripe" as const;
   assertCheckoutAvailable(): void {
-    if (!process.env.STRIPE_SECRET_KEY) throw new Error('Payment provider unavailable');
+    if (!process.env.STRIPE_SECRET_KEY)
+      throw new Error("Payment provider unavailable");
   }
 
   async createPayment(data: CreatePaymentRequest): Promise<ProviderPayment> {
@@ -32,6 +34,25 @@ export class StripePaymentProvider implements PaymentProvider {
     };
   }
 
+  async recoverPayment(orderId: string) {
+    return stripeService.recoverExistingPayment(orderId);
+  }
+
+  async inspectPaymentReference(orderId: string, reference: string) {
+    return stripeService.inspectExistingReference(orderId, reference);
+  }
+
+  async reconcileExistingStatus(orderId: string, expectedReference?: string) {
+    if (!expectedReference) throw new PaymentStatusPreEffectError();
+    await stripeService.confirmPayment(
+      expectedReference,
+      undefined,
+      undefined,
+      true,
+      orderId,
+    );
+  }
+
   async getStatus(providerRef: string): Promise<ProviderPaymentStatus> {
     return stripeService.retrievePaymentIntentStatus(providerRef);
   }
@@ -42,7 +63,7 @@ export class StripePaymentProvider implements PaymentProvider {
       select: { orderId: true },
     });
     if (!payment) {
-      throw new NotFoundError('Payment');
+      throw new NotFoundError("Payment");
     }
     await stripeService.refundPayment(payment.orderId, amount);
   }

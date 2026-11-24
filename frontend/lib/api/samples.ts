@@ -7,6 +7,7 @@ import { apiGet, apiPost } from './client'
  */
 
 export interface Sample {
+  submissionId: string
   id: string
   productionId: string
   status: 'pending' | 'approved' | 'rejected'
@@ -32,9 +33,9 @@ export const samplesApi = {
   get: (id: string) => apiGet<Sample>(`/samples/${id}`),
 
   /** ADMIN: approve a production sample → production resumes full run. */
-  approve: (id: string) => apiPost<Sample>(`/samples/${id}/approve`),
+  approve: (id: string, submissionId: string) => apiPost<Sample>(`/samples/${id}/approve`, { submissionId }),
 
   /** ADMIN: reject with revision notes → vendor fixes and re-uploads. */
-  reject: (id: string, revisionNotes: string) =>
-    apiPost<Sample>(`/samples/${id}/reject`, { revisionNotes }),
+  reject: (id: string, revisionNotes: string, submissionId: string) =>
+    apiPost<Sample>(`/samples/${id}/reject`, { revisionNotes, submissionId }),
 }

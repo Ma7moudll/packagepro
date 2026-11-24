@@ -1,12 +1,13 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
-import { sampleService } from './sample.service';
-import { AuthenticatedRequest } from '../../middleware/auth.middleware';
-import { requireRoles, assertProductionOwnership } from '../../middleware/rbac';
-import { ValidationError } from '../../utils/errors';
-import { z } from 'zod';
+import { FastifyRequest, FastifyReply } from "fastify";
+import { sampleService } from "./sample.service";
+import { AuthenticatedRequest } from "../../middleware/auth.middleware";
+import { requireRoles, assertProductionOwnership } from "../../middleware/rbac";
+import { ValidationError } from "../../utils/errors";
+import { z } from "zod";
 
 const rejectSampleSchema = z.object({
   revisionNotes: z.string().min(1),
+  submissionId: z.string().uuid(),
 });
 
 // Photos arrive base64-encoded in JSON (no multipart dependency needed).
@@ -16,9 +17,9 @@ const uploadSamplesSchema = z.object({
     .array(
       z.object({
         fileName: z.string().min(1).max(255),
-        mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+        mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
         dataBase64: z.string().min(1),
-      })
+      }),
     )
     .min(1)
     .max(5),
@@ -30,24 +31,30 @@ const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // 10MB per photo
 export class SampleController {
   async uploadSamples(request: FastifyRequest, reply: FastifyReply) {
     // Vendor (owner of the production) or ADMIN uploads sample photos for QA.
-    const productionId = (request.params as { productionId: string }).productionId;
-    await assertProductionOwnership(request, reply, productionId);
+    const productionId = (request.params as { productionId: string })
+      .productionId;
+    const actor = await assertProductionOwnership(request, reply, productionId);
 
     const body = uploadSamplesSchema.parse(request.body);
     const files = body.photos.map((photo) => {
-      const buffer = Buffer.from(photo.dataBase64, 'base64');
+      const buffer = Buffer.from(photo.dataBase64, "base64");
       if (buffer.length === 0) {
         throw new ValidationError(`Photo ${photo.fileName} has empty content`);
       }
       if (buffer.length > MAX_PHOTO_BYTES) {
         throw new ValidationError(
-          `Photo ${photo.fileName} exceeds the ${MAX_PHOTO_BYTES} byte limit`
+          `Photo ${photo.fileName} exceeds the ${MAX_PHOTO_BYTES} byte limit`,
         );
       }
       return { buffer, fileName: photo.fileName, mimeType: photo.mimeType };
     });
 
-    const sample = await sampleService.uploadSamples(productionId, files, body.notes);
+    const sample = await sampleService.uploadSamples(
+      productionId,
+      files,
+      body.notes,
+      { userId: actor.userId, role: actor.role },
+    );
 
     return reply.send({
       success: true,
@@ -57,10 +64,17 @@ export class SampleController {
 
   async approveSample(request: FastifyRequest, reply: FastifyReply) {
     // QA review is an ADMIN action — sample approval gates full production.
-    const user = await requireRoles(request, reply, 'ADMIN');
+    const user = await requireRoles(request, reply, "ADMIN");
     const sampleId = (request.params as { id: string }).id;
 
-    const sample = await sampleService.approveSample(sampleId, user.userId);
+    const body = z
+      .object({ submissionId: z.string().uuid() })
+      .parse(request.body);
+    const sample = await sampleService.approveSample(
+      sampleId,
+      user.userId,
+      body.submissionId,
+    );
 
     return reply.send({
       success: true,
@@ -69,14 +83,15 @@ export class SampleController {
   }
 
   async rejectSample(request: FastifyRequest, reply: FastifyReply) {
-    const user = await requireRoles(request, reply, 'ADMIN');
+    const user = await requireRoles(request, reply, "ADMIN");
     const sampleId = (request.params as { id: string }).id;
     const body = rejectSampleSchema.parse(request.body);
 
     const sample = await sampleService.rejectSample(
       sampleId,
       user.userId,
-      body.revisionNotes
+      body.revisionNotes,
+      body.submissionId,
     );
 
     return reply.send({
@@ -86,9 +101,18 @@ export class SampleController {
   }
 
   async getSample(request: FastifyRequest, reply: FastifyReply) {
-    await requireRoles(request, reply, 'CUSTOMER', 'VENDOR', 'ADMIN');
+    const user = await requireRoles(
+      request,
+      reply,
+      "CUSTOMER",
+      "VENDOR",
+      "ADMIN",
+    );
     const sampleId = (request.params as { id: string }).id;
-    const sample = await sampleService.getSample(sampleId);
+    const sample = await sampleService.getSample(sampleId, {
+      userId: user.userId,
+      role: user.role,
+    });
 
     return reply.send({
       success: true,

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 
 interface KPICardProps {
   title: string
-  value: string | number
+  value: React.ReactNode;
   icon: LucideIcon
   hint?: string
   tone?: "default" | "positive" | "warning" | "negative"
@@ -37,10 +37,10 @@ export function KPICard({ title, value, icon: Icon, hint, tone = "default", load
   return (
     <Card>
       <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-slate-500 truncate">{title}</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1 truncate">{value}</p>
+        <div className="flex flex-col gap-3 sm:flex-row items-start justify-between">
+          <div className="min-w-0 flex-1 w-full">
+            <p className="text-sm font-medium text-slate-500 break-words">{title}</p>
+            <p className="text-2xl font-bold text-slate-900 mt-1 break-words">{value}</p>
             {hint && <p className="text-xs text-slate-400 mt-1">{hint}</p>}
           </div>
           <div className={cn("rounded-lg p-2.5 shrink-0", TONE_CLASSES[tone])}>

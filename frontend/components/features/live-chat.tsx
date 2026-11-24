@@ -41,6 +41,8 @@ export function LiveChat() {
     }, 1000)
   }
 
+  if (pathname === "/receiving") return null
+
   if (!isOpen) {
     return (
       <Button

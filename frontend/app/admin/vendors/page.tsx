@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { DataTable, type Column } from "@/components/admin/data-table"
 import { KPICard } from "@/components/admin/kpi-card"
+import { useLanguage } from "@/providers/language-provider"
 import { useAuth } from "@/providers/auth-provider"
 import { useToast } from "@/hooks/use-toast"
 import { adminApi, type AdminVendor, type Pagination } from "@/lib/api/admin"
@@ -16,6 +17,7 @@ import { Factory, CheckCircle2, Star, Loader2 } from "lucide-react"
 
 export default function AdminVendorsPage() {
   const { user, isLoading: authLoading } = useAuth()
+  const { language } = useLanguage()
   const router = useRouter()
   const { toast } = useToast()
 
@@ -23,6 +25,8 @@ export default function AdminVendorsPage() {
   const [pagination, setPagination] = useState<Pagination | null>(null)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const loadSeq = useRef(0)
+  const [error, setError] = useState<string | null>(null)
   const [toggling, setToggling] = useState<string | null>(null)
 
   useEffect(() => {
@@ -32,23 +36,36 @@ export default function AdminVendorsPage() {
   }, [user, authLoading, router])
 
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current
     setLoading(true)
+    setError(null)
     try {
       const res = await adminApi.getVendors({ page, limit: 20 })
+      if (seq !== loadSeq.current) return
       if (res.success && res.data) {
         setVendors(res.data)
         setPagination(res.pagination ?? null)
+        setError(null)
+      } else {
+        setVendors([])
+        setPagination(null)
+        setError("Failed to load vendors. Please try again.")
       }
     } catch (err) {
+      if (seq !== loadSeq.current) return
       console.error("Failed to load vendors:", err)
+      setVendors([])
+      setPagination(null)
+      setError("Failed to load vendors. Please try again.")
     } finally {
-      setLoading(false)
+      if (seq === loadSeq.current) setLoading(false)
     }
   }, [page])
 
   useEffect(() => {
     if (!user || user.role !== "ADMIN") return
     load()
+    return () => { loadSeq.current++ }
   }, [user, load])
 
   if (!user || user.role !== "ADMIN") return null
@@ -147,7 +164,7 @@ export default function AdminVendorsPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <KPICard title="Vendors (page)" value={vendors.length} icon={Factory} loading={loading} />
         <KPICard
           title="Active (page)"
@@ -169,6 +186,11 @@ export default function AdminVendorsPage() {
           <CardTitle className="text-lg">Vendor directory</CardTitle>
         </CardHeader>
         <CardContent>
+          {error && (
+            <div role="alert" className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {language === "ar" ? "تعذر تحميل المصانع. حاول مرة أخرى." : error}
+            </div>
+          )}
           {loading && vendors.length === 0 ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
