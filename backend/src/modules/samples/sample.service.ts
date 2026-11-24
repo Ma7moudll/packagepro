@@ -149,9 +149,33 @@ export class SampleService {
   /**
    * Get sample by ID
    */
-  async getSample(sampleId: string): Promise<any> {
-    const sample = await prisma.sample.findUnique({
-      where: { id: sampleId },
+  async getSample(
+    sampleId: string,
+    actor: { userId: string; role: string },
+  ): Promise<any> {
+    if (!["ADMIN", "CUSTOMER", "VENDOR"].includes(actor.role)) throw new NotFoundError("Sample");
+    const sample = await prisma.sample.findFirst({
+      where: {
+        id: sampleId,
+        ...(actor.role === "ADMIN"
+          ? {}
+          : actor.role === "CUSTOMER"
+            ? {
+                production: {
+                  purchaseOrder: {
+                    order: { customer: { userId: actor.userId } },
+                  },
+                },
+              }
+            : actor.role === "VENDOR"
+              ? {
+                  production: {
+                    vendor: { userId: actor.userId },
+                    purchaseOrder: { vendor: { userId: actor.userId } },
+                  },
+                }
+              : { id: sampleId }),
+      },
       include: {
         production: {
           include: {
@@ -174,7 +198,7 @@ export class SampleService {
     });
 
     if (!sample) {
-      throw new NotFoundError('Sample');
+      throw new NotFoundError("Sample");
     }
 
     return sample;

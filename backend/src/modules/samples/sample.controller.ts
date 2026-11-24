@@ -86,9 +86,18 @@ export class SampleController {
   }
 
   async getSample(request: FastifyRequest, reply: FastifyReply) {
-    await requireRoles(request, reply, 'CUSTOMER', 'VENDOR', 'ADMIN');
+    const user = await requireRoles(
+      request,
+      reply,
+      "CUSTOMER",
+      "VENDOR",
+      "ADMIN",
+    );
     const sampleId = (request.params as { id: string }).id;
-    const sample = await sampleService.getSample(sampleId);
+    const sample = await sampleService.getSample(sampleId, {
+      userId: user.userId,
+      role: user.role,
+    });
 
     return reply.send({
       success: true,
