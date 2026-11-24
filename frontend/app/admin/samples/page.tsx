@@ -12,6 +12,7 @@ import { DataTable, type Column } from "@/components/admin/data-table"
 import { useAuth } from "@/providers/auth-provider"
 import { useToast } from "@/hooks/use-toast"
 import { adminApi, type AdminSample, type Pagination } from "@/lib/api/admin"
+import { ApiClientError } from "@/lib/api/client"
 import { samplesApi } from "@/lib/api/samples"
 import { CheckCircle2, XCircle, Loader2, ImageIcon } from "lucide-react"
 
@@ -75,9 +76,9 @@ export default function AdminSamplesPage() {
     setActing(sample.id)
     try {
       if (action === "approve") {
-        await samplesApi.approve(sample.id)
+        await samplesApi.approve(sample.id, sample.submissionId)
       } else {
-        await samplesApi.reject(sample.id, revisionNotes!)
+        await samplesApi.reject(sample.id, revisionNotes!, sample.submissionId)
       }
       toast({
         title: action === "approve" ? "Sample approved" : "Revision requested",
@@ -88,7 +89,10 @@ export default function AdminSamplesPage() {
       load()
     } catch (err) {
       console.error("Sample review failed:", err)
-      toast({ title: "Review action failed", variant: "destructive" })
+      if (err instanceof ApiClientError && err.status === 409) {
+        toast({ title: "Sample changed. Review the current photos before trying again.", variant: "destructive" })
+        load()
+      } else toast({ title: "Review action failed", variant: "destructive" })
     } finally {
       setActing(null)
     }

@@ -107,6 +107,7 @@ export const adminApi = {
 }
 
 export interface AdminSample {
+  submissionId: string
   id: string
   status: string
   photoUrls: string[]
