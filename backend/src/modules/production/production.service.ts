@@ -1,3 +1,4 @@
+import {fenceDispatchWriter} from '../consolidation/dispatch-writer-fence';
 import { prisma } from "../../lib/prisma";
 import {
   ConflictError,
@@ -23,8 +24,8 @@ export class ProductionService {
         select: { orderId: true },
       });
       if (!lookup) throw new NotFoundError("Purchase Order");
-      // Start requests lock order then PO. Other workflow writers are not
-      // coordinated here; this is not a whole-lifecycle aggregate-state protocol.
+      // Start requests lock order then PO and share a dispatch source fence.
+      // Uncovered source writers still prevent a whole-lifecycle guarantee.
       await tx.$queryRaw`SELECT id FROM orders WHERE id=${lookup.orderId} FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM purchase_orders WHERE id=${poId} FOR UPDATE`;
       const po = await tx.purchaseOrder.findUniqueOrThrow({
@@ -63,6 +64,7 @@ export class ProductionService {
         );
       if (!["vendor_confirmed", "in_production"].includes(po.order.status))
         throw new ConflictError("Order is not eligible to start production");
+      await fenceDispatchWriter(tx,lookup.orderId,'production_started_before_start');
       const production = existing
         ? await tx.production.update({
             where: { id: existing.id },
@@ -220,6 +222,7 @@ export class ProductionService {
         )
       )
         throw new ConflictError("Order is closed for production changes");
+      await fenceDispatchWriter(tx,poLookup.orderId,'production_changed_before_start');
       await tx.production.update({
         where: { id: productionId },
         data: {
@@ -230,13 +233,16 @@ export class ProductionService {
             : {}),
         },
       });
-      // Preserve the existing single-run parent effect here, NOT a multi-PO projection.
-      // Aggregate completion/QA/fulfillment policy remains explicitly unresolved.
-      if (completing)
-        await tx.order.update({
-          where: { id: production.purchaseOrder.orderId },
-          data: { status: "quality_check" },
-        });
+      // Parent order lock serializes cooperating completions; lock other source rows
+      // too so independent production writers cannot change this aggregate mid-read.
+      await tx.$queryRaw`SELECT id FROM purchase_orders WHERE "orderId"=${production.purchaseOrder.orderId} ORDER BY id FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM productions WHERE "poId" IN (SELECT id FROM purchase_orders WHERE "orderId"=${production.purchaseOrder.orderId}) ORDER BY id FOR SHARE`;
+      // Parent stage is factory aggregate only, never outbound eligibility.
+      if (completing && ['vendor_confirmed','in_production'].includes(production.purchaseOrder.order.status)) {
+        const allPOs=await tx.purchaseOrder.findMany({where:{orderId:production.purchaseOrder.orderId},include:{production:true}});
+        const finished=allPOs.length>0 && allPOs.every(po=>po.status==='confirmed' && po.production?.vendorId===po.vendorId && po.production.progressPercent===100 && ['quality_review','completed'].includes(po.production.status));
+        if(finished)await tx.order.update({where:{id:production.purchaseOrder.orderId},data:{status:'quality_check'}});
+      }
       return tx.production.findUniqueOrThrow({
         where: { id: productionId },
         include: { purchaseOrder: { include: { order: true } } },

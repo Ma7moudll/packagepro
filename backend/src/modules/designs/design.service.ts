@@ -1,3 +1,5 @@
+import {fenceDispatchWriter} from '../consolidation/dispatch-writer-fence';
+import {lockDesignDispatchSources,fenceDesignDispatchSources} from './design-dispatch-fence';
 import {approvalContentHash} from '../orders/approval-snapshot';
 import { prisma } from '../../lib/prisma';
 import { NotFoundError, AppError } from '../../utils/errors';
@@ -35,6 +37,16 @@ export interface SaveDesignData {
 }
 
 export class DesignService {
+  private async writeLifecycle(observed:any,args:any):Promise<any>{
+    return prisma.$transaction(async tx=>{
+      const ids=await lockDesignDispatchSources(tx,observed.id);
+      const fresh=await tx.design.findUniqueOrThrow({where:{id:observed.id}});
+      if(fresh.updatedAt.getTime()!==observed.updatedAt.getTime()||fresh.lifecycleStatus!==observed.lifecycleStatus)throw new AppError(409,'Design changed; retry');
+      await fenceDesignDispatchSources(tx,ids);
+      return tx.design.update(args);
+    });
+  }
+
   /**
    * Create a new design session
    */
@@ -67,51 +79,18 @@ export class DesignService {
 
     // Durable database record (owner-scoped). Without an order the design sits
     // in `draft` until it is saved or eventually linked to an order.
-    let design: any;
-    if (data.orderId && ownerId) {
-      // Order-bound: Design.orderId is unique. Try to create; if one exists,
-      // take over its session ONLY through one guarded UPDATE whose WHERE
-      // clause holds the ownership rule (unowned, or already this user), so
-      // two concurrent callers cannot both pass a stale check.
-      try {
-        design = await prisma.design.create({
-          data: { orderId: data.orderId, ownerId, sessionId, name: data.name, description: data.description },
-        });
-      } catch (error: any) {
-        if (error?.code === 'P2003') {
-          // The order was deleted between the check and the insert.
-          throw new AppError(403, 'You do not have access to this order');
-        }
-        if (error?.code !== 'P2002') throw error;
-        const claimed = await prisma.design.updateMany({
-          where: {
-            orderId: data.orderId,
-            OR: [{ ownerId: null }, { ownerId }],
-            // Order membership is part of the same guarded write.
-            order: { is: { customer: { is: { userId: ownerId } } } },
-          },
-          data: { sessionId, ownerId, updatedAt: new Date() },
-        });
-        if (claimed.count !== 1) {
-          throw new AppError(403, 'You do not have access to this order');
-        }
-        design = await prisma.design.findUnique({ where: { orderId: data.orderId } });
-        if (!design) {
-          // Deleted right after the claim: never report success with no design.
-          throw new AppError(409, 'Design was removed while the session was being created; retry');
-        }
+    const design=await prisma.$transaction(async tx=>{
+      const existing=data.orderId?await tx.design.findUnique({where:{orderId:data.orderId}}):null;
+      if(existing&&ownerId){
+        const ids=await lockDesignDispatchSources(tx,existing.id);
+        const claimed=await tx.design.updateMany({where:{id:existing.id,...(ownerId?{OR:[{ownerId:null},{ownerId}],order:{is:{customer:{is:{userId:ownerId}}}}}:{ownerId:null})},data:{sessionId,...(ownerId?{ownerId}:{}),updatedAt:new Date()}});
+        if(claimed.count!==1)throw new AppError(403,'You do not have access to this order');
+        await fenceDesignDispatchSources(tx,ids);
+        return tx.design.findUniqueOrThrow({where:{id:existing.id}});
       }
-    } else {
-      design = await prisma.design.create({
-        data: {
-          orderId: data.orderId ?? null,
-          ownerId: ownerId ?? null,
-          sessionId,
-          name: data.name,
-          description: data.description,
-        },
-      });
-    }
+      if(data.orderId){await tx.$queryRaw`SELECT id FROM orders WHERE id=${data.orderId} FOR UPDATE`;await fenceDispatchWriter(tx,data.orderId,'design_created_before_start');}
+      try{return await tx.design.create({data:{orderId:data.orderId??null,ownerId:ownerId??null,sessionId,name:data.name,description:data.description}})}catch(error:any){if(error.code==='P2003')throw new AppError(403,'You do not have access to this order');if(error.code==='P2002')throw new AppError(409,'Design session changed concurrently; retry');throw error;}
+    });
 
     // Mirror session in Redis (24 hour TTL) for fast lookups
     if (redis) {
@@ -216,7 +195,7 @@ export class DesignService {
       // Serialize the first-save session race, then existing design content.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${data.sessionId}, 0))`;
       const row = await tx.design.findUnique({where:{sessionId:data.sessionId},select:{id:true}});
-      if (row) await tx.$queryRaw`SELECT id FROM designs WHERE id = ${row.id} FOR UPDATE`;
+      const sourceOrders=row?await lockDesignDispatchSources(tx,row.id):[];
     // Upsert the design record. The editor session is self-sufficient (no
     // order required); if an orderId is attached later the record is linked.
     let design = await tx.design.findUnique({
@@ -270,12 +249,14 @@ export class DesignService {
         }
         throw new AppError(403, 'You do not have access to this design');
       }
+      await fenceDesignDispatchSources(tx,sourceOrders);
       design = await tx.design.findUnique({ where: { id: design.id }, include: { files: true } });
       if (!design) {
         // Deleted right after the guarded write: never report success with no design.
         throw new AppError(409, 'Design was removed while saving; retry');
       }
     } else {
+      if(session.orderId){await tx.$queryRaw`SELECT id FROM orders WHERE id=${session.orderId} FOR UPDATE`;await fenceDispatchWriter(tx,session.orderId,'design_created_before_start');}
       try {
       design = await tx.design.create({
         data: {
@@ -406,9 +387,10 @@ export class DesignService {
 
     // Save file record
     const designFile = await prisma.$transaction(async tx=>{
-      await tx.$queryRaw`SELECT id FROM designs WHERE id = ${designId} FOR UPDATE`;
+      const sourceOrders=await lockDesignDispatchSources(tx,designId);
       const current=await tx.design.findUniqueOrThrow({where:{id:designId}});
       if(approvalContentHash(current)!==initialHash)throw new AppError(409,'Design changed while uploading; retry against the saved design');
+      await fenceDesignDispatchSources(tx,sourceOrders);
     const result = await tx.designFile.create({
       data: {
         designId,
@@ -450,7 +432,7 @@ export class DesignService {
     }
 
     // Update design status
-    const updatedDesign = await prisma.design.update({
+    const updatedDesign = await this.writeLifecycle(design, {
       where: { id: designId },
       data: {
         lifecycleStatus: 'SUBMITTED',
@@ -485,7 +467,7 @@ export class DesignService {
     }
 
     // Update design status
-    const updatedDesign = await prisma.design.update({
+    const updatedDesign = await this.writeLifecycle(design, {
       where: { id: designId },
       data: {
         lifecycleStatus: 'DRAFT',
@@ -577,7 +559,7 @@ export class DesignService {
 
     // Auto-transition from SUBMITTED to IN_REVIEW on first view
     if (design.lifecycleStatus === 'SUBMITTED') {
-      return await prisma.design.update({
+      return await this.writeLifecycle(design, {
         where: { id: designId },
         data: { lifecycleStatus: 'IN_REVIEW' },
         include: { files: true, order: true },
@@ -638,7 +620,7 @@ export class DesignService {
     }
 
     // Update design status
-    const updatedDesign = await prisma.design.update({
+    const updatedDesign = await this.writeLifecycle(design, {
       where: { id: designId },
       data: {
         lifecycleStatus: 'APPROVED',
@@ -665,7 +647,7 @@ export class DesignService {
     }
 
     // Update design status
-    const updatedDesign = await prisma.design.update({
+    const updatedDesign = await this.writeLifecycle(design, {
       where: { id: designId },
       data: {
         lifecycleStatus: 'REJECTED',

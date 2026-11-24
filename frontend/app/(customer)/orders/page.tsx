@@ -1,4 +1,5 @@
 "use client"
+import { RecordedReleaseNote } from "@/components/orders/recorded-release-note"
 
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
@@ -175,6 +176,7 @@ export default function OrdersPage() {
               return (
                 <Card key={order.id}>
                   <CardContent className="p-6">
+                    <RecordedReleaseNote status={order.status} />
                     <div className="flex items-start justify-between gap-4 flex-wrap">
                       <div className="flex-1 min-w-[240px]">
                         <div className="flex items-center gap-4 mb-2 flex-wrap">

@@ -197,23 +197,17 @@ describe('ownership deterministic PostgreSQL interleavings', () => {
     expect(await prisma.design.count({ where: { orderId: o.id } })).toBe(0);
   });
 
-  it('order deletion after an existing-design claim returns 409, never success with a null design', async () => {
+  it('order deletion waits for the order-bound session claim transaction', async () => {
     const a = await user('delete-claim-a');
     const o = await order(a.customerId, 'delete-claim');
     await prisma.design.create({ data: { orderId: o.id, ownerId: a.userId, sessionId: `${marker}-delete-claim` } });
-    const update = prisma.design.updateMany.bind(prisma.design);
-    let injected = false;
-    const spy = vi.spyOn(prisma.design, 'updateMany').mockImplementation((async (args: any) => {
-      const result = await update(args);
-      if (!injected && args.where.orderId === o.id) {
-        injected = true;
-        await prisma.order.delete({ where: { id: o.id } });
-      }
-      return result;
-    }) as any);
-    try {
-      await expect(designService.createSession({ orderId: o.id }, a.userId)).rejects.toMatchObject({ statusCode: 409 });
-    } finally { spy.mockRestore(); }
+    const transaction=prisma.$transaction.bind(prisma);let reached!:()=>void,release!:()=>void;const at=new Promise<void>(r=>reached=r),gate=new Promise<void>(r=>release=r);let hooked=false;
+    const spy=vi.spyOn(prisma,'$transaction').mockImplementation((async(cb:any)=>transaction(async(tx:any)=>{
+      const update=tx.design.updateMany.bind(tx.design);
+      return cb(new Proxy(tx,{get(t,k){if(k!=='design')return t[k];return new Proxy(tx.design,{get(m,kk){if(kk!=='updateMany')return m[kk];return async(args:any)=>{const result=await update(args);if(!hooked){hooked=true;reached();await gate}return result}}})}}));
+    })) as any);
+    let removal:Promise<any>|undefined;
+    try{const claim=designService.createSession({orderId:o.id},a.userId);await at;let done=false;removal=prisma.order.delete({where:{id:o.id}}).then(r=>{done=true;return r});await new Promise(r=>setTimeout(r,250));expect(done).toBe(false);release();expect((await claim).design).toBeTruthy();await removal;}finally{release();spy.mockRestore();if(removal)await removal}
   });
 
   it('design deletion after a save write returns 409, never success with a null design', async () => {

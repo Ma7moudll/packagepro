@@ -1,3 +1,4 @@
+import {fenceDispatchWriter} from '../consolidation/dispatch-writer-fence';
 import {approvalService} from '../orders/approval.service';
 import {approvalContentHash} from '../orders/approval-snapshot';
 import { prisma } from '../../lib/prisma';
@@ -188,6 +189,7 @@ export class POService {
             );
           }
 
+          await fenceDispatchWriter(tx,orderId,'po_created_before_start');
           const rows: any[] = [];
           const year = new Date().getFullYear();
           for (let i = 0; i < groups.length; i++) {
@@ -358,6 +360,9 @@ export class POService {
     actor?: { userId: string; role: UserRole }
   ): Promise<any> {
     return prisma.$transaction(async (tx) => {
+      const lookup=await tx.purchaseOrder.findUnique({where:{id:poId},select:{orderId:true}});
+      if(!lookup)throw new NotFoundError('Purchase Order');
+      await tx.$queryRaw`SELECT id FROM orders WHERE id=${lookup.orderId} FOR UPDATE`;
       const po = await tx.purchaseOrder.findUnique({
         where: { id: poId },
       });
@@ -391,6 +396,7 @@ export class POService {
         );
       }
 
+      await fenceDispatchWriter(tx,po.orderId,'po_confirmed_before_start');
       const updated = await tx.purchaseOrder.update({
         where: { id: poId },
         data: {

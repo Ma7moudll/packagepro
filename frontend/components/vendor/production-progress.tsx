@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Badge } from "@/components/ui/badge"
 import { useLanguage } from "@/providers/language-provider"
-import { Play, CheckCircle2, Upload, Image, Loader2, X, AlertTriangle } from "lucide-react"
+import { Play, Upload, Image, Loader2, X, AlertTriangle } from "lucide-react"
 
-type ProductionStatus = "not_started" | "in_production" | "sample_ready" | "sample_approved" | "quality_check" | "ready_to_ship"
+type ProductionStatus = "not_started" | "in_production" | "sample_ready" | "sample_approved" | "quality_check" | "factory_complete"
 
 interface ProductionProgressProps {
   orderId: string
@@ -18,7 +18,6 @@ interface ProductionProgressProps {
   onStartProduction: () => Promise<void>
   onUpdateProgress: (value: number) => Promise<void>
   onUploadSample: (file: File) => Promise<void>
-  onMarkReadyToShip: () => Promise<void>
   /** Reload the current order/sample state (upload-conflict resolution). */
   onReload?: () => Promise<void>
   uploadDisabled?: boolean
@@ -31,7 +30,7 @@ const STATUS_LABELS: Record<ProductionStatus, { ar: string; en: string }> = {
   sample_ready: { ar: "العينة جاهزة", en: "Sample Ready" },
   sample_approved: { ar: "تمت الموافقة على العينة", en: "Sample Approved" },
   quality_check: { ar: "فحص الجودة", en: "Quality Check" },
-  ready_to_ship: { ar: "جاهز للشحن", en: "Ready to Ship" },
+  factory_complete: { ar: "اكتمل إنتاج المصنع", en: "Factory Production Complete" },
 }
 
 export function ProductionProgress({
@@ -41,7 +40,6 @@ export function ProductionProgress({
   onStartProduction,
   onUpdateProgress,
   onUploadSample,
-  onMarkReadyToShip,
   onReload,
   uploadDisabled = false,
   productionAvailable = true,
@@ -127,19 +125,9 @@ export function ProductionProgress({
     }
   }
 
-  const handleMarkReady = async () => {
-    setSubmitting(true)
-    try {
-      await onMarkReadyToShip()
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   const canStart = productionAvailable && currentStatus === "not_started"
   const canUpdateProgress = productionAvailable && (currentStatus === "in_production" || currentStatus === "sample_ready")
   const canUploadSample = !uploadDisabled && (currentStatus === "in_production" || currentStatus === "sample_ready")
-  const canMarkReady = productionAvailable && currentStatus === "quality_check"
 
   return (
     <Card>
@@ -161,6 +149,12 @@ export function ProductionProgress({
               : STATUS_LABELS[currentStatus].en}
           </Badge>
         </div>
+
+        {productionAvailable && ["quality_check", "factory_complete"].includes(currentStatus) && (
+          <p role="status" data-factory-release-note className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            {language === "ar" ? "هذه حالة إنتاج هذا المصنع فقط، وليست تصريحًا بشحن الطلب. مراجعة الفريق وإجراءات السماح بالشحن لم تكتمل بعد." : "This is this factory's production status only, not permission to ship the order. Team review and shipping release are still pending."}
+          </p>
+        )}
 
         {/* Progress Slider */}
         <div className="space-y-2">
@@ -339,16 +333,7 @@ export function ProductionProgress({
               {language === "ar" ? "بدء الإنتاج" : "Start Production"}
             </Button>
           )}
-          {canMarkReady && (
-            <Button className="w-full" onClick={handleMarkReady} disabled={submitting}>
-              {submitting ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-              )}
-              {language === "ar" ? "تحديد كجاهز للشحن" : "Mark Ready to Ship"}
-            </Button>
-          )}
+
         </div>
       </CardContent>
     </Card>

@@ -1,9 +1,9 @@
+import {fenceDispatchWriter} from '../consolidation/dispatch-writer-fence';
 import { prisma } from '../../lib/prisma';
 import { NotFoundError } from '../../utils/errors';
 import { logger } from '../../utils/logger';
 import {
   settleVendorForDeliveredOrder,
-  TERMINAL_ORDER_STATUSES,
 } from '../settlements/settlement.service';
 
 export class HandshakeService {
@@ -70,7 +70,15 @@ export class HandshakeService {
       throw new Error('Handshake has expired');
     }
 
+    const poLookup = await prisma.purchaseOrder.findUnique({
+      where: { id: handshake.poId }, select: { orderId: true },
+    });
     return prisma.$transaction(async (tx) => {
+      // Follow the production/receipt order-first lock order before touching a PO.
+      if (poLookup) await tx.$queryRaw`SELECT id FROM orders WHERE id=${poLookup.orderId} FOR UPDATE`;
+      const fresh=await tx.handshake.findUniqueOrThrow({where:{id:handshakeId}});
+      if(fresh.status!=='pending'||fresh.expiresAt<new Date())throw new Error('Handshake is no longer pending or has expired');
+      if(poLookup)await fenceDispatchWriter(tx,poLookup.orderId,'handshake_accepted_before_start');
       const updated = await tx.handshake.update({
         where: { id: handshakeId },
         data: {
@@ -92,12 +100,11 @@ export class HandshakeService {
           },
         });
 
-        // Guarded transition — a delivered/completed/cancelled order is never
-        // moved to vendor_confirmed.
+        // First acceptance may advance routing, never regress later production/fulfillment.
         await tx.order.updateMany({
           where: {
             id: po.orderId,
-            status: { notIn: TERMINAL_ORDER_STATUSES },
+            status: 'ready_for_routing',
           },
           data: { status: 'vendor_confirmed' },
         });

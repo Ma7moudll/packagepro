@@ -1,4 +1,5 @@
 "use client"
+import { RecordedReleaseNote } from "./recorded-release-note"
 
 import { useLanguage } from "@/providers/language-provider"
 import { cn } from "@/lib/utils"
@@ -50,6 +51,10 @@ export function OrderTimeline({ status }: { status: OrderStatus }) {
 
   return (
     <div className="space-y-0">
+      <RecordedReleaseNote status={status} />
+      {status === "quality_check" && <p role="status" data-order-release-note className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        {language === "ar" ? "حالة الطلب المسجلة هي فحص الجودة. هذه الحالة وحدها ليست تصريحًا بالشحن. مراجعة الفريق والسماح بالشحن لا يزالان معلقين." : "The recorded order status is Quality Check. This status alone is not permission to ship. Team review and shipping release are still pending."}
+      </p>}
       {STEPS.map((step, idx) => {
         const stepOrder = STATUS_ORDER[step.status]
         const isCompleted = stepOrder !== undefined && currentStep > stepOrder

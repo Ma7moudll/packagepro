@@ -1,4 +1,5 @@
 "use client"
+import { RecordedReleaseNote } from "@/components/orders/recorded-release-note"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -103,7 +104,8 @@ export default function ManufacturerOrdersPage() {
         {orders.map((po) => (
           <Card key={po.id}>
             <CardContent className="p-6">
-              <div className="flex items-center justify-between">
+              <RecordedReleaseNote status={po.status === "ready_to_ship" || po.order?.status === "ready_to_ship" ? "ready_to_ship" : undefined} />
+              <div className="flex flex-wrap gap-3 items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-4 mb-2">
                     <h3 className="text-lg font-semibold">#{po.poNumber}</h3>
