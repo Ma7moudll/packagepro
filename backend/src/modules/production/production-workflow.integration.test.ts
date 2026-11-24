@@ -354,7 +354,10 @@ describe.skipIf(process.env.PACKAGEPRO_PRODUCTION_ISOLATED_DB !== "yes")(
       const before = await snapshot();
       for (const value of [12.5, NaN, Infinity, -1, 101])
         await expect(
-          productionService.updateProgress(id, value),
+          productionService.updateProgress(id, value, undefined, {
+            userId,
+            role: "VENDOR",
+          }),
         ).rejects.toMatchObject({ statusCode: 400 });
       expect(await snapshot()).toEqual(before);
     });
@@ -459,6 +462,228 @@ describe.skipIf(process.env.PACKAGEPRO_PRODUCTION_ISOLATED_DB !== "yes")(
         expect(synthetic.notify).not.toHaveBeenCalled();
       } finally {
         await prisma.production.deleteMany({ where: { poId } });
+        await prisma.user.delete({ where: { id: foreign.id } });
+      }
+    });
+    it("completion response reflects committed quality review and parent", async () => {
+      const a = await start();
+      const r = await progress(a.json().data.id, 100);
+      expect(r.statusCode, r.body).toBe(200);
+      expect(r.json().data.status).toBe("quality_review");
+      expect(r.json().data.purchaseOrder.order.status).toBe("quality_check");
+      const before = await snapshot();
+      expect((await progress(a.json().data.id, 100)).statusCode).toBe(409);
+      expect(await snapshot()).toEqual(before);
+    });
+    it.each(["quality_review", "completed"] as const)(
+      "progress cannot rewrite %s",
+      async (status) => {
+        const p = await prisma.production.create({
+          data: {
+            poId,
+            vendorId,
+            status,
+            progressPercent: 100,
+            completedAt: new Date(2000),
+          },
+        });
+        const before = await snapshot();
+        expect((await progress(p.id, 20)).statusCode).toBe(409);
+        expect(await snapshot()).toEqual(before);
+      },
+    );
+    it("production100 rolls back progress when parent write fails", async () => {
+      const a = await start();
+      const before = await snapshot();
+      await prisma.$executeRawUnsafe(
+        `CREATE FUNCTION integrity_reject_parent() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic rollback'; END $$`,
+      );
+      await prisma.$executeRawUnsafe(
+        `CREATE TRIGGER integrity_reject_parent BEFORE UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION integrity_reject_parent()`,
+      );
+      try {
+        expect((await progress(a.json().data.id, 100)).statusCode).toBe(500);
+        expect(await snapshot()).toEqual(before);
+      } finally {
+        await prisma.$executeRawUnsafe(
+          "DROP TRIGGER integrity_reject_parent ON orders",
+        );
+        await prisma.$executeRawUnsafe(
+          "DROP FUNCTION integrity_reject_parent()",
+        );
+      }
+    });
+
+    it.each(["not_started", "sample_production"] as const)(
+      "preserves legacy %s progress without inventing completion",
+      async (status) => {
+        const p = await prisma.production.create({
+          data: { poId, vendorId, status, progressPercent: 0 },
+        });
+        const before = await prisma.order.findUnique({
+          where: { id: orderId },
+        });
+        const r = await progress(p.id, 100);
+        expect(r.statusCode, r.body).toBe(200);
+        expect(r.json().data.status).toBe(status);
+        expect(r.json().data.progressPercent).toBe(100);
+        expect(
+          await prisma.order.findUnique({ where: { id: orderId } }),
+        ).toEqual(before);
+      },
+    );
+
+    it("direct completion returns committed state and rejects replay unchanged", async () => {
+      const a = await start();
+      const id = a.json().data.id;
+      const done = await productionService.completeProduction(id, {
+        userId,
+        role: "VENDOR",
+      });
+      expect(done.status).toBe("quality_review");
+      expect(done.purchaseOrder.order.status).toBe("quality_check");
+      const before = await snapshot();
+      await expect(
+        productionService.completeProduction(id, { userId, role: "VENDOR" }),
+      ).rejects.toMatchObject({ statusCode: 409 });
+      expect(await snapshot()).toEqual(before);
+    });
+
+    it.each(["cancelled", "shipped", "delivered", "completed"] as const)(
+      "progress cannot rewind closed parent %s",
+      async (status) => {
+        const id = (await start()).json().data.id;
+        await prisma.order.update({ where: { id: orderId }, data: { status } });
+        const before = await snapshot();
+        expect((await progress(id, 100)).statusCode).toBe(409);
+        expect(await snapshot()).toEqual(before);
+      },
+    );
+    it("concurrent100 requests transition once and preserve completion timestamp", async () => {
+      const id = (await start()).json().data.id;
+      const responses = await Promise.all(
+        Array.from({ length: 8 }, () => progress(id, 100)),
+      );
+      expect(responses.filter((r) => r.statusCode === 200)).toHaveLength(1);
+      expect(responses.filter((r) => r.statusCode === 409)).toHaveLength(7);
+      const before = await snapshot();
+      expect((await progress(id, 25)).statusCode).toBe(409);
+      expect(await snapshot()).toEqual(before);
+    });
+    it.each(["production", "po"] as const)(
+      "progress rechecks locked %s ownership after controller passes",
+      async (target) => {
+        const id = (await start()).json().data.id;
+        const foreign = await prisma.user.create({
+          data: {
+            email: "progress-reassign@test.invalid",
+            passwordHash: "unusable",
+            role: "VENDOR",
+            vendor: {
+              create: {
+                companyName: "Synthetic new owner",
+                address: "Test",
+                city: "Test",
+                country: "EG",
+              },
+            },
+          },
+          include: { vendor: true },
+        });
+        const original =
+          productionService.updateProgress.bind(productionService);
+        let before: any;
+        vi.spyOn(productionService, "updateProgress").mockImplementationOnce(
+          async (...args) => {
+            if (target === "po")
+              await prisma.purchaseOrder.update({
+                where: { id: poId },
+                data: { vendorId: foreign.vendor!.id },
+              });
+            else
+              await prisma.production.update({
+                where: { id },
+                data: { vendorId: foreign.vendor!.id },
+              });
+            before = await snapshot();
+            return original(...args);
+          },
+        );
+        try {
+          const r = await progress(id, 100);
+          expect(r.statusCode, r.body).toBe(403);
+          expect(await snapshot()).toEqual(before);
+        } finally {
+          await prisma.purchaseOrder.update({
+            where: { id: poId },
+            data: { vendorId },
+          });
+          await prisma.production.update({ where: { id }, data: { vendorId } });
+          await prisma.user.delete({ where: { id: foreign.id } });
+        }
+      },
+    );
+    it("ADMIN progress retains existing access", async () => {
+      const id = (await start()).json().data.id;
+      const r = await app.inject({
+        method: "POST",
+        url: `/api/production/${id}/progress`,
+        headers: {
+          authorization:
+            "Bearer " +
+            jwtService.generateAccessToken(
+              "admin",
+              "admin@test.invalid",
+              "ADMIN",
+            ),
+        },
+        payload: { progressPercent: 100 },
+      });
+      expect(r.statusCode, r.body).toBe(200);
+    });
+
+    it("ADMIN cannot silently repair mismatched production and PO owners", async () => {
+      const id = (await start()).json().data.id;
+      const foreign = await prisma.user.create({
+        data: {
+          email: "progress-mismatch@test.invalid",
+          passwordHash: "unusable",
+          role: "VENDOR",
+          vendor: {
+            create: {
+              companyName: "Synthetic mismatch",
+              address: "Test",
+              city: "Test",
+              country: "EG",
+            },
+          },
+        },
+        include: { vendor: true },
+      });
+      try {
+        await prisma.production.update({
+          where: { id },
+          data: { vendorId: foreign.vendor!.id },
+        });
+        const before = await snapshot();
+        const r = await app.inject({
+          method: "POST",
+          url: `/api/production/${id}/progress`,
+          headers: {
+            authorization:
+              "Bearer " +
+              jwtService.generateAccessToken(
+                "admin",
+                "admin@test.invalid",
+                "ADMIN",
+              ),
+          },
+          payload: { progressPercent: 100 },
+        });
+        expect(r.statusCode, r.body).toBe(409);
+        expect(await snapshot()).toEqual(before);
+      } finally {
+        await prisma.production.update({ where: { id }, data: { vendorId } });
         await prisma.user.delete({ where: { id: foreign.id } });
       }
     });

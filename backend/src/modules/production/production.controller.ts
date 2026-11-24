@@ -1,12 +1,12 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
-import { productionService } from './production.service';
+import { FastifyRequest, FastifyReply } from "fastify";
+import { productionService } from "./production.service";
 import {
   assertProductionOwnership,
   requireVendorProfile,
-} from '../../middleware/rbac';
-import { AuthorizationError } from '../../utils/errors';
-import { prisma } from '../../lib/prisma';
-import { z } from 'zod';
+} from "../../middleware/rbac";
+import { AuthorizationError } from "../../utils/errors";
+import { prisma } from "../../lib/prisma";
+import { z } from "zod";
 
 const updateProgressSchema = z.object({
   progressPercent: z.number().int().min(0).max(100),
@@ -19,17 +19,22 @@ export class ProductionController {
     const { user, vendor } = await requireVendorProfile(request, reply);
     const poId = (request.params as { poId: string }).poId;
 
-    if (user.role !== 'ADMIN') {
+    if (user.role !== "ADMIN") {
       const po = await prisma.purchaseOrder.findUnique({
         where: { id: poId },
         select: { vendorId: true },
       });
       if (po && po.vendorId !== vendor.id) {
-        throw new AuthorizationError('You do not have access to this purchase order');
+        throw new AuthorizationError(
+          "You do not have access to this purchase order",
+        );
       }
     }
 
-    const production = await productionService.startProduction(poId, {userId:user.userId,role:user.role});
+    const production = await productionService.startProduction(poId, {
+      userId: user.userId,
+      role: user.role,
+    });
 
     return reply.send({
       success: true,
@@ -39,12 +44,13 @@ export class ProductionController {
 
   async updateProgress(request: FastifyRequest, reply: FastifyReply) {
     const productionId = (request.params as { id: string }).id;
-    await assertProductionOwnership(request, reply, productionId);
+    const user = await assertProductionOwnership(request, reply, productionId);
     const body = updateProgressSchema.parse(request.body);
     const production = await productionService.updateProgress(
       productionId,
       body.progressPercent,
-      body.notes
+      body.notes,
+      { userId: user.userId, role: user.role },
     );
 
     return reply.send({
