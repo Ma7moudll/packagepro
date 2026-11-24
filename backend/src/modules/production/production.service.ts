@@ -5,6 +5,8 @@ import {
   NotFoundError,
   ValidationError,
 } from "../../utils/errors";
+import { notificationHub } from "../notifications/notification-hub";
+import { logger } from "../../utils/logger";
 import { notificationService } from "../notifications/notifications.service";
 
 const context = {
@@ -86,27 +88,43 @@ export class ProductionService {
           where: { id: po.orderId },
           data: { status: "in_production" },
         });
-      return { production, started: true };
-    });
-    if (result.started) {
-      const orderCustomer = await prisma.order.findUnique({
-        where: { id: result.production.purchaseOrder.orderId },
+      const orderCustomer = await tx.order.findUnique({
+        where: { id: po.orderId },
         select: { orderNumber: true, customer: { select: { userId: true } } },
       });
-      if (orderCustomer?.customer?.userId)
-        await notificationService.createIfUnseen(
+      let published: { userId: string; notification: any } | undefined;
+      if (orderCustomer?.customer?.userId) {
+        const notice = await notificationService.createIfUnseenInTx(
+          tx,
           orderCustomer.customer.userId,
-          {
-            entityType: "order",
-            entityId: result.production.purchaseOrder.orderId,
-          },
+          { entityType: "order", entityId: po.orderId },
           {
             type: "production_started",
             title: `Production started for ${orderCustomer.orderNumber}`,
             message: `Your order ${orderCustomer.orderNumber} is now in production.`,
-            link: `/orders/${result.production.purchaseOrder.orderId}`,
+            link: `/orders/${po.orderId}`,
           },
         );
+        if (notice.status === "created" && notice.notification)
+          published = {
+            userId: orderCustomer.customer.userId,
+            notification: notice.notification,
+          };
+      }
+      return { production, started: true, published };
+    });
+    if ("published" in result && result.published) {
+      try {
+        notificationHub.publish(
+          result.published.userId,
+          result.published.notification,
+        );
+      } catch (error) {
+        logger.warn(
+          "Production-start notice persisted but realtime publish failed",
+          error,
+        );
+      }
     }
     // Reload the relation after its atomic order transition rather than returning stale order state.
     return prisma.production.findUniqueOrThrow({

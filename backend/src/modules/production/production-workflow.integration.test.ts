@@ -10,7 +10,7 @@ import {
 import Fastify from "fastify";
 const synthetic = vi.hoisted(() => ({ notify: vi.fn() }));
 vi.mock("../notifications/notifications.service", () => ({
-  notificationService: { createIfUnseen: synthetic.notify },
+  notificationService: { createIfUnseenInTx: synthetic.notify },
 }));
 import { prisma } from "../../lib/prisma";
 import { jwtService } from "../auth/services/jwt.service";
@@ -88,7 +88,10 @@ describe.skipIf(process.env.PACKAGEPRO_PRODUCTION_ISOLATED_DB !== "yes")(
     beforeEach(async () => {
       vi.restoreAllMocks();
       synthetic.notify.mockReset();
-      synthetic.notify.mockResolvedValue(undefined);
+      synthetic.notify.mockResolvedValue({
+        status: "exists",
+        notification: null,
+      });
       await clear();
       const o = await prisma.order.create({
         data: {
@@ -337,17 +340,16 @@ describe.skipIf(process.env.PACKAGEPRO_PRODUCTION_ISOLATED_DB !== "yes")(
       ).toBe(401);
       expect((await snapshot()).production).toHaveLength(0);
     });
-    it("notification failure does not reset committed run on retry", async () => {
+    it("notification persistence failure rolls back start until retry", async () => {
       synthetic.notify.mockRejectedValueOnce(
         new Error("synthetic notification failure"),
       );
-      expect((await start()).statusCode).toBe(500);
       const before = await snapshot();
-      expect(before.production).toHaveLength(1);
-      expect(before.order!.status).toBe("in_production");
-      expect((await start()).statusCode).toBe(200);
+      expect((await start()).statusCode).toBe(500);
       expect(await snapshot()).toEqual(before);
-      expect(synthetic.notify).toHaveBeenCalledTimes(1);
+      expect((await start()).statusCode).toBe(200);
+      expect((await snapshot()).production).toHaveLength(1);
+      expect(synthetic.notify).toHaveBeenCalledTimes(2);
     });
     it("direct service also rejects fractional/nonfinite progress before persistence", async () => {
       const id = (await start()).json().data.id;
