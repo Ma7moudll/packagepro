@@ -47,7 +47,7 @@ export function Navbar() {
       className={`sticky top-0 z-50 w-full border-b bg-white backdrop-blur-sm ${isRTL ? "font-cairo" : ""}`}
     >
       <div className="container mx-auto px-2 min-[360px]:px-3 sm:px-4">
-        <div className={`flex h-16 items-center ${isRTL ? "flex-row-reverse" : "justify-between"}`}>
+        <div className={`flex min-h-16 flex-wrap gap-y-2 py-2 items-center ${isRTL ? "flex-row-reverse" : "justify-between"}`}>
           {/* Logo */}
           <Link href="/" className={`flex items-center space-x-2 ${isRTL ? "space-x-reverse" : ""}`}>
             <Package className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-600" />

@@ -80,6 +80,7 @@ export function EditorHeader({ onPropertiesToggle, extra, cartOpen, onCartOpenCh
   // (the pill reads "Saving..." for the whole 30s window); disable only while
   // an actual manual save request is in flight.
   const [manualSaving, setManualSaving] = useState(false)
+  const [cloudSaveIssue,setCloudSaveIssue] = useState<"conflict"|"failed"|"local"|null>(null)
   const [showTutorial, setShowTutorial] = useState(false)
   const [mockupOpen, setMockupOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
@@ -123,6 +124,7 @@ export function EditorHeader({ onPropertiesToggle, extra, cartOpen, onCartOpenCh
       // Persist to the backend (durable, reload-safe)
       try {
         const sid = await ensureCloudSession(sessionId, name, coreState)
+        setCloudSaveIssue(null)
         if (sid) onSessionSaved?.(sid)
         if (sid && sid !== sessionId) {
           const params = new URLSearchParams(searchParams.toString())
@@ -131,14 +133,16 @@ export function EditorHeader({ onPropertiesToggle, extra, cartOpen, onCartOpenCh
         }
       } catch (cloudError) {
         console.error("Cloud save failed:", cloudError)
-        // IndexedDB already saved; surface error state still marks saved so the
-        // user knows their work is not lost locally.
+        setCloudSaveIssue((cloudError as any)?.status===409?"conflict":"failed")
+        setSaveStatus("error")
+        return
       }
 
       setSaveStatus("saved")
       setTimeout(() => setSaveStatus("idle"), 2000)
     } catch (error) {
       console.error("Save failed:", error)
+      setCloudSaveIssue("local")
       setSaveStatus("error")
       // Keep failure visible until the next save attempt.
     } finally {
@@ -404,6 +408,10 @@ export function EditorHeader({ onPropertiesToggle, extra, cartOpen, onCartOpenCh
         </div>
       </header>
 
+      {cloudSaveIssue && <div role="alert" className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950 flex flex-wrap items-center gap-2">
+        <span>{language==="ar" ? (cloudSaveIssue==="local" ? "تعذر حفظ التغييرات الأخيرة على هذا الجهاز. لم يتم إرسالها إلى الحساب. تصميمك ما زال في المحرر. لا تغلق الصفحة وحاول الحفظ مرة أخرى." : cloudSaveIssue==="conflict" ? "تعارض في الحفظ. تم حفظ نسخة على هذا الجهاز فقط. تصميمك ما زال في المحرر. حاول الحفظ مرة أخرى." : "تعذر الحفظ على الحساب. تم حفظ نسخة على هذا الجهاز فقط. حاول الحفظ مرة أخرى.") : (cloudSaveIssue==="local" ? "Latest changes could not be saved on this device or sent to your account. Your design is still in the editor. Keep this page open and try saving again." : cloudSaveIssue==="conflict" ? "Save conflict. A copy is saved on this device only. Your design is still in the editor. Try saving again." : "Cloud save failed. A copy is saved on this device only. Try saving again.")}</span>
+        <Button variant="outline" size="sm" onClick={handleSave} disabled={manualSaving}>{language==="ar"?"إعادة محاولة الحفظ":"Retry save"}</Button>
+      </div>}
       {/* Tutorial Overlay */}
       <TutorialOverlay
         isOpen={showTutorial}

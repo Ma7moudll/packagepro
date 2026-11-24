@@ -24,8 +24,11 @@ import { Search, ShoppingCart,
 const ORDER_STATUSES = [
   "pending_review",
   "awaiting_approval",
+  "ready_for_routing",
   "vendor_confirmed",
   "in_production",
+  "quality_check",
+  "ready_to_ship",
   "shipped",
   "delivered",
   "completed",
@@ -176,7 +179,7 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap gap-3 items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Orders</h1>
           <p className="text-sm text-slate-500">All platform orders with production and shipping status</p>
@@ -216,6 +219,9 @@ export default function AdminOrdersPage() {
         />
       </div>
 
+      <p role="note" data-admin-release-note className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        {language === "ar" ? "حالات الطلبات أدناه مسجلة للعرض وليست تصريحًا بالشحن. لا يمكن تغيير فحص الجودة أو جاهز للشحن أو تم الشحن يدويًا، حتى بواسطة الإدارة. إجراءات السماح بالشحن وتصحيح هذه الحالات لم تُفعّل بعد." : "The order statuses below are recorded values, not permission to ship. Quality Check, Ready to Ship and Shipped cannot be set manually, including by admins. Shipping release and correction of these statuses are not enabled yet."}
+      </p>
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">All Orders</CardTitle>

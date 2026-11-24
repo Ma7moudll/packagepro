@@ -1,3 +1,4 @@
+import {fenceDispatchWriter} from '../consolidation/dispatch-writer-fence';
 import {validateCustomerOrderQuery} from './customer-order-query';
 import {approvalContentHash} from './approval-snapshot';
 import { assertSpecificationPriced } from "../../utils/production-specification";
@@ -489,7 +490,15 @@ export class OrderService {
     fromStatus: OrderStatus,
     status: OrderStatus
   ): Promise<any> {
-    const claimed = await prisma.order.updateMany({
+    if (['quality_check','ready_to_ship','shipped'].includes(status)) {
+      throw new ConflictError('Factory completion and outbound release cannot be set by generic status changes');
+    }
+    const claimed = await prisma.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM orders WHERE id=${orderId} FOR UPDATE`;
+      const fresh=await tx.order.findUnique({where:{id:orderId},select:{status:true}});
+      if(fresh?.status!==fromStatus)throw new ConflictError('Order status changed concurrently');
+      await fenceDispatchWriter(tx,orderId,'order_status_changed_before_start');
+      return tx.order.updateMany({
       where: { id: orderId, status: fromStatus },
       data: {
         status,
@@ -498,6 +507,7 @@ export class OrderService {
         ...(status === 'delivered' && { deliveredAt: new Date() }),
         ...(status === 'completed' && { completedAt: new Date() }),
       },
+    });
     });
 
     if (claimed.count === 0) {

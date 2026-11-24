@@ -18,18 +18,18 @@ import { ArrowLeft, MapPin, Phone, Mail, AlertCircle, Loader2 } from "lucide-rea
 import Link from "next/link"
 import type { OrderStatus } from "@shared/types"
 
-type ProductionUiStatus = "not_started" | "in_production" | "sample_ready" | "sample_approved" | "quality_check" | "ready_to_ship"
+type ProductionUiStatus = "not_started" | "in_production" | "sample_ready" | "sample_approved" | "quality_check" | "factory_complete"
 
 const PRODUCTION_MAP: Record<string, ProductionUiStatus> = {
   not_started: "not_started",
   in_progress: "in_production",
   sample_production: "sample_ready",
   quality_review: "quality_check",
-  completed: "ready_to_ship",
+  completed: "factory_complete",
 }
 
 export default function ManufacturerOrderDetailPage() {
-  const { user } = useAuth()
+  const { user, isLoading: authLoading } = useAuth()
   const router = useRouter()
   const params = useParams()
   const { language } = useLanguage()
@@ -80,6 +80,7 @@ export default function ManufacturerOrderDetailPage() {
   }, [orderId, language])
 
   useEffect(() => {
+    if (authLoading) return
     if (!user || (user.role !== "MANUFACTURER" && user.role !== "ADMIN")) {
       router.push("/login")
       return
@@ -88,7 +89,7 @@ export default function ManufacturerOrderDetailPage() {
       fetchData()
     }
     return () => { loadSeq.current++ }
-  }, [user, router, orderId, fetchData])
+  }, [user, authLoading, router, orderId, fetchData])
 
   const handleAcceptHandshake = async () => {
     if (!po?.handshake) return
@@ -143,13 +144,6 @@ export default function ManufacturerOrderDetailPage() {
     try { await fetchData({ silent: true }) } catch { setUploadRefreshError(true) }
   }
 
-  const handleMarkReadyToShip = async () => {
-    setProductionStatus("ready_to_ship")
-    if (orderId) {
-      await ordersApi.updateStatus(orderId, "ready_to_ship")
-      await fetchData()
-    }
-  }
 
   if (!user || (user.role !== "MANUFACTURER" && user.role !== "ADMIN")) {
     return null
@@ -242,16 +236,16 @@ export default function ManufacturerOrderDetailPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <Button variant="outline" size="icon" asChild>
             <Link href="/manufacturer/orders">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-slate-900">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
                 {language === "ar" ? "تفاصيل الطلب" : "Order Details"}
               </h1>
               {po?.poNumber && (
@@ -409,7 +403,6 @@ export default function ManufacturerOrderDetailPage() {
                 onStartProduction={handleStartProduction}
                 onUpdateProgress={handleUpdateProgress}
                 onUploadSample={handleUploadSample}
-                onMarkReadyToShip={handleMarkReadyToShip}
                 onReload={() => fetchData({ silent: true })}
               />
             </>

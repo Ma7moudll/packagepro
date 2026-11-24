@@ -58,9 +58,20 @@ export class ConsolidationService {
         manifest:manifest?{id:manifest.id,revision:manifest.revision,receiptRevision:manifest.receiptRevision,allocations:manifest.allocations,current}:null,receipts:receipts.slice(0,limit),receiptPage:{after,hasMore:receipts.length>limit,nextAfter:receipts.length>limit?receipts[limit-1].receiptRevision:null}};
     });
   }
+  /** Local prototype fence. Caller already holds the parent order lock. */
+  private async fenceDispatchReceiptWrite(tx:Prisma.TransactionClient,orderId:string) {
+    const intent=await tx.dispatchPrototypeReservation.findUnique({where:{orderId}});
+    if(!intent)return;
+    if(['attempt_started','reconciliation_required','label_created'].includes(intent.state))throw new ConflictError('Dispatch attempt may exist; receipt/source correction requires reconciliation');
+    if(intent.state==='reserved'){
+      await tx.dispatchPrototypeReservation.update({where:{id:intent.id},data:{state:'invalidated_before_start',version:{increment:1}}});
+      await tx.dispatchPrototypeEvent.create({data:{reservationId:intent.id,kind:'receiving_changed_before_start'}});
+    }
+  }
   async plan(orderId: string, userId: string, hubId: string, expectedRevision: number, allocations: Allocation[]) {
     return prisma.$transaction(async tx=>{
       const {order,hub,sourceHash} = await this.context(tx,orderId,userId,hubId,true);
+      await this.fenceDispatchReceiptWrite(tx,orderId);
       const existing = await tx.consolidationManifest.findUnique({where:{orderId}});
       if (expectedRevision !== (existing?.revision ?? 0)) throw new ConflictError('Manifest revision changed');
       if (!Array.isArray(allocations) || !allocations.length) throw new ValidationError('Explicit allocations required');
@@ -94,6 +105,7 @@ export class ConsolidationService {
       const c=input.counts;
       if (!entry || !c || ![c.received,c.accepted,c.rejected].every(integer) || c.accepted+c.rejected>c.received)
         throw new ValidationError('Valid allocation receipt/review counts required');
+      await this.fenceDispatchReceiptWrite(tx,orderId);
       const next=manifest.receiptRevision+1;
       const event=await tx.consolidationReceiptEvent.create({data:{manifestId:manifest.id,manifestRevision:manifest.revision,receiptRevision:next,eventKey:input.eventKey,requestHash,actorId:userId,allocationId:entry.id,snapshot:{...entry,...c},reason:input.reason.trim()}});
       await tx.consolidationManifest.update({where:{id:manifest.id},data:{receiptRevision:next}});
@@ -122,6 +134,60 @@ export class ConsolidationService {
       if (blockers.length) throw new ConflictError(`Consolidation blocked: ${blockers.join(', ')}`);
       return tx.consolidationConfirmation.upsert({where:{manifestId_manifestRevision_receiptRevision:{manifestId:manifest.id,manifestRevision:manifest.revision,receiptRevision:manifest.receiptRevision}},update:{},create:{manifestId:manifest.id,manifestRevision:manifest.revision,receiptRevision:manifest.receiptRevision,sourceHash:manifest.sourceHash,hubRevision:manifest.hubRevision,actorId:userId}});
     });
+  }
+  /** Local-only observation, not registered over HTTP and never consumed by dispatch. */
+  async observeAggregateReadiness(orderId:string,userId:string,hubId:string) {
+    return prisma.$transaction(async tx=>{
+      const {order,hub,sourceHash}=await this.context(tx,orderId,userId,hubId);
+      await tx.$queryRaw`SELECT id FROM productions WHERE "poId" IN (SELECT id FROM purchase_orders WHERE "orderId"=${orderId}) ORDER BY id FOR SHARE`;
+      await tx.$queryRaw`SELECT id FROM payments WHERE "orderId"=${orderId} FOR SHARE`;
+      const productions=await tx.production.findMany({where:{purchaseOrder:{orderId}},orderBy:{id:'asc'},select:{id:true,poId:true,vendorId:true,status:true,progressPercent:true}});
+      const payment=await tx.payment.findUnique({where:{orderId},select:{status:true}});
+      const manifest=await tx.consolidationManifest.findUnique({where:{orderId}});
+      if(manifest&&manifest.hubId!==hubId)throw new AuthorizationError('Manifest belongs to another hub');
+      const productionBlockers:string[]=[];
+      if(!order.purchaseOrders.length)productionBlockers.push('no_purchase_orders');
+      for(const po of order.purchaseOrders){
+        if(po.status!=='confirmed')productionBlockers.push('purchase_order_not_confirmed');
+        const run=productions.find(p=>p.poId===po.id);
+        if(!run)productionBlockers.push('production_missing');
+        else if(run.vendorId!==po.vendorId)productionBlockers.push('production_vendor_mismatch');
+        else if(!['quality_review','completed'].includes(run.status)||run.progressPercent!==100)productionBlockers.push('production_not_finished');
+      }
+      const receivingBlockers:string[]=[];
+      const current=!!manifest&&manifest.hubRevision===hub.revision&&manifest.sourceHash===sourceHash;
+      if(!manifest)receivingBlockers.push('manifest_missing');
+      else if(!current)receivingBlockers.push('manifest_source_or_hub_changed');
+      else{
+        receivingBlockers.push(...await this.blockers(tx,manifest));
+        const confirmation=await tx.consolidationConfirmation.findUnique({where:{manifestId_manifestRevision_receiptRevision:{manifestId:manifest.id,manifestRevision:manifest.revision,receiptRevision:manifest.receiptRevision}}});
+        if(!confirmation)receivingBlockers.push('team_confirmation_required');
+        else{
+          await tx.$queryRaw`SELECT id FROM consolidation_capabilities WHERE "userId"=${confirmation.actorId} AND "hubId"=${hubId} FOR SHARE`;
+          const cap=await tx.consolidationCapability.findUnique({where:{userId_hubId:{userId:confirmation.actorId,hubId}}});
+          if(!cap?.canReceive)receivingBlockers.push('confirming_capability_revoked');
+        }
+      }
+      return {orderId,hubId,orderStatus:order.status,
+        approval:{timestampRecorded:!!order.approvedAt},
+        production:{allFinished:productionBlockers.length===0,blockers:[...new Set(productionBlockers)],qaEvidence:'not_durably_recorded' as const},
+        receiving:{eligible:receivingBlockers.length===0,blockers:[...new Set(receivingBlockers)],manifestRevision:manifest?.revision??null,receiptRevision:manifest?.receiptRevision??null,current},
+        payment:{recordedStatus:payment?.status??null,releasePolicyEvaluated:false},
+        dispatch:{available:false,reserved:false,blockers:['dispatch_not_integrated','hub_pickup_and_measured_parcels_unconfigured','payment_release_policy_not_evaluated']}};
+    });
+  }
+  /** Unregistered prototype seam. One owning transaction must include its reservation writes. */
+  async withCurrentWholeOrderReview<T>(tx:Prisma.TransactionClient,orderId:string,userId:string,hubId:string,expected:{manifestRevision:number;receiptRevision:number},consume:(facts:{sourceHash:string;hubRevision:number;confirmationId:string})=>Promise<T>):Promise<T> {
+    const {manifest,hub}=await this.manifestContext(tx,orderId,userId);
+    if(manifest.hubId!==hubId)throw new AuthorizationError('Review belongs to another hub');
+    if(manifest.revision!==expected.manifestRevision||manifest.receiptRevision!==expected.receiptRevision)throw new ConflictError('Review snapshot changed');
+    if((await this.blockers(tx,manifest)).length)throw new ConflictError('Whole-order receipt/review blocked');
+    const confirmation=await tx.consolidationConfirmation.findUnique({where:{manifestId_manifestRevision_receiptRevision:{manifestId:manifest.id,manifestRevision:manifest.revision,receiptRevision:manifest.receiptRevision}}});
+    if(!confirmation)throw new ConflictError('Team confirmation required');
+    await tx.$queryRaw`SELECT id FROM consolidation_capabilities WHERE "userId"=${confirmation.actorId} AND "hubId"=${hubId} FOR SHARE`;
+    const cap=await tx.consolidationCapability.findUnique({where:{userId_hubId:{userId:confirmation.actorId,hubId}}});
+    if(!cap?.canReceive||confirmation.sourceHash!==manifest.sourceHash||confirmation.hubRevision!==hub.revision)throw new ConflictError('Team confirmation no longer current');
+    return consume({sourceHash:manifest.sourceHash,hubRevision:hub.revision,confirmationId:confirmation.id});
   }
   async inspectEligibility(orderId:string,userId:string) {
     return prisma.$transaction(async tx=>{

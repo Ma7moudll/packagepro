@@ -298,6 +298,7 @@ model Order {
   // Multi-vendor orders: one order can fulfill through several vendors,
   // one PurchaseOrder per vendor item-group (Step-4 Piece 4a).
   purchaseOrders  PurchaseOrder[]
+  dispatchPrototypeReservation DispatchPrototypeReservation?
   consolidationManifest ConsolidationManifest?
   shipment        Shipment?
   payment         Payment?
@@ -1069,4 +1070,56 @@ model ConsolidationConfirmation {
  actor User @relation(fields:[actorId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_confirmation_actor_fk")
  @@unique([manifestId,manifestRevision,receiptRevision])
  @@map("consolidation_confirmations")
+}
+
+// Unregistered local whole-order dispatch prototype. No operational worker.
+model DispatchPrototypeReservation {
+ id String @id @default(cuid())
+ orderId String @unique
+ requestKey String
+ packetHash String
+ packet Json
+ state String @default("reserved")
+ version Int @default(1)
+ createdBy String
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ order Order @relation(fields:[orderId],references:[id],onDelete:Restrict,map:"dispatch_prototype_order_fk")
+ attempts DispatchPrototypeAttempt[]
+ @@map("dispatch_prototype_reservations")
+}
+model DispatchPrototypeAttempt {
+ id String @id @default(cuid())
+ reservationId String @unique
+ packetHash String
+ state String @default("attempt_started")
+ providerReference String @unique
+ result Json?
+ failureCode String?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ reservation DispatchPrototypeReservation @relation(fields:[reservationId],references:[id],onDelete:Restrict)
+ @@map("dispatch_prototype_attempts")
+}
+
+model DispatchPrototypeInputs {
+ id String @id @default(cuid())
+ orderId String @unique
+ revision Int @default(1)
+ hubId String
+ pickup Json
+ parcels Json
+ updatedBy String
+ updatedAt DateTime @updatedAt
+ @@map("dispatch_prototype_inputs")
+}
+model DispatchPrototypeEvent {
+ id String @id @default(cuid())
+ reservationId String
+ attemptId String?
+ kind String
+ evidence Json?
+ createdAt DateTime @default(now())
+ @@index([reservationId,createdAt])
+ @@map("dispatch_prototype_events")
 }

@@ -30,6 +30,8 @@ export class ShipmentService {
       throw new NotFoundError('Order');
     }
 
+    this.assertNewShipmentReleaseIntegrated();
+
     if (order.status !== 'ready_to_ship') {
       throw new ValidationError('Order is not ready to ship');
     }
@@ -214,6 +216,10 @@ export class ShipmentService {
     this.assertReadAccess(shipment.order.customer.userId, actor);
     return shipment;
   }
+  private assertNewShipmentReleaseIntegrated(): void {
+    throw new ConflictError('New shipment creation is paused: whole-order shipping release is not integrated');
+  }
+
   private assertReadAccess(ownerId: string, actor: { userId: string; role: string }): void {
     if (actor.role !== 'ADMIN' && actor.userId !== ownerId) throw new AuthorizationError('You do not own this shipment');
   }

@@ -1,3 +1,4 @@
+import {fenceDispatchWriter} from '../consolidation/dispatch-writer-fence';
 import {
   hashApprovalToken,
   newApprovalToken,
@@ -47,6 +48,7 @@ export class ApprovalService {
       if(!order)throw new NotFoundError('Order');
       if(!['awaiting_approval','ready_for_routing'].includes(order.status))throw new ConflictError('Order is not eligible for approval reopening');
       if(await tx.purchaseOrder.count({where:{orderId}}))throw new ConflictError('An existing purchase order prevents reopening, including incomplete purchase orders');
+      await fenceDispatchWriter(tx,orderId,'approval_reopened_before_start');
       await tx.approvalRequest.updateMany({where:{orderId,status:{in:['generating','pending','approved']}},data:{status:'superseded'}});
       await tx.orderApprovalToken.updateMany({where:{orderId,consumedAt:null},data:{consumedAt:new Date()}});
       await tx.order.update({where:{id:orderId},data:{status:'pending_review',approvedAt:null,metadata:{...(order.metadata as any),approval:null,approvalReopen:{actorId:actor.id,reason:reason.trim(),reopenedAt:new Date().toISOString()}}}});
@@ -119,6 +121,7 @@ export class ApprovalService {
           throw new ValidationError(
             "Legacy or stale file association. Re-upload against the current saved design, then select explicitly",
           );
+      await fenceDispatchWriter(tx,orderId,'approval_requested_before_start');
       await tx.approvalRequest.updateMany({
         where: { orderId, status: { in: ["generating", "pending"] } },
         data: { status: "superseded" },
@@ -210,6 +213,7 @@ export class ApprovalService {
           throw new ConflictError(
             "Design or request changed during proof generation; renew after saving",
           );
+        await fenceDispatchWriter(tx,orderId,'approval_generated_before_start');
         const file = await tx.designFile.create({
           data: {
             designId: design.id,
@@ -326,6 +330,7 @@ export class ApprovalService {
         throw new ConflictError(
           "Design changed or approval was renewed. Request a new proof",
         );
+      await fenceDispatchWriter(tx,orderId,'approval_accepted_before_start');
       const consumed = await tx.orderApprovalToken.updateMany({
         where: {
           tokenHash: hashApprovalToken(token),

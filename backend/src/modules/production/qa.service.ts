@@ -53,13 +53,8 @@ export class QAService {
       },
     });
 
-    // Update order status to ready_to_ship
-    await prisma.order.update({
-      where: { id: production.purchaseOrder.orderId },
-      data: {
-        status: 'ready_to_ship',
-      },
-    });
+    // A per-run QA result is not whole-order receipt/review or dispatch evidence.
+    // No parent readiness write. This legacy helper has no registered callers.
 
     return {
       ...updated,

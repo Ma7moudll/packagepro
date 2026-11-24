@@ -1,3 +1,4 @@
+import {inspectDispatch} from './dispatch-inspection.service';
 import {FastifyPluginAsync, FastifyRequest, FastifyReply} from 'fastify';
 import {z} from 'zod';
 import {authenticate, AuthenticatedRequest} from '../../middleware/auth.middleware';
@@ -32,6 +33,12 @@ function orderId(request:FastifyRequest):string {return parse(z.object({orderId:
 
 /** Default-off receipt/review only. No capability assignment or dispatch routes. */
 export const consolidationRoutes:FastifyPluginAsync=async server=>{
+ server.get('/consolidation/orders/:orderId/dispatch-inspection',async(request,reply)=>{
+  if(process.env.DISPATCH_INSPECTION_ENABLED!=='true')throw new AuthorizationError('Dispatch inspection disabled');
+  const userId=await actor(request,reply),order=orderId(request);
+  const query=parse(z.object({after:z.string().max(180).optional()}).strict(),request.query);
+  return reply.send({success:true,data:await inspectDispatch(order,userId,query.after)});
+ });
  server.get('/consolidation/orders/:orderId',async(request,reply)=>{
   const userId=await actor(request,reply), order=orderId(request);
   const query=parse(z.object({hubId:id,after:cursor.optional(),limit:pageSize.optional()}).strict(),request.query);
