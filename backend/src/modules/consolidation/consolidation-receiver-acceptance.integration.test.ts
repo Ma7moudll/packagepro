@@ -229,7 +229,9 @@ describe.skipIf(process.env.PACKAGEPRO_CONSOLIDATION_DB !== "yes")(
                 ready = true;
                 break;
               }
-            } catch {}
+            } catch {
+              // health probe not up yet; retry
+            }
             await new Promise((r) => setTimeout(r, 100));
           }
           expect(ready, logs).toBe(true);

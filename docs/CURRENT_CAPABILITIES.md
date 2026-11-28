@@ -15,7 +15,7 @@ Production dieline: deferred: 50, supported: 5.
 
 Pricing: estimated: 8, quote_required: 47.
 
-Backend source: 24 module directories, 37 Prisma model declarations. These are code counts, not operational coverage.
+Backend source: 25 module directories, 42 Prisma model declarations. These are code counts, not operational coverage.
 
 Declared dependencies: Fastify ^5.12.8; Next.js ^15.5.18; React ^19.2.6.
 
