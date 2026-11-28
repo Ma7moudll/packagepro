@@ -8,9 +8,25 @@ import { Queue, Worker, Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { prisma } from '../../lib/prisma';
 import { logger } from '../../utils/logger';
+import { assertCanReadDesign, trustedRole } from '../../modules/designs/design-access';
+
+/** Runs before the worker reads the design: the requester must be allowed to read it (owner or admin). */
+export async function assertExportRequester(data: Pick<ExportJobData, 'designId' | 'requestedBy'>): Promise<void> {
+  if (!data.requestedBy) throw new Error('Export refused: no requester on the job');
+  await assertCanReadDesign({ userId: data.requestedBy }, data.designId);
+}
+
+/** Job status is for the requester or an admin; anyone else gets the same answer as for a missing job. */
+export async function canSeeExportJob(data: Pick<ExportJobData, 'requestedBy'>, userId?: string): Promise<boolean> {
+  if (!userId) return false;
+  if (data.requestedBy && data.requestedBy === userId) return true;
+  return (await trustedRole({ userId })) === 'ADMIN';
+}
 
 export interface ExportJobData {
   designId: string;
+  /** Authenticated user who asked for the export. Required: a job without it is refused. */
+  requestedBy?: string;
   format: 'png' | 'pdf' | 'ai' | 'eps';
   options?: {
     dpi?: number;
@@ -70,6 +86,7 @@ export function createExportWorker(redis: Redis): Worker<ExportJobData> {
       });
 
       try {
+        await assertExportRequester(job.data);
         const design = await prisma.design.findUnique({
           where: { id: job.data.designId },
           include: { files: true, order: true },
@@ -248,11 +265,11 @@ export async function enqueueExport(data: ExportJobData): Promise<Job<ExportJobD
 /**
  * Get export job status
  */
-export async function getExportJobStatus(jobId: string): Promise<any> {
+export async function getExportJobStatus(jobId: string, userId?: string): Promise<any> {
   const queue = getExportQueue();
   const job = await queue.getJob(jobId);
   
-  if (!job) {
+  if (!job || !(await canSeeExportJob(job.data, userId))) {
     return null;
   }
 

@@ -1,3 +1,4 @@
+import { withoutDesignSide } from '../orders/vendor-order-view';
 import {approvalService} from '../orders/approval.service';
 import {approvalContentHash} from '../orders/approval-snapshot';
 import { prisma } from '../../lib/prisma';
@@ -330,6 +331,8 @@ export class POService {
     if (actor.role !== 'ADMIN') {
       const vendor = actor.role === 'VENDOR' ? await prisma.vendor.findUnique({ where: { userId: actor.userId } }) : null;
       if (!vendor || vendor.id !== po.vendorId) throw new AuthorizationError('You do not own this purchase order');
+      // The owning vendor works from the purchase-order files; the customer's design is not part of its view.
+      return { ...po, order: po.order ? withoutDesignSide(po.order) : po.order };
     }
     return po;
   }
