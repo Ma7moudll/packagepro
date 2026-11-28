@@ -30,7 +30,7 @@ vi.mock('bullmq', () => ({ Queue: class {}, Worker: class {}, Job: class {} }));
 vi.mock('ioredis', () => ({ Redis: class {} }));
 
 import { orderService } from './order.service';
-import { withoutDesignSide } from './vendor-order-view';
+import { vendorOrderView } from './vendor-order-view';
 import { poService } from '../purchase-orders/po.service';
 import { prePressController } from '../prepress/prepress.controller';
 import { assertExportRequester, canSeeExportJob } from '../../workers/export-queue/export.worker';
@@ -77,13 +77,7 @@ describe('getOrder by caller', () => {
     expect(o.items).toHaveLength(1);
     expect(o.purchaseOrders[0].printFileUrl).toBe('https://cdn/print.pdf');
     expect(o.purchaseOrders[0].dielineFileUrl).toBe('https://cdn/die.pdf');
-    expect(o.design).toBeNull();
-    expect(o.currentApprovalRequest).toBeNull();
-    expect(o.customer).toEqual({ id: 'C1' });
-    expect(o.payment).toBeNull();
-    expect(o.settlements).toEqual([]);
-    expect(o.reviews).toEqual([]);
-    expect(o.paymentStatus).toBeNull();
+    for (const k of ['design', 'currentApprovalRequest', 'customer', 'payment', 'settlements', 'reviews', 'paymentStatus']) expect(o, k).not.toHaveProperty(k);
     const wire = JSON.stringify(o);
     for (const s of ['art.png', 'proof.png', 'c@x.y', 'layers', 'cust1']) expect(wire).not.toContain(s);
   });
@@ -111,7 +105,7 @@ describe('getPO', () => {
   it('owning vendor gets PO files but no design', async () => {
     const po = await poService.getPO('P1', { userId: 'vend1', role: 'VENDOR' as any });
     expect(po.printFileUrl).toBe('https://cdn/print.pdf');
-    expect(po.order.design).toBeNull();
+    expect(po.order).not.toHaveProperty('design');
     expect(JSON.stringify(po)).not.toContain('art.png');
     expect(JSON.stringify(po)).not.toContain('c@x.y');
   });
@@ -160,11 +154,12 @@ describe('export worker guards', () => {
   });
 });
 
-describe('withoutDesignSide', () => {
+describe('vendorOrderView', () => {
   it('does not mutate its input and leaves other fields', () => {
     const o = fullOrder();
-    const v = withoutDesignSide(o);
+    const v = vendorOrderView(o);
     expect(o.design).toBeTruthy();
     expect(v.shippingEmail).toBe('ship@x.y');
+    expect(v).not.toHaveProperty('design');
   });
 });

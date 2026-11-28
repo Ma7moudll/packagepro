@@ -1,4 +1,5 @@
-import { withoutDesignSide } from '../orders/vendor-order-view';
+import { trustedRole } from '../designs/design-access';
+import { vendorOrderView } from '../orders/vendor-order-view';
 import {approvalService} from '../orders/approval.service';
 import {approvalContentHash} from '../orders/approval-snapshot';
 import { prisma } from '../../lib/prisma';
@@ -328,11 +329,13 @@ export class POService {
       throw new NotFoundError('Purchase Order');
     }
 
-    if (actor.role !== 'ADMIN') {
-      const vendor = actor.role === 'VENDOR' ? await prisma.vendor.findUnique({ where: { userId: actor.userId } }) : null;
+    // The role comes from the database, not the token claim: a demoted user's old token keeps no access.
+    const role = await trustedRole(actor);
+    if (role !== 'ADMIN') {
+      const vendor = role === 'VENDOR' ? await prisma.vendor.findUnique({ where: { userId: actor.userId } }) : null;
       if (!vendor || vendor.id !== po.vendorId) throw new AuthorizationError('You do not own this purchase order');
       // The owning vendor works from the purchase-order files; the customer's design is not part of its view.
-      return { ...po, order: po.order ? withoutDesignSide(po.order) : po.order };
+      return { ...po, order: po.order ? vendorOrderView(po.order) : po.order };
     }
     return po;
   }

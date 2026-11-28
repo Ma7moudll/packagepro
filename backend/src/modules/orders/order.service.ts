@@ -1,6 +1,6 @@
 import {validateCustomerOrderQuery} from './customer-order-query';
 import {approvalContentHash} from './approval-snapshot';
-import {onlyOwnPOs, withoutDesignSide} from './vendor-order-view';
+import {vendorOrderView} from './vendor-order-view';
 import { assertSpecificationPriced } from "../../utils/production-specification";
 import { prisma } from '../../lib/prisma';
 import {
@@ -356,7 +356,13 @@ export class OrderService {
       }
       // 4a: a vendor may now own several POs of one order. A vendor sees the order, not the customer's design.
       if (order.purchaseOrders.some((po: any) => po.vendor.userId === userId)) {
-        return { ...serializeOrder(onlyOwnPOs(withoutDesignSide(order), userId)), paymentStatus: null, paymentMethod: null };
+        const view = vendorOrderView(order, userId);
+        return {
+          ...view,
+          trackingNumber: order.shipment?.dhlTrackingNumber ?? null,
+          // legacy singular field, now the vendor's own first PO
+          purchaseOrder: view.purchaseOrders[0] ?? null,
+        };
       }
 
       throw new ValidationError('Access denied');

@@ -5,7 +5,6 @@ import { useRouter, useParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/providers/auth-provider"
 import { useLanguage } from "@/providers/language-provider"
 import { ordersApi } from "@/lib/api/orders"
@@ -233,6 +232,8 @@ export default function ManufacturerOrderDetailPage() {
   }
 
   const isHandshakable = po?.handshake?.status === "pending"
+  // A vendor sees its own PO cost, not the customer's subtotal, shipping, tax or total.
+  const poCost = po?.vendorCost ?? order.purchaseOrder?.vendorCost ?? null
   const shipAddr: NonNullable<BackendOrder["shippingAddress"]> = order.shippingAddress || {
     name: order.shippingName,
     phone: order.shippingPhone,
@@ -299,14 +300,6 @@ export default function ManufacturerOrderDetailPage() {
                           {item.dimensions.unit}
                         </p>
                       )}
-                      <p className="text-sm text-slate-600">
-                        {language === "ar" ? "سعر الوحدة" : "Unit Price"}: {num(item.unitPrice).toFixed(2)} {language === "ar" ? "جنيه" : "EGP"}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xl font-bold text-emerald-600">
-                        {num(item.totalPrice).toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}
-                      </p>
                     </div>
                   </div>
                 ))
@@ -326,7 +319,7 @@ export default function ManufacturerOrderDetailPage() {
             <CardContent className="space-y-4">
               <div className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-slate-400" />
-                <span className="text-sm">{order.customer?.user?.email || order.shippingEmail || shipAddr?.email || "—"}</span>
+                <span className="text-sm">{order.shippingEmail || shipAddr?.email || "—"}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-slate-400" />
@@ -418,26 +411,13 @@ export default function ManufacturerOrderDetailPage() {
           {/* Order Summary */}
           <Card>
             <CardHeader>
-              <CardTitle>{language === "ar" ? "ملخص الطلب" : "Order Summary"}</CardTitle>
+              <CardTitle>{language === "ar" ? "أمر الشراء الخاص بك" : "Your Purchase Order"}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex justify-between">
-                <span>{language === "ar" ? "المجموع الفرعي" : "Subtotal"}:</span>
-                <span>{num(order.subtotal).toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>{language === "ar" ? "الشحن" : "Shipping"}:</span>
-                <span>{num(order.shippingCost).toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>{language === "ar" ? "الضريبة" : "Tax"}:</span>
-                <span>{num(order.tax).toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}</span>
-              </div>
-              <Separator />
               <div className="flex justify-between font-semibold text-lg">
-                <span>{language === "ar" ? "الإجمالي" : "Total"}:</span>
+                <span>{language === "ar" ? "تكلفة أمر الشراء" : "Your PO cost"}:</span>
                 <span className="text-emerald-600">
-                  {num(order.total).toLocaleString()} {language === "ar" ? "جنيه" : "EGP"}
+                  {poCost == null ? "—" : `${num(poCost).toLocaleString()} ${language === "ar" ? "جنيه" : "EGP"}`}
                 </span>
               </div>
             </CardContent>
