@@ -352,17 +352,7 @@ export default function ManufacturerOrderDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Notes */}
-          {order.notes && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{language === "ar" ? "ملاحظات" : "Notes"}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-slate-700">{order.notes}</p>
-              </CardContent>
-            </Card>
-          )}
+          {/* Customer free-text notes are not shown to vendors (policy; a production-instructions field is a later design). */}
         </div>
 
         {/* Sidebar */}

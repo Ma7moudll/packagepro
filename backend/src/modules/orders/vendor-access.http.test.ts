@@ -40,9 +40,9 @@ const fullOrder = () => ({
   id: 'O1', orderNumber: 'N-1', status: 'IN_PRODUCTION', currency: 'EGP', notes: 'handle with care',
   subtotal: '1000.00', tax: '140.00', shippingCost: '60.00', total: '1200.00', metadata: { shippingBreakdown: { x: 1 }, internal: 'META-SECRET' },
   shippingName: 'Recipient', shippingPhone: '+20100', shippingEmail: 'ship@x.y',
-  shippingAddress: { name: 'Recipient', phone: '+20100', email: 'ship@x.y', street: '1 Main', city: 'Cairo', postalCode: '11', country: 'EG', accountEmail: 'acct@x.y', internalFlag: 'ADDR-SECRET' },
+  shippingAddress: { name: 'Recipient', phone: '+20100', email: 'ship@x.y', street: '1 Main', city: 'Cairo', state: 'Giza', postalCode: '11', country: 'EG', accountEmail: 'acct@x.y', internalFlag: 'ADDR-SECRET', notes: 'ADDR-NOTES', userId: 'ADDR-UID' },
   createdAt: 'c', updatedAt: 'u', approvedAt: null, shippedAt: null, deliveredAt: null, completedAt: null, customerId: 'C1',
-  items: [{ id: 'i1', orderId: 'O1', productType: 'box', quantity: 100, dimensions: { length: 1, width: 2, unit: 'cm' }, material: 'kraft', color: null, finish: null, productId: 'p', variantId: null, sku: 's', config: { a: 'b' }, designId: 'D1', unitPrice: '10.00', totalPrice: '1000.00' }],
+  items: [{ id: 'i1', orderId: 'O1', productType: 'box', quantity: 100, dimensions: { length: 1, width: 2, unit: 'cm' }, material: 'kraft', color: null, finish: null, productId: 'p', variantId: null, sku: 's', config: { material: 'kraft', finish: 'matte', designName: 'CFG-DESIGNNAME', price: 'CFG-PRICE', designId: 'CFG-DREF' }, designId: 'D1', unitPrice: '10.00', totalPrice: '1000.00' }],
   design: { id: 'D1', designData: { secret: 'LAYERS' }, files: [{ id: 'f1', fileName: 'art.png', fileUrl: 'https://cdn/art.png' }] },
   approvalRequests: [{ id: 'a1', status: 'approved', proofUrl: 'https://cdn/proof.png', contentHash: 'h' }],
   customer: { id: 'C1', userId: 'cust1', user: { id: 'cust1', email: 'acct@x.y', firstName: 'A', lastName: 'B' } },
@@ -50,7 +50,7 @@ const fullOrder = () => ({
     { id: 'P1', vendorId: 'V1', vendorCost: '700.00', printFileUrl: 'https://cdn/print.pdf', dielineFileUrl: 'https://cdn/die.pdf', vendor: { id: 'V1', userId: 'vend1', companyName: 'One' } },
     { id: 'P2', vendorId: 'V2', vendorCost: '650.00', printFileUrl: 'https://cdn/other.pdf', dielineFileUrl: null, vendor: { id: 'V2', userId: 'vend2', email: 'v2@x.y', companyName: 'Two' } },
   ],
-  shipment: { id: 'sh1', orderId: 'O1', status: 'created', dhlTrackingNumber: 'TRK1', labelUrl: 'https://cdn/label.pdf', podSignature: 'SIG', shippingMethod: 'standard', estimatedDeliveryDate: null, actualDeliveryDate: null },
+  shipment: { id: 'sh1', orderId: 'O1', status: 'created', dhlTrackingNumber: 'TRK1', labelUrl: 'https://cdn/label.pdf', podSignature: 'SIG', trackingEvents: [{ note: 'SHIP-EVENTS' }], weight: 'SHIP-WEIGHT', dimensions: { l: 'SHIP-DIM' }, createdAt: 'SHIP-CREATED', updatedAt: 'SHIP-UPDATED', shippingMethod: 'standard', estimatedDeliveryDate: null, actualDeliveryDate: null },
   payment: { status: 'PAID', amount: '1200.00' },
   settlements: [{ id: 's1', amount: '10.00' }],
   reviews: [{ id: 'r1', rating: 5 }],
@@ -64,8 +64,8 @@ const get = async (token: string | undefined, url: string, method: 'GET' | 'POST
   return { status: r.statusCode, body, text: r.body };
 };
 
-const ORDER_KEYS = ['approvedAt', 'completedAt', 'createdAt', 'currency', 'deliveredAt', 'id', 'items', 'notes', 'orderNumber', 'purchaseOrder', 'purchaseOrders', 'shipment', 'shippedAt', 'shippingAddress', 'shippingEmail', 'shippingName', 'shippingPhone', 'status', 'trackingNumber', 'updatedAt'];
-const FORBIDDEN = ['LAYERS', 'art.png', 'proof.png', 'acct@x.y', 'META-SECRET', 'ADDR-SECRET', 'other.pdf', 'v2@x.y', 'label.pdf', 'SIG', '1000.00', '140.00', '60.00', '1200.00', '650.00', 'cust1', 'PAID'];
+const ORDER_KEYS = ['approvedAt', 'completedAt', 'createdAt', 'currency', 'deliveredAt', 'id', 'items', 'orderNumber', 'purchaseOrder', 'purchaseOrders', 'shipment', 'shippedAt', 'shippingAddress', 'shippingEmail', 'shippingName', 'shippingPhone', 'status', 'trackingNumber', 'updatedAt'];
+const FORBIDDEN = ['LAYERS', 'art.png', 'proof.png', 'acct@x.y', 'META-SECRET', 'ADDR-SECRET', 'other.pdf', 'v2@x.y', 'label.pdf', 'SIG', '1000.00', '140.00', '60.00', '1200.00', '650.00', 'cust1', 'PAID', 'handle with care', 'CFG-DESIGNNAME', 'CFG-PRICE', 'CFG-DREF', 'ADDR-NOTES', 'ADDR-UID', 'SHIP-EVENTS', 'SHIP-WEIGHT', 'SHIP-DIM', 'SHIP-CREATED', 'SHIP-UPDATED'];
 
 beforeEach(() => {
   db.users = { admin1: 'ADMIN', cust1: 'CUSTOMER', cust2: 'CUSTOMER', vend1: 'VENDOR', vend2: 'VENDOR' };
@@ -94,11 +94,15 @@ describe('GET /orders/:id', () => {
     expect(o.purchaseOrders[0].vendorCost).toBe('700.00');
     expect(o.purchaseOrders[0].printFileUrl).toBe('https://cdn/print.pdf');
     expect(o.purchaseOrders[0].dielineFileUrl).toBe('https://cdn/die.pdf');
-    expect(Object.keys(o.shippingAddress).sort()).toEqual(['city', 'country', 'email', 'name', 'phone', 'postalCode', 'street']);
+    expect(Object.keys(o.shippingAddress).sort()).toEqual(['city', 'country', 'email', 'name', 'phone', 'postalCode', 'state', 'street']);
+    expect(o.items[0].config).toEqual({ material: 'kraft', finish: 'matte' });
+    expect(fullOrder().shippingAddress).toHaveProperty('internalFlag'); // the stored address does carry extra keys; none may pass
+    expect(Object.keys(fullOrder().shippingAddress).length).toBeGreaterThan(Object.keys(o.shippingAddress).length);
     expect(o.items[0]).not.toHaveProperty('unitPrice');
     expect(o.items[0]).not.toHaveProperty('totalPrice');
     expect(o.items[0]).not.toHaveProperty('designId');
     expect(Object.keys(o.shipment).sort()).toEqual(['actualDeliveryDate', 'dhlTrackingNumber', 'estimatedDeliveryDate', 'id', 'orderId', 'shippingMethod', 'status']);
+    expect(Object.keys(fullOrder().shipment).length).toBeGreaterThan(Object.keys(o.shipment).length);
     expect(o.trackingNumber).toBe('TRK1');
     for (const n of FORBIDDEN) expect(r.text, n).not.toContain(n);
   });
@@ -129,8 +133,12 @@ describe('GET /purchase-orders/:id', () => {
     const po = r.body.data;
     expect(po.vendorCost).toBe('700.00');
     expect(po.printFileUrl).toBe('https://cdn/print.pdf');
-    expect(Object.keys(po.order).sort()).toEqual(['approvedAt', 'completedAt', 'createdAt', 'currency', 'deliveredAt', 'id', 'items', 'notes', 'orderNumber', 'shipment', 'shippedAt', 'shippingAddress', 'shippingEmail', 'shippingName', 'shippingPhone', 'status', 'updatedAt']);
-    for (const n of ['LAYERS', 'art.png', 'proof.png', 'acct@x.y', 'META-SECRET', 'ADDR-SECRET', '1000.00', '1200.00', '140.00']) expect(r.text, n).not.toContain(n);
+    expect(Object.keys(po.order).sort()).toEqual(['approvedAt', 'completedAt', 'createdAt', 'currency', 'deliveredAt', 'id', 'items', 'orderNumber', 'shipment', 'shippedAt', 'shippingAddress', 'shippingEmail', 'shippingName', 'shippingPhone', 'status', 'updatedAt']);
+    expect(Object.keys(po.order.shippingAddress).sort()).toEqual(['city', 'country', 'email', 'name', 'phone', 'postalCode', 'state', 'street']);
+    expect(po.order.items[0].config).toEqual({ material: 'kraft', finish: 'matte' });
+    expect(po.order).not.toHaveProperty('notes');
+    expect(Object.keys(po.order.shipment).sort()).toEqual(['actualDeliveryDate', 'dhlTrackingNumber', 'estimatedDeliveryDate', 'id', 'orderId', 'shippingMethod', 'status']);
+    for (const n of ['LAYERS', 'art.png', 'proof.png', 'acct@x.y', 'META-SECRET', 'ADDR-SECRET', '1000.00', '1200.00', '140.00', 'handle with care', 'CFG-DESIGNNAME', 'CFG-PRICE', 'CFG-DREF', 'ADDR-NOTES', 'ADDR-UID', 'SHIP-EVENTS', 'SHIP-WEIGHT', 'SHIP-DIM', 'SHIP-CREATED', 'SHIP-UPDATED']) expect(r.text, n).not.toContain(n);
   });
   it('another vendor, a customer and a stale ADMIN claim are refused by the backend; no token is 401', async () => {
     expect((await get(undefined, '/purchase-orders/P1')).status).toBe(401);
