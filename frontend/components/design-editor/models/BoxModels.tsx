@@ -12,9 +12,9 @@ import { StockPanel } from "./StockPanel"
 import { ShippingConstruction } from "./ShippingConstruction"
 import { PouchShape } from "./PouchProduct"
 import { ZiplockBagShape } from "./ZiplockProduct"
-import { CupShape, TubeShape } from "./CurvedProducts"
+import { CupShape, TubeShape, PillowShape, StripRollShape } from "./CurvedProducts"
 import { FlatProductShape } from "./FlatProducts"
-import { PaperBagShape, MailerBagShape, EnvelopeShape } from "./SoftProducts"
+import { PaperBagShape, MailerBagShape, EnvelopeShape, SewnBagShape } from "./SoftProducts"
 import { Html } from "@react-three/drei"
 import {thankYouPreviewStockColour} from "../../../../backend/src/modules/catalog/thank-you-preview"
 import { productPreviewCoverage } from "@/lib/editor/product-preview-coverage"
@@ -953,6 +953,96 @@ export function FoldingCarton(props:BoxModelProps){
  </group>
 }
 
+export function SnapLockBox(props:BoxModelProps){
+ // Batch T22 Part 2: the folding-carton body and top
+ // (dust flaps, lid, tuck, same opening motion), with a
+ // snap-lock bottom instead of the carton's flat bottom
+ // panel: two main bottom flaps hinged on the front and
+ // back walls meeting at the centre, and two side flaps
+ // one thickness below them. Preview geometry — the
+ // tab-and-slit interlock of the real snap-lock bottom
+ // is not modelled. Reached only when the snap-lock
+ // preview flag is on (lib/editor/preview-flags.ts).
+ const motion=useProductOpening(props.openState??0)
+ const {dimensions}=props,{length:L,width:W,height:H}=dimensions,l=L/100,w=W/100,h=H/100,b=.004
+ const t=easeInOutCubic(motion),stock=useProductStock(props),lid=w-b*2,tuck=Math.min(h*.3,w*.45),dust=Math.min(w*.4,h*.28)
+ const p={thickness:b,edge:stock.edge},main=w/2,side=w/2
+ return <group name="snaplock-construction">
+  <StockPanel {...p} width={l} height={h} outside={stock.face("front")} inside={stock.inner("front")} faceId="front" position={[0,h/2,w/2]}/>
+  <StockPanel {...p} width={l} height={h} outside={stock.face("back")} inside={stock.inner("back")} faceId="back" position={[0,h/2,-w/2]} rotation={[0,Math.PI,0]}/>
+  <StockPanel {...p} width={w} height={h} outside={stock.face("left")} inside={stock.inner("left")} faceId="left" position={[-l/2,h/2,0]} rotation={[0,-Math.PI/2,0]}/>
+  <StockPanel {...p} width={w} height={h} outside={stock.face("right")} inside={stock.inner("right")} faceId="right" position={[l/2,h/2,0]} rotation={[0,Math.PI/2,0]}/>
+  <StockPanel {...p} width={l} height={main} outside={stock.outside} inside={stock.inside} position={[0,0,w/2-main/2]} rotation={[-Math.PI/2,0,0]}/>
+  <StockPanel {...p} width={l} height={main} outside={stock.outside} inside={stock.inside} position={[0,0,-w/2+main/2]} rotation={[-Math.PI/2,0,0]}/>
+  <StockPanel {...p} width={w} height={side} outside={stock.outside} inside={stock.inside} position={[-l/2+side/2,-b,0]} rotation={[-Math.PI/2,0,Math.PI/2]}/>
+  <StockPanel {...p} width={w} height={side} outside={stock.outside} inside={stock.inside} position={[l/2-side/2,-b,0]} rotation={[-Math.PI/2,0,Math.PI/2]}/>
+  {[-1,1].map(side2=><group key={side2} position={[side2*l/2,h-b*2,0]} rotation={[0,0,-side2*t*Math.PI*.6]}>
+   <StockPanel {...p} width={dust} height={w-b*2} outside={stock.outside} inside={stock.inside} position={[-side2*dust/2,0,0]} rotation={[-Math.PI/2,0,0]}/>
+  </group>)}
+  <group position={[0,h,-w/2+b]} rotation={[-t*Math.PI*.59,0,0]}>
+   <StockPanel {...p} width={l} height={lid} outside={stock.face("top")} inside={stock.inner("top")} faceId="top" position={[0,0,lid/2]} rotation={[-Math.PI/2,0,0]}/>
+   <group position={[0,0,lid]} rotation={[(Math.PI/2)*(1-t*.83),0,0]}>
+    <StockPanel {...p} width={l*.82} height={tuck} outside={stock.outside} inside={stock.inside} position={[0,0,tuck/2]} rotation={[-Math.PI/2,0,0]}/>
+   </group>
+  </group>
+ </group>
+}
+
+export function AutoBottomBox(props:BoxModelProps){
+ // Batch T24 (T22 list, Part 3): the folding-carton
+ // body and top (dust flaps, lid, tuck, same opening
+ // motion), with an auto-bottom (crash-lock) base
+ // instead of the carton's flat bottom panel: two side
+ // flaps fold in first, then the two main flaps fold
+ // over them and over each other, shown here as three
+ // layers one thickness apart. Preview geometry — the
+ // diagonal pre-folds on the real main flaps are not
+ // modelled. Reached only when the auto-bottom preview
+ // flag is on (lib/editor/preview-flags.ts).
+ const motion=useProductOpening(props.openState??0)
+ const {dimensions}=props,{length:L,width:W,height:H}=dimensions,l=L/100,w=W/100,h=H/100,b=.004
+ const t=easeInOutCubic(motion),stock=useProductStock(props),lid=w-b*2,tuck=Math.min(h*.3,w*.45),dust=Math.min(w*.4,h*.28)
+ const p={thickness:b,edge:stock.edge},side=w/2
+ return <group name="autobottom-construction">
+  <StockPanel {...p} width={l} height={h} outside={stock.face("front")} inside={stock.inner("front")} faceId="front" position={[0,h/2,w/2]}/>
+  <StockPanel {...p} width={l} height={h} outside={stock.face("back")} inside={stock.inner("back")} faceId="back" position={[0,h/2,-w/2]} rotation={[0,Math.PI,0]}/>
+  <StockPanel {...p} width={w} height={h} outside={stock.face("left")} inside={stock.inner("left")} faceId="left" position={[-l/2,h/2,0]} rotation={[0,-Math.PI/2,0]}/>
+  <StockPanel {...p} width={w} height={h} outside={stock.face("right")} inside={stock.inner("right")} faceId="right" position={[l/2,h/2,0]} rotation={[0,Math.PI/2,0]}/>
+  <StockPanel {...p} width={w} height={side} outside={stock.outside} inside={stock.inside} position={[-l/2+side/2,-2*b,0]} rotation={[-Math.PI/2,0,Math.PI/2]}/>
+  <StockPanel {...p} width={w} height={side} outside={stock.outside} inside={stock.inside} position={[l/2-side/2,-2*b,0]} rotation={[-Math.PI/2,0,Math.PI/2]}/>
+  <StockPanel {...p} width={l} height={w} outside={stock.outside} inside={stock.inside} position={[0,-b,0]} rotation={[-Math.PI/2,0,0]}/>
+  <StockPanel {...p} width={l} height={w} outside={stock.outside} inside={stock.inside} position={[0,0,0]} rotation={[-Math.PI/2,0,0]}/>
+  {[-1,1].map(side2=><group key={side2} position={[side2*l/2,h-b*2,0]} rotation={[0,0,-side2*t*Math.PI*.6]}>
+   <StockPanel {...p} width={dust} height={w-b*2} outside={stock.outside} inside={stock.inside} position={[-side2*dust/2,0,0]} rotation={[-Math.PI/2,0,0]}/>
+  </group>)}
+  <group position={[0,h,-w/2+b]} rotation={[-t*Math.PI*.59,0,0]}>
+   <StockPanel {...p} width={l} height={lid} outside={stock.face("top")} inside={stock.inner("top")} faceId="top" position={[0,0,lid/2]} rotation={[-Math.PI/2,0,0]}/>
+   <group position={[0,0,lid]} rotation={[(Math.PI/2)*(1-t*.83),0,0]}>
+    <StockPanel {...p} width={l*.82} height={tuck} outside={stock.outside} inside={stock.inside} position={[0,0,tuck/2]} rotation={[-Math.PI/2,0,0]}/>
+   </group>
+  </group>
+ </group>
+}
+
+export function SleeveBand(props:BoxModelProps){
+ // Batch T22: an open band — the four walls of the
+ // carton construction with no bottom, lid, dust or
+ // tuck panels. It wraps a box of the same footprint;
+ // the product's height is the band's height. A sleeve
+ // does not open, so openState is ignored. Reached
+ // only when the sleeve preview flag is on (see
+ // lib/editor/preview-flags.ts).
+ const {dimensions}=props,{length:L,width:W,height:H}=dimensions,l=L/100,w=W/100,h=H/100,b=.004
+ const stock=useProductStock(props)
+ const p={thickness:b,edge:stock.edge}
+ return <group name="sleeve-band-construction">
+  <StockPanel {...p} width={l} height={h} outside={stock.face("front")} inside={stock.inner("front")} faceId="front" position={[0,h/2,w/2]}/>
+  <StockPanel {...p} width={l} height={h} outside={stock.face("back")} inside={stock.inner("back")} faceId="back" position={[0,h/2,-w/2]} rotation={[0,Math.PI,0]}/>
+  <StockPanel {...p} width={w} height={h} outside={stock.face("left")} inside={stock.inner("left")} faceId="left" position={[-l/2,h/2,0]} rotation={[0,-Math.PI/2,0]}/>
+  <StockPanel {...p} width={w} height={h} outside={stock.face("right")} inside={stock.inner("right")} faceId="right" position={[l/2,h/2,0]} rotation={[0,Math.PI/2,0]}/>
+ </group>
+}
+
 export function PizzaBox(props:BoxModelProps){
  const motion=useProductOpening(props.openState??0)
  const {dimensions}=props,{length:L,width:W,height:H}=dimensions,l=L/100,w=W/100,h=H/100,b=.008,bh=h*.72,lh=h*.28,over=b*2.5
@@ -983,6 +1073,39 @@ export function MailerBag(props:BoxModelProps){const stock=useProductStock(props
 export function StandUpPouch(props:BoxModelProps){const stock=useProductStock(props);return <PouchShape {...props} stock={stock}/>}
 export function ZiplockBag(props:BoxModelProps){const stock=useProductStock(props);return <ZiplockBagShape {...props} stock={stock}/>}
 
+export function PillowBox(props:BoxModelProps){const stock=useProductStock(props);return <PillowShape {...props} stock={stock}/>}
+
+export function StripRoll(props:BoxModelProps){const stock=useProductStock(props);return <StripRollShape {...props} stock={stock}/>}
+
+export function SewnBag(props:BoxModelProps){const stock=useProductStock(props);return <SewnBagShape {...props} stock={stock}/>}
+
+export function StampPad(props:BoxModelProps){
+ // Batch T25: a stamp ink pad — a shallow base tray
+ // holding a dark ink surface, with a shallow lid
+ // hinged at the back that the opening motion raises.
+ // The ink surface is a plain dark material; no ink
+ // texture or stamp die is modelled.
+ const motion=useProductOpening(props.openState??0)
+ const {dimensions}=props,{length:L,width:W,height:H}=dimensions,l=L/100,w=W/100,h=H/100,b=.003
+ const t=easeInOutCubic(motion),stock=useProductStock(props)
+ const inkMat=useMemo(()=>new THREE.MeshStandardMaterial({color:"#232833",roughness:.55}),[])
+ const p={thickness:b,edge:stock.edge},wallH=h*.55,lidH=h*.32
+ return <group name="footprint-construction">
+  <StockPanel {...p} width={l} height={w} outside={stock.outside} inside={stock.inside} position={[0,0,0]} rotation={[-Math.PI/2,0,0]}/>
+  <StockPanel {...p} width={l} height={wallH} outside={stock.face("front")} inside={stock.inner("front")} faceId="front" position={[0,wallH/2,w/2]}/>
+  <StockPanel {...p} width={l} height={wallH} outside={stock.face("back")} inside={stock.inner("back")} faceId="back" position={[0,wallH/2,-w/2]} rotation={[0,Math.PI,0]}/>
+  <StockPanel {...p} width={w} height={wallH} outside={stock.face("left")} inside={stock.inner("left")} faceId="left" position={[-l/2,wallH/2,0]} rotation={[0,-Math.PI/2,0]}/>
+  <StockPanel {...p} width={w} height={wallH} outside={stock.face("right")} inside={stock.inner("right")} faceId="right" position={[l/2,wallH/2,0]} rotation={[0,Math.PI/2,0]}/>
+  <StockPanel thickness={.002} edge={stock.edge} width={l-.02} height={w-.02} outside={inkMat} inside={inkMat} position={[0,wallH-.012,0]} rotation={[-Math.PI/2,0,0]}/>
+  <group position={[0,wallH,-w/2]} rotation={[-t*2.0,0,0]}>
+   <StockPanel {...p} width={l} height={w} outside={stock.face("top")} inside={stock.inner("top")} faceId="top" position={[0,lidH,w/2]} rotation={[-Math.PI/2,0,0]}/>
+   <StockPanel {...p} width={l} height={lidH} outside={stock.outside} inside={stock.inside} position={[0,lidH/2,w]}/>
+   <StockPanel {...p} width={w} height={lidH} outside={stock.outside} inside={stock.inside} position={[-l/2,lidH/2,w/2]} rotation={[0,-Math.PI/2,0]}/>
+   <StockPanel {...p} width={w} height={lidH} outside={stock.outside} inside={stock.inside} position={[l/2,lidH/2,w/2]} rotation={[0,Math.PI/2,0]}/>
+  </group>
+ </group>
+}
+
 // ============================================
 // MODEL FACTORY
 // ============================================
@@ -1007,6 +1130,13 @@ export function getBoxModel(type: string) {
   case "flat":return Label
   case "mailer-bag":return MailerBag
   case "ziplock-bag":return ZiplockBag
+  case "sleeve":return SleeveBand
+  case "snaplock":return SnapLockBox
+  case "autobottom":return AutoBottomBox
+  case "pillow":return PillowBox
+  case "strip":return StripRoll
+  case "sewnbag":return SewnBag
+  case "footprint":return StampPad
   default:return UnsupportedProductPreview
  }
 }
