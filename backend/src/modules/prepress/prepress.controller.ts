@@ -2,11 +2,13 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { prePressCheckService } from '../../services/pre-press-checker/prepress.service';
 import { authenticate, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { orderService } from '../orders/order.service';
+import { trustedRole } from '../designs/design-access';
+import { ValidationError } from '../../utils/errors';
 
 export class PrePressController {
   /**
-   * Access rule (same as GET /orders/:id): the owning customer, a vendor with
-   * a PO on the order, or an ADMIN. Previously any authenticated user could
+   * Access rule: the owning customer or an ADMIN (a vendor with a PO on the order
+   * can read the order but not run or read pre-press). Previously any authenticated user could
    * run a check against, or read the results of, ANY order — an IDOR that
    * also let strangers trigger expensive file processing on other people's
    * orders. orderService.getOrder enforces the rule and throws for everyone
@@ -19,7 +21,11 @@ export class PrePressController {
     await authenticate(request, reply);
     const user = (request as AuthenticatedRequest).user;
     const orderId = (request.params as { id: string }).id;
-    await orderService.getOrder(orderId, user.userId);
+    const order = await orderService.getOrder(orderId, user.userId);
+    // Pre-press reads the customer's design files and writes the design's check row, so it is limited to the
+    // order's customer and admins. A vendor with a PO on the order passes getOrder but not this.
+    const isCustomer = order?.customer?.user?.id === user.userId;
+    if (!isCustomer && (await trustedRole(user)) !== 'ADMIN') throw new ValidationError('Access denied');
     return orderId;
   }
 

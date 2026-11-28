@@ -6,6 +6,7 @@ import { getRedisClient } from '../../lib/redis';
 import { fileUploadService } from '../../services/file-upload/upload.service';
 import { DesignLifecycleService, DesignLifecycleState } from '../../services/design-lifecycle/design-lifecycle.service';
 import { isDesignOwner } from '../../middleware/auth.middleware';
+import { logger } from '../../utils/logger';
 import { certifiedDielineReceipt } from './dieline-delivery';
 import { prePressCheckService } from '../../services/pre-press-checker/prepress.service';
 import { deriveUnsupportedArtwork, unsupportedArtworkOutputMessage } from '../../services/pre-press-checker/unsupported-artwork';
@@ -196,7 +197,9 @@ export class DesignService {
   /**
    * Save design data (durable database persistence)
    */
-  async saveDesign(data: SaveDesignData, ownerId?: string): Promise<any> {
+  async saveDesign(data: SaveDesignData, ownerId?: string, opts: { strictSession?: boolean } = {}): Promise<any> {
+    // strictSession (set by the HTTP controller): the session must already exist (made by createSession, which
+    // issues a random id), and an ownerless draft is not claimed by whoever saves first.
     if (data.files?.some((file) => file.fileType === 'artwork_review')) throw new AppError(400, 'Review artifacts must use the owner-bound review endpoint');
     let session: any = {};
     const redis = getRedisClient();
@@ -243,7 +246,7 @@ export class DesignService {
       // matches 0 rows. An existing owner is never reassigned.
       const ownerGuard: any = ownerId
         ? {
-            OR: [{ ownerId: null }, { ownerId }],
+            OR: opts.strictSession && !design.orderId ? [{ ownerId }] : [{ ownerId: null }, { ownerId }],
             // Order-bound designs must also belong to the caller's order.
             ...(design.orderId
               ? { orderId: design.orderId, order: { is: { customer: { is: { userId: ownerId } } } } }
@@ -276,6 +279,7 @@ export class DesignService {
         throw new AppError(409, 'Design was removed while saving; retry');
       }
     } else {
+      if (opts.strictSession) throw new AppError(404, 'Design session not found');
       try {
       design = await tx.design.create({
         data: {
@@ -572,11 +576,12 @@ export class DesignService {
   /**
    * Get design for review (mark as IN_REVIEW)
    */
-  async getDesignForReview(designId: string): Promise<any> {
+  async getDesignForReview(designId: string, opts: { startReview?: boolean } = {}): Promise<any> {
     const design = await this.getDesign(designId);
 
-    // Auto-transition from SUBMITTED to IN_REVIEW on first view
-    if (design.lifecycleStatus === 'SUBMITTED') {
+    // Auto-transition from SUBMITTED to IN_REVIEW on the reviewer's first view. Only an explicit reviewer
+    // (the controller passes startReview for ADMIN) moves the state; a read by anyone else changes nothing.
+    if (opts.startReview === true && design.lifecycleStatus === 'SUBMITTED') {
       return await prisma.design.update({
         where: { id: designId },
         data: { lifecycleStatus: 'IN_REVIEW' },
@@ -627,7 +632,7 @@ export class DesignService {
   /**
    * Approve a design
    */
-  async approveDesign(designId: string, _userId: string, _notes?: string): Promise<any> {
+  async approveDesign(designId: string, actorId: string, _notes?: string): Promise<any> {
     const design = await this.getDesign(designId);
 
     // Validate state transition
@@ -648,13 +653,14 @@ export class DesignService {
       include: { files: true, order: true },
     });
 
+    logger.info('design review decision', { designId, actorId, decision: 'approved' });
     return updatedDesign;
   }
 
   /**
    * Reject a design
    */
-  async rejectDesign(designId: string, _userId: string, _reason: string): Promise<any> {
+  async rejectDesign(designId: string, actorId: string, _reason: string): Promise<any> {
     const design = await this.getDesign(designId);
 
     // Validate state transition
@@ -674,13 +680,14 @@ export class DesignService {
       include: { files: true, order: true },
     });
 
+    logger.info('design review decision', { designId, actorId, decision: 'rejected' });
     return updatedDesign;
   }
 
   /**
    * Request changes to design (adds revision_request comments but keeps IN_REVIEW)
    */
-  async requestChanges(designId: string, _userId: string, changes: string[]): Promise<any> {
+  async requestChanges(designId: string, actorId: string, changes: string[]): Promise<any> {
     const design = await this.getDesign(designId);
 
     // Verify design is in review
@@ -691,6 +698,7 @@ export class DesignService {
     // Add revision request comments
     // TODO: Create multiple comments with type: 'revision_request'
 
+    logger.info('design review decision', { designId, actorId, decision: 'changes_requested' });
     return {
       designId,
       requestedChanges: changes,

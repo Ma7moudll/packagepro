@@ -194,8 +194,15 @@ async function registerRoutes() {
   const { checkoutRoutes } = await import('./modules/checkout/checkout.routes');
   const { publicRoutes } = await import('./modules/public/public.routes');
   const { fileRoutes } = await import('./modules/files/files.routes');
+  const { signedFileUrlResponses } = await import('./modules/files/signed-response');
+  const { isFileSigningConfigured } = await import('./modules/files/signed-url');
+  if (process.env.NODE_ENV === 'production' && !isFileSigningConfigured()) {
+    throw new Error('FILE_URL_SIGNING_SECRET (32+ characters) must be set in production. Refusing to start.');
+  }
   const { adminRoutes } = await import('./modules/admin/admin.routes');
 
+  // Local stored-file URLs in JSON responses are signed and expiring (see modules/files/signed-url.ts).
+  await server.register(signedFileUrlResponses);
   await server.register(authRoutes, { prefix: '/api' });
   await server.register(pricingRoutes, { prefix: '/api' });
   await server.register(designRoutes, { prefix: '/api' });

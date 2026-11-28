@@ -1,5 +1,6 @@
 import {validateCustomerOrderQuery} from './customer-order-query';
 import {approvalContentHash} from './approval-snapshot';
+import {vendorOrderView} from './vendor-order-view';
 import { assertSpecificationPriced } from "../../utils/production-specification";
 import { prisma } from '../../lib/prisma';
 import {
@@ -350,13 +351,18 @@ export class OrderService {
         include: { customer: true, vendor: true },
       });
 
-      if (
-        user?.role === 'ADMIN' ||
-        order.customer.user.id === userId ||
-        // 4a: a vendor may now own several POs of one order.
-        order.purchaseOrders.some((po: any) => po.vendor.userId === userId)
-      ) {
+      if (user?.role === 'ADMIN' || order.customer.user.id === userId) {
         return serializeOrder(order);
+      }
+      // 4a: a vendor may now own several POs of one order. A vendor sees the order, not the customer's design.
+      if (order.purchaseOrders.some((po: any) => po.vendor.userId === userId)) {
+        const view = vendorOrderView(order, userId);
+        return {
+          ...view,
+          trackingNumber: order.shipment?.dhlTrackingNumber ?? null,
+          // legacy singular field, now the vendor's own first PO
+          purchaseOrder: view.purchaseOrders[0] ?? null,
+        };
       }
 
       throw new ValidationError('Access denied');

@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { designService } from './design.service';
 import { z } from 'zod';
 import { authenticate, AuthenticatedRequest } from '../../middleware/auth.middleware';
+import { assertAdmin, assertCanReadDesign, assertCanReadSession, trustedRole } from './design-access';
 
 const createSessionSchema = z.object({
   orderId: z.string().optional(),
@@ -76,6 +77,7 @@ export class DesignController {
   async getSession(request: FastifyRequest, reply: FastifyReply) {
     await authenticate(request, reply);
     const sessionId = (request.params as { sessionId: string }).sessionId;
+    await assertCanReadSession((request as AuthenticatedRequest).user, sessionId);
     const session = await designService.getSession(sessionId);
 
     return reply.send({
@@ -99,7 +101,18 @@ export class DesignController {
     await authenticate(request, reply);
     const body = saveDesignSchema.parse(request.body);
     const user = (request as AuthenticatedRequest).user;
-    const design = await designService.saveDesign(body, user.userId);
+    // A saved design may only reference local files the user is entitled to.
+    {
+      const { assertLocalFileUrlsAllowed, prismaRefLoader } = await import('../files/file-access');
+      const { prisma } = await import('../../lib/prisma');
+      await assertLocalFileUrlsAllowed(
+        user,
+        (body.files ?? []).map((f) => f.fileUrl),
+        prismaRefLoader(prisma as any),
+        'POST saveDesign'
+      );
+    }
+    const design = await designService.saveDesign(body, user.userId, { strictSession: true });
 
     return reply.send({
       success: true,
@@ -110,6 +123,7 @@ export class DesignController {
   async getDesign(request: FastifyRequest, reply: FastifyReply) {
     await authenticate(request, reply);
     const designId = (request.params as { id: string }).id;
+    await assertCanReadDesign((request as AuthenticatedRequest).user, designId);
     const design = await designService.getDesign(designId);
 
     return reply.send({
@@ -121,6 +135,7 @@ export class DesignController {
   async getDesignFiles(request: FastifyRequest, reply: FastifyReply) {
     await authenticate(request, reply);
     const designId = (request.params as { id: string }).id;
+    await assertCanReadDesign((request as AuthenticatedRequest).user, designId);
     const files = await designService.getDesignFiles(designId);
 
     return reply.send({
@@ -133,7 +148,8 @@ export class DesignController {
     await authenticate(request, reply);
     const user = (request as AuthenticatedRequest).user;
     const designId = (request.params as { id: string }).id;
-    
+    await assertCanReadDesign(user, designId);
+
     const design = await designService.submitDesign(designId, user.userId);
 
     return reply.code(200).send({
@@ -146,7 +162,8 @@ export class DesignController {
     await authenticate(request, reply);
     const user = (request as AuthenticatedRequest).user;
     const designId = (request.params as { id: string }).id;
-    
+    await assertCanReadDesign(user, designId);
+
     const design = await designService.recallDesign(designId, user.userId);
 
     return reply.code(200).send({
@@ -159,6 +176,7 @@ export class DesignController {
     await authenticate(request, reply);
     const user = (request as AuthenticatedRequest).user;
     const designId = (request.params as { id: string }).id;
+    await assertCanReadDesign(user, designId);
     const body = exportDesignSchema.parse(request.body);
     
     const result = await designService.exportDesign(designId, user.userId, body);
@@ -180,9 +198,12 @@ export class DesignController {
 
   async getDesignForReview(request: FastifyRequest, reply: FastifyReply) {
     await authenticate(request, reply);
+    const user = (request as AuthenticatedRequest).user;
     const designId = (request.params as { id: string }).id;
-    
-    const design = await designService.getDesignForReview(designId);
+    await assertCanReadDesign(user, designId);
+
+    // Viewing is allowed for the owner and admins; only an admin reviewer moves SUBMITTED to IN_REVIEW.
+    const design = await designService.getDesignForReview(designId, { startReview: (await trustedRole(user)) === 'ADMIN' });
 
     return reply.code(200).send({
       success: true,
@@ -195,6 +216,7 @@ export class DesignController {
     const user = (request as AuthenticatedRequest).user;
     const designId = (request.params as { id: string }).id;
     const body = addCommentSchema.parse(request.body);
+    await assertCanReadDesign(user, designId);
     
     const comment = await designService.addCommentToDesign(designId, user.userId, body);
 
@@ -208,9 +230,10 @@ export class DesignController {
     await authenticate(request, reply);
     const user = (request as AuthenticatedRequest).user;
     const designId = (request.params as { id: string }).id;
+    const adminId = await assertAdmin(user);
     const body = approveDesignSchema.parse(request.body);
     
-    const design = await designService.approveDesign(designId, user.userId, body.notes);
+    const design = await designService.approveDesign(designId, adminId, body.notes);
 
     return reply.code(200).send({
       success: true,
@@ -222,9 +245,10 @@ export class DesignController {
     await authenticate(request, reply);
     const user = (request as AuthenticatedRequest).user;
     const designId = (request.params as { id: string }).id;
+    const adminId = await assertAdmin(user);
     const body = rejectDesignSchema.parse(request.body);
     
-    const design = await designService.rejectDesign(designId, user.userId, body.reason);
+    const design = await designService.rejectDesign(designId, adminId, body.reason);
 
     return reply.code(200).send({
       success: true,
@@ -236,9 +260,10 @@ export class DesignController {
     await authenticate(request, reply);
     const user = (request as AuthenticatedRequest).user;
     const designId = (request.params as { id: string }).id;
+    const adminId = await assertAdmin(user);
     const body = requestChangesSchema.parse(request.body);
     
-    const result = await designService.requestChanges(designId, user.userId, body.changes);
+    const result = await designService.requestChanges(designId, adminId, body.changes);
 
     return reply.code(200).send({
       success: true,

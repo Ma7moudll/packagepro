@@ -34,6 +34,10 @@ export class ReviewController {
       });
     }
 
+    {
+      const { assertLocalFileUrlsAllowed, prismaRefLoader } = await import('../files/file-access');
+      await assertLocalFileUrlsAllowed(user, body.photoUrls ?? [], prismaRefLoader(prisma), 'POST createReview');
+    }
     const review = await reviewService.createReview({
       ...body,
       customerId: customer.id,

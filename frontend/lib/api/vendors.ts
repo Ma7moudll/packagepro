@@ -129,7 +129,7 @@ export interface BackendOrder {
   createdAt: string
   updatedAt: string
   items?: BackendOrderItem[]
-  purchaseOrder?: { id: string; poNumber: string; status: string; vendorId: string } | null
+  purchaseOrder?: { id: string; poNumber: string; status: string; vendorId: string; vendorCost?: string | number } | null
   customer?: {
     user?: { id: string; email?: string; firstName?: string | null; lastName?: string | null } | null
   } | null

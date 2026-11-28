@@ -19,6 +19,7 @@ import {
 import { fetchStoredFile } from "../../services/file-upload/stored-file-fetch";
 import { fileUploadService } from "../../services/file-upload/upload.service";
 import { approvalContentHash, approvalBytesHash } from "./approval-snapshot";
+import { isStoredFileOfDesign } from "../files/file-access";
 
 // Validate once before staging anything, then retain this base across async work.
 export function approvalFrontendBase(value=process.env.FRONTEND_URL,production=process.env.NODE_ENV==='production'):string{
@@ -114,6 +115,10 @@ export class ApprovalService {
         throw new ValidationError(
           "Selected files do not belong to this design",
         );
+      // A local key is read only if it sits under this design's own folder (see isStoredFileOfDesign).
+      for (const file of [print, dieline].filter(Boolean))
+        if (!isStoredFileOfDesign(file!.fileUrl, design.id))
+          throw new ValidationError("Selected file is not stored under this design");
       for (const file of [print, dieline].filter(Boolean))
         if ((file!.metadata as any)?.approvalContentHash !== hash)
           throw new ValidationError(

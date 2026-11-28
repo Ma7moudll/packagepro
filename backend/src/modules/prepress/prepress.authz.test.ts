@@ -4,8 +4,8 @@ import { prePressController } from './prepress.controller';
 import { jwtService } from '../auth/services/jwt.service';
 
 /**
- * Prepress endpoints must enforce the same access rule as GET /orders/:id:
- * the owning customer, a vendor with a PO on the order, or an ADMIN. Before
+ * Prepress endpoints are narrower than GET /orders/:id:
+ * the owning customer or an ADMIN (a vendor with a PO can read the order but not pre-press). Before
  * the fix, any authenticated user could trigger a check on (or read results
  * of) any order id.
  *
