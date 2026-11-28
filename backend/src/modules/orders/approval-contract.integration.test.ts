@@ -21,7 +21,7 @@ describe('real saved-design approval snapshot contract',()=>{
  async function setup(){
   const sessionId=`approval-save-${Date.now()}-${Math.random()}`;const designData={marker:'A',layers:[]};
   const bytes=await sharp({create:{width:20,height:20,channels:3,background:'#ff0000'}}).png().toBuffer();
-  const upload=await fileUploadService.uploadFile(bytes,'red.png','image/png','test-approval');
+  const d0=await designService.saveDesign({sessionId,designData},userId);const upload=await fileUploadService.uploadFile(bytes,'red.png','image/png',`designs/${d0.id}`);
   const d=await designService.saveDesign({sessionId,designData,files:[{fileType:'print_file',fileName:'red.png',fileUrl:upload.fileUrl,mimeType:'image/png'}]},userId);
   const o=await prisma.order.create({data:{orderNumber:sessionId,customerId,status:'pending_review',subtotal:20,total:20,tax:0,shippingCost:0,shippingAddress:{},shippingName:'Test',shippingPhone:'local'}});orders.push(o.id);
   await prisma.design.update({where:{id:d.id},data:{orderId:o.id}});

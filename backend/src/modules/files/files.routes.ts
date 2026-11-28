@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { fileUploadService } from '../../services/file-upload/upload.service';
+import { isFileSigningConfigured, verifyFileSignature } from './signed-url';
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   jpg: 'image/jpeg',
@@ -14,13 +15,23 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 /**
  * Serves files uploaded in local-storage mode (S3 not configured).
  * URLs look like /api/files/samples/<productionId>/<uuid>.jpg and are
- * produced by fileUploadService.uploadFile.
+ * produced by fileUploadService.uploadFile, and must carry ?exp=&sig= from
+ * createSignedFileUrl (see signed-url.ts).
  */
 export const fileRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/files/*', async (request, reply) => {
     const fileKey = (request.params as { '*': string })['*'];
     if (!fileKey) {
       return reply.status(404).send({ success: false, error: 'NOT_FOUND' });
+    }
+
+    // Access needs a valid signed, expiring URL. Checked before any disk read.
+    if (!isFileSigningConfigured()) {
+      return reply.status(503).send({ success: false, error: 'FILE_SIGNING_NOT_CONFIGURED' });
+    }
+    const q = request.query as { exp?: unknown; sig?: unknown };
+    if (!verifyFileSignature(fileKey, q.exp, q.sig)) {
+      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED' });
     }
 
     const file = await fileUploadService.readLocalFile(fileKey);
@@ -43,7 +54,7 @@ export const fileRoutes: FastifyPluginAsync = async (fastify) => {
     if (extension === 'svg') {
       reply.header('Content-Disposition', 'attachment');
     } else {
-      reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+      reply.header('Cache-Control', 'private, max-age=60');
     }
 
     return reply.send(file.buffer);

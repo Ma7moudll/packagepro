@@ -47,6 +47,8 @@ services:
       # Required: no committed defaults. The backend refuses to boot without them.
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in your .env file}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in your .env file}
+      # Signs /api/files/* URLs (32+ characters). Not bound to a user or an order.
+      FILE_URL_SIGNING_SECRET: ${FILE_URL_SIGNING_SECRET:?Set FILE_URL_SIGNING_SECRET (32+ characters) in your .env file}
     ports:
       - "3000:3000"
     depends_on:

@@ -197,8 +197,8 @@ describe('security report regressions, real database', () => {
     expect(emailService.sendApprovalRequest).not.toHaveBeenCalled();
   });
   async function approvalInput(o:any){
-    const bytes=await sharp({create:{width:20,height:20,channels:3,background:'#ffffff'}}).png().toBuffer();const upload=await fileUploadService.uploadFile(bytes,'security.png','image/png','test-approval');
-    const d=await designService.saveDesign({sessionId:`${marker}-design-${++seq}`,designData:{layers:[]},files:[{fileType:'print_file',fileName:'security.png',fileUrl:upload.fileUrl,mimeType:'image/png'}]},owner.userId);
+    const bytes=await sharp({create:{width:20,height:20,channels:3,background:'#ffffff'}}).png().toBuffer();const sessionId=`${marker}-design-${++seq}`;const d0=await designService.saveDesign({sessionId,designData:{layers:[]}},owner.userId);const upload=await fileUploadService.uploadFile(bytes,'security.png','image/png',`designs/${d0.id}`);
+    const d=await designService.saveDesign({sessionId,designData:{layers:[]},files:[{fileType:'print_file',fileName:'security.png',fileUrl:upload.fileUrl,mimeType:'image/png'}]},owner.userId);
     await prisma.design.update({where:{id:d.id},data:{orderId:o.id}});const file=await prisma.designFile.findFirstOrThrow({where:{designId:d.id,fileType:'print_file'}});return {printFileId:file.id,dielineFileId:null};
   }
   it('failed durable token persistence rolls back finalization and sends no email; explicit renewal recovers',async()=>{

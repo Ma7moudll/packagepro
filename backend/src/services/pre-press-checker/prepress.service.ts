@@ -25,6 +25,7 @@ import { checkFonts } from './validators/font.validator';
 import { detectFileKind } from './validators/file-kind';
 import { analyzeGeometry, AutoFix } from './geometry-mirror';
 import { fetchStoredFile, StoredFileFetchError } from '../file-upload/stored-file-fetch';
+import { isStoredFileOfDesign } from '../../modules/files/file-access';
 
 export type IssueSeverity = 'error' | 'warning' | 'info';
 
@@ -84,6 +85,16 @@ export class PrePressCheckService {
     // A — authoritative file checks on the persisted print + preview assets.
     for (const file of order.design.files) {
       if (file.fileType !== 'print_file' && file.fileType !== 'preview') continue;
+
+      // A local key is read only if it sits under this design's own folder (see isStoredFileOfDesign).
+      if (!isStoredFileOfDesign(file.fileUrl, order.design.id)) {
+        issues.push({
+          type: 'file_access',
+          severity: 'error',
+          message: `Failed to download file ${file.fileName}: NOT_UNDER_DESIGN`,
+        });
+        continue;
+      }
 
       let buffer: Buffer;
       try {
