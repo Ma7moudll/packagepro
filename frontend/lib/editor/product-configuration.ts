@@ -5,6 +5,7 @@ import {ziplockPreviewStockColour} from '../../../backend/src/modules/catalog/zi
 import type {DesignCoreState} from './state/types.ts'
 import {canonicalEditorType} from '../../../shared/catalog/products.ts'
 import {productPreviewCoverage} from './product-preview-coverage.ts'
+import {dimensionLabelRelabelEnabled} from './dimension-label-flags.ts'
 
 /** Product-listed candidates are requests, not supplier-certified materials. */
 export function productConfiguration(type:string,materials:readonly string[]=[]){
@@ -17,9 +18,30 @@ export function productConfiguration(type:string,materials:readonly string[]=[])
   n==='circle-label'?[{key:'length',en:'Diameter',ar:'القطر'}]:
   c.family==='flat'||c.family==='label'||c.family==='ziplock-bag'?[{key:'length',en:'Width',ar:'العرض'},{key:'height',en:'Height',ar:'الارتفاع'}]:
   [{key:'length',en:'Width',ar:'العرض'},{key:'width',en:'Depth',ar:'العمق'},{key:'height',en:'Height',ar:'الارتفاع'}]
- return {boardStock,opening,dimensions,materials:[...new Set(materials)],supplierConfirmed:false as const}
+ const shown=dimensionLabelRelabelEnabled()?applyDimensionRelabels(n,c.family,dimensions):dimensions
+ return {boardStock,opening,dimensions:shown,materials:[...new Set(materials)],supplierConfirmed:false as const}
 }
 export interface nativeDimension {key:'length'|'width'|'height';en:string;ar:string}
+const STRIP_PRODUCTS=['paper-tape','plastic-tape','water-activated-tape','ribbon']
+const SEWN_BAG_PRODUCTS=['cotton-bag','mesh-bag','muslin-bag']
+/** Batch T25 — relabels only, behind the dimension-label
+ * flag: the strip products' length field is the roll
+ * length and their width field is the strip's real width
+ * (their height field has no effect); for the envelope,
+ * the corrugated envelope and the mailer and sewn bags
+ * the depth field has no effect on the routed blank
+ * (batch T24's table). stamp_ink_pad is deliberately
+ * untouched: its height is recorded and validated. */
+export function applyDimensionRelabels(normalized:string,family:string|undefined,dimensions:nativeDimension[]):nativeDimension[]{
+ const relabel=(key:nativeDimension['key'],en:string,ar:string)=>dimensions.map(d=>d.key===key?{...d,en,ar}:d)
+ if(STRIP_PRODUCTS.includes(normalized)){
+  return relabel('length','Roll length','طول اللفة').map(d=>d.key==='width'?{...d,en:'Strip width',ar:'عرض الشريط'}:d).map(d=>d.key==='height'?{...d,en:'Height (unused)',ar:'الارتفاع (غير مستخدم)'}:d)
+ }
+ if(normalized==='envelope'||normalized==='corrugated-envelope'||family==='mailer-bag'||SEWN_BAG_PRODUCTS.includes(normalized)){
+  return relabel('width','Depth (unused)','العمق (غير مستخدم)')
+ }
+ return dimensions
+}
 export function productDimensionChange(type:string,current:{length:number;width:number;height:number},key:nativeDimension['key'],value:number){
  const next={...current,[key]:Math.max(1,value||1)},c=productPreviewCoverage(type)
  if(c.family==='tube'&&key==='width')next.length=next.width

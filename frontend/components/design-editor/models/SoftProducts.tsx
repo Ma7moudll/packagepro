@@ -53,3 +53,38 @@ export function MailerBagShape({dimensions,stock,type,openState=0}:ProductShapeP
   <mesh geometry={liner} material={linerMaterial}/>
  </group>
 }
+
+export function SewnBagShape({dimensions,stock}:ProductShapeProps){
+ // Batch T25: an open-top sewn textile bag. The body
+ // is a parametric tube with an elliptical cross
+ // section (length across, width as the gusset
+ // depth), closed at the bottom and open at the top,
+ // with a slightly wider hem band at the top edge.
+ // Plain tote form — no handles, drawstring or
+ // printed construction details are modelled.
+ const L=dimensions.length/100,W=dimensions.width/100,H=dimensions.height/100
+ const half=(top:boolean,hem:boolean)=>{
+  const NY=hem?2:9,NT=17,pos:number[]=[],uv:number[]=[],idx:number[]=[]
+  for(let i=0;i<NY;i++){
+   const t=hem?.92+i*.08:i/(NY-1),y=t*H,bulge=hem?1.03:1+Math.sin(t*Math.PI)*.03
+   const rx=(L/2)*bulge,rz=(W/2)*bulge
+   for(let j=0;j<NT;j++){
+    const th=(j/(NT-1))*Math.PI+(top?0:Math.PI)
+    pos.push(rx*Math.cos(th),y,rz*Math.sin(th));uv.push(j/(NT-1),t)
+   }
+  }
+  for(let i=0;i<NY-1;i++)for(let j=0;j<NT-1;j++){const a=i*NT+j,b=a+NT;idx.push(a,a+1,b,b,a+1,b+1)}
+  if(!hem){const base=pos.length/3;pos.push(0,0,0);uv.push(.5,0);for(let j=0;j<NT-1;j++)idx.push(base,(0)*NT+j+1,(0)*NT+j)}
+  const g=new THREE.BufferGeometry()
+  g.setAttribute("position",new THREE.Float32BufferAttribute(pos,3))
+  g.setAttribute("uv",new THREE.Float32BufferAttribute(uv,2))
+  g.setIndex(idx);g.computeVertexNormals()
+  return g
+ }
+ const front=useMemo(()=>half(true,false),[L,W,H]),back=useMemo(()=>half(false,false),[L,W,H]),hem=useMemo(()=>half(true,true),[L,W,H])
+ return <group name="sewnbag-construction">
+  <mesh geometry={front} material={stock.face("front")} castShadow userData={{faceId:"front"}}/>
+  <mesh geometry={back} material={stock.face("back")} castShadow userData={{faceId:"back"}}/>
+  <mesh geometry={hem} material={stock.inside}/>
+ </group>
+}
