@@ -1,6 +1,11 @@
 "use client"
+import {
+  Money,
+  MoneySummary,
+  mergeMoneyGroups,
+} from "@/components/admin/money";
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,13 +13,15 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { DataTable, type Column } from "@/components/admin/data-table"
 import { KPICard } from "@/components/admin/kpi-card"
+import { useLanguage } from "@/providers/language-provider"
 import { useAuth } from "@/providers/auth-provider"
 import { useDebounce } from "@/hooks/use-debounce"
 import { adminApi, type AdminCustomer, type Pagination } from "@/lib/api/admin"
-import { Search, Users, DollarSign, Loader2 } from "lucide-react"
+import { Search, Users, Banknote, Loader2 } from "lucide-react"
 
 export default function AdminCustomersPage() {
   const { user, isLoading: authLoading } = useAuth()
+  const { language } = useLanguage()
   const router = useRouter()
 
   const [customers, setCustomers] = useState<AdminCustomer[]>([])
@@ -23,6 +30,11 @@ export default function AdminCustomersPage() {
   const [search, setSearch] = useState("")
   const debouncedSearch = useDebounce(search, 350)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  // Request ownership: only the latest load may commit rows, pagination,
+  // error and loading state. A slower older response (or its failure)
+  // must never overwrite the result of a newer request.
+  const loadSeq = useRef(0)
 
   useEffect(() => {
     if (!authLoading && (!user || user.role !== "ADMIN")) {
@@ -31,32 +43,47 @@ export default function AdminCustomersPage() {
   }, [user, authLoading, router])
 
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current
     setLoading(true)
+    setError(null)
     try {
       const res = await adminApi.getCustomers({
         page,
         limit: 20,
         search: debouncedSearch || undefined,
       })
+      if (seq !== loadSeq.current) return
       if (res.success && res.data) {
         setCustomers(res.data)
         setPagination(res.pagination ?? null)
+        setError(null)
+      } else {
+        setCustomers([])
+        setPagination(null)
+        setError("Failed to load customers. Please try again.")
       }
     } catch (err) {
+      if (seq !== loadSeq.current) return
       console.error("Failed to load customers:", err)
+      setCustomers([])
+      setPagination(null)
+      setError("Failed to load customers. Please try again.")
     } finally {
-      setLoading(false)
+      if (seq === loadSeq.current) setLoading(false)
     }
   }, [page, debouncedSearch])
 
   useEffect(() => {
     if (!user || user.role !== "ADMIN") return
     load()
+    return () => { loadSeq.current++ }
   }, [user, load])
 
   if (!user || user.role !== "ADMIN") return null
 
-  const totalLtv = customers.reduce((sum, c) => sum + c.lifetimeValue, 0)
+  const totalLtv = customers.every((c) => c.lifetimeValueByCurrency)
+    ? mergeMoneyGroups(customers.flatMap((c) => c.lifetimeValueByCurrency!))
+    : undefined;
   const repeatBuyers = customers.filter((c) => c.ordersCount > 1).length
 
   const columns: Column<AdminCustomer>[] = [
@@ -84,10 +111,10 @@ export default function AdminCustomersPage() {
       cell: (c) => <span className="text-sm font-medium">{c.ordersCount}</span>,
     },
     {
-      header: "Lifetime value",
+      header: "Order value (not cancelled)",
       cell: (c) => (
         <span className="font-medium text-emerald-700">
-          ${c.lifetimeValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          <MoneySummary groups={c.lifetimeValueByCurrency} unclassifiedCount={c.unclassifiedOrderCount} />
         </span>
       ),
     },
@@ -105,13 +132,13 @@ export default function AdminCustomersPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <KPICard title="Customers (page)" value={customers.length} icon={Users} loading={loading} />
         <KPICard title="Repeat buyers (page)" value={repeatBuyers} icon={Users} loading={loading} />
         <KPICard
-          title="LTV on page"
-          value={`$${totalLtv.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-          icon={DollarSign}
+          title="Order value on page"
+          value={<MoneySummary groups={totalLtv} unclassifiedCount={customers.reduce((n,c)=>n+(c.unclassifiedOrderCount??0),0)} />}
+          icon={Banknote}
           tone="positive"
           loading={loading}
         />
@@ -134,6 +161,11 @@ export default function AdminCustomersPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {error && (
+            <div role="alert" className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {language === "ar" ? "تعذر تحميل العملاء. حاول مرة أخرى." : error}
+            </div>
+          )}
           {loading && customers.length === 0 ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-slate-400" />

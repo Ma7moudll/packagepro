@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -55,17 +55,28 @@ export default function VendorSamplesPage() {
   const [pos, setPos] = useState<PurchaseOrder[]>([])
   const [uploadingFor, setUploadingFor] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const loadSeq = useRef(0)
+  const [loadError, setLoadError] = useState(false)
+
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    // A silent reload refreshes the data in place (used by the sample
+    // uploader's conflict resolution): the grid — and with it the
+    // vendor's selected, not-yet-uploaded photos — stays mounted.
+    const seq = ++loadSeq.current
+    setLoadError(false)
+    if (!opts?.silent) setLoading(true)
     try {
       const res = await vendorsApi.getOrders({ limit: 50 })
+      if (seq !== loadSeq.current) throw new Error("Reload superseded; reload current sample again")
+      if (!res.success || !res.data) throw new Error("Reload failed")
       if (res.success && res.data) {
         setPos(res.data as unknown as PurchaseOrder[])
       }
     } catch (err) {
-      console.error("Failed to load productions:", err)
+      if (seq === loadSeq.current) setLoadError(true)
+      throw err
     } finally {
-      setLoading(false)
+      if (seq === loadSeq.current) setLoading(false)
     }
   }, [])
 
@@ -74,7 +85,8 @@ export default function VendorSamplesPage() {
       router.push("/login")
       return
     }
-    if (user) load()
+    if (user) void load().catch(() => {})
+    return () => { loadSeq.current++ }
   }, [user, authLoading, router, load])
 
   if (!user || (user.role !== "MANUFACTURER" && user.role !== "ADMIN")) return null
@@ -105,14 +117,23 @@ export default function VendorSamplesPage() {
               ? "سيتم إشعارك عند اكتمال مراجعة الجودة."
               : "You will be notified once QA reviews it.",
         })
-        await load()
+        await load({ silent: true }).catch(() => {})
+      } else {
+        throw new Error("Upload failed")
       }
     } catch (err) {
+      // A 409 means the sample state changed while the vendor was
+      // working. Hand it to the uploader, which shows the conflict
+      // feedback and the reload choice — no generic toast, and the
+      // vendor's selected photos are not cleared. Every other failure
+      // keeps the existing generic handling below.
+      if ((err as { status?: unknown } | null)?.status === 409) throw err
       console.error("Sample upload failed:", err)
       toast({
         title: language === "ar" ? "فشل الرفع" : "Upload failed",
         variant: "destructive",
       })
+      throw err
     } finally {
       setUploadingFor(null)
     }
@@ -131,13 +152,14 @@ export default function VendorSamplesPage() {
               : "Upload QA sample photos and track review status"}
           </p>
         </div>
-        <Button variant="outline" onClick={load} disabled={loading}>
+        <Button variant="outline" onClick={() => { void load({ silent: true }).catch(() => {}) }} disabled={loading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
           {language === "ar" ? "تحديث" : "Refresh"}
         </Button>
       </div>
 
-      {loading ? (
+      {loadError && <p role="alert" className="text-sm text-rose-600 mb-4">{language === "ar" ? "تعذر تحديث العينات. الحالة المعروضة قديمة. أعد المحاولة." : "Samples could not refresh. The displayed state may be stale. Try again."}</p>}
+      {loading && pos.length === 0 ? (
         <div className="flex items-center justify-center py-24">
           <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
         </div>
@@ -224,10 +246,12 @@ export default function VendorSamplesPage() {
                     </div>
                   )}
 
-                  {inSampleStage && po.production && (
+                  {po.production && (
                     <SampleUploader
+                      closed={!inSampleStage}
                       disabled={uploadingFor === po.production.id}
                       onUpload={(photos) => handleUpload(po, photos)}
+                      onReload={() => load({ silent: true })}
                     />
                   )}
                 </CardContent>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react"
 import { useDesignStore } from "@/lib/editor/state/store"
-import { resolveDieline } from "@/lib/editor/geometry/resolve-dieline"
+import { resolveDieline, selectEffectiveDieline } from "@/lib/editor/geometry/resolve-dieline"
 import { DesignCanvas2D } from "@/components/editor/canvas/DesignCanvas2D"
 import { DesignCanvas3D } from "@/components/editor/canvas/DesignCanvas3D"
 import { DielineCanvas } from "@/components/editor/canvas/DielineCanvas"
@@ -10,6 +10,7 @@ import { WallViewCanvas } from "@/components/editor/canvas/WallViewCanvas"
 import { analyticsService } from "@/lib/analytics/analytics-service"
 
 interface PackhelpEditorProps {
+  preserveRestoredDesign?: boolean
   productType?: "box" | "bag" | "cup" | "tube"
   boxType?: "mailer-box" | "gift-box" | "folding-carton" | "rigid-box" | "cup" | "bag" | "shipping-box"
   material?: string
@@ -17,6 +18,7 @@ interface PackhelpEditorProps {
     elements?: any[]
     colors?: { primary: string; secondary: string }
     dimensions?: { length: number; width: number; height: number }
+    quantity?: number
   }
   onSave?: (design: any) => void
   onAddText?: () => void
@@ -35,6 +37,7 @@ const MATERIAL_COLORS: Record<string, string> = {
 
 // Initialize store with initial design if provided
 export function PackhelpEditor({
+  preserveRestoredDesign = false,
   productType = "box",
   boxType = "mailer-box",
   material,
@@ -49,15 +52,25 @@ export function PackhelpEditor({
   const applyCoreState = useDesignStore((s) => s.applyCoreState)
   const product = useDesignStore((s) => s.product)
   const dimensions = useDesignStore((s) => s.model.dimensions)
+  const storedSnapshot = useDesignStore((s) => s.storedDielineSnapshot)
 
   // M8-D: SINGLE canonical geometry resolution point. The blueprint (M8-B
   // passthrough) + mm dimensions become DielineGeometry exactly once here;
   // DielineCanvas consumes the result and never resolves again. Products
   // without a blueprint yield { ok:false, reason:"no-blueprint" }, which
   // DielineView routes to the frozen M7DielineFallback.
+  // The fresh resolution passes through the shared effective-geometry
+  // selector: for a restored design whose geometry inputs are unchanged,
+  // the saved snapshot is the effective geometry (source:"stored"), so
+  // the dieline tab displays — and exports — exactly what was saved.
   const dielineResolution = useMemo(
-    () => resolveDieline(product?.dieline, dimensions),
-    [product?.dieline, dimensions.length, dimensions.width, dimensions.height]
+    () =>
+      selectEffectiveDieline(resolveDieline(product?.dieline, dimensions), {
+        productId: product?.id,
+        dims: dimensions,
+        stored: storedSnapshot,
+      }),
+    [product?.dieline, product?.id, dimensions.length, dimensions.width, dimensions.height, storedSnapshot]
   )
 
   // Track editor opened
@@ -73,6 +86,9 @@ export function PackhelpEditor({
   // Initialize store with initial design if provided
   useEffect(() => {
     if (isInitialized.current) return
+    // A saved non-catalogue design has no product id. Its async restore owns
+    // initialization too, even if it finishes before this component mounts.
+    if (preserveRestoredDesign) { isInitialized.current = true; return }
 
     // When the store was already hydrated by initFromEditorConfig (catalog-driven entry),
     // do not clobber it with the default initialDesign props.
@@ -91,6 +107,12 @@ export function PackhelpEditor({
           ...newState.model,
           dimensions: initialDesign.dimensions,
         }
+      }
+
+      // SKU entry has no catalog initializer. Preserve the quantity the user
+      // selected instead of silently submitting the default30 in the cart.
+      if (Number.isSafeInteger(initialDesign?.quantity) && initialDesign!.quantity! > 0) {
+        newState.model = { ...newState.model, quantity: initialDesign!.quantity! }
       }
 
       // 2. Apply model type
@@ -140,7 +162,7 @@ export function PackhelpEditor({
     })
 
     isInitialized.current = true
-  }, [initialDesign, boxType, material, applyCoreState])
+  }, [initialDesign, boxType, material, applyCoreState, preserveRestoredDesign])
 
   switch (viewMode) {
     case "2d":

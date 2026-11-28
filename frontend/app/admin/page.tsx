@@ -1,4 +1,5 @@
 "use client"
+import { Money, MoneySummary } from "@/components/admin/money";
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -9,7 +10,8 @@ import { useAuth } from "@/providers/auth-provider"
 import { analyticsApi, subscribeToAdminAnalytics, type DashboardSummary } from "@/lib/api/analytics"
 import { ordersApi } from "@/lib/api/orders"
 import { API_BASE } from "@/lib/api/client"
-import { Package, Users, ShoppingCart, DollarSign, TrendingUp, AlertCircle, Plus, Eye, Loader2 } from "lucide-react"
+import { Package, Users, ShoppingCart,
+  Banknote, TrendingUp, AlertCircle, Plus, Eye, Loader2 } from "lucide-react"
 import Link from "next/link"
 import type { Order } from "@shared/types"
 
@@ -79,10 +81,10 @@ export default function AdminDashboard() {
 
   const statCards = [
     {
-      title: "Total Revenue",
-      value: stats ? `$${(stats.revenue || 0).toLocaleString()}` : "—",
+      title: "Non-cancelled order value",
+      value: stats ? <MoneySummary groups={stats.revenueByCurrency} unclassifiedCount={stats.unclassifiedOrderCount} /> : "—",
       change: stats && stats.revenueChange > 0 ? `+${stats.revenueChange}%` : undefined,
-      icon: DollarSign,
+      icon: Banknote,
       color: "text-green-600",
     },
     {
@@ -167,7 +169,9 @@ export default function AdminDashboard() {
                       <p className="text-sm text-slate-500">{order.items?.length || 0} items</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium">${order.total.toLocaleString()}</p>
+                      <p className="font-medium">
+                        <Money amount={order.total} currency={order.currency} />
+                      </p>
                       <Badge variant={order.status === "delivered" ? "default" : "outline"}>
                         {order.status.replace(/_/g, " ")}
                       </Badge>
@@ -215,7 +219,7 @@ export default function AdminDashboard() {
               </Button>
               <Button variant="outline" className="h-20 flex-col" asChild>
                 <Link href="/admin/finance">
-                  <DollarSign className="h-6 w-6 mb-2" />
+                  <Banknote className="h-6 w-6 mb-2" />
                   Finance
                 </Link>
               </Button>

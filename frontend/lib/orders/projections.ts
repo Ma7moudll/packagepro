@@ -7,7 +7,7 @@ import type { Order } from "@shared/types"
  */
 
 export function currencyOf(order: Order): string {
-  return order.currency || order.payment?.currency || "USD"
+  return order.currency || order.payment?.currency || "EGP"
 }
 
 export function money(order: Order, value: unknown): number {
@@ -84,6 +84,6 @@ export function billingStats(orders: Order[]): BillingStats {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   const paidOrders = bills.filter(isPaid)
   const totalSpent = paidOrders.reduce((sum, o) => sum + orderTotal(o), 0)
-  const currency = paidOrders[0] ? currencyOf(paidOrders[0]) : "USD"
+  const currency = paidOrders[0] ? currencyOf(paidOrders[0]) : "EGP"
   return { bills, paidOrders, totalSpent, currency }
 }

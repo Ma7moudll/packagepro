@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Badge } from "@/components/ui/badge"
 import { useLanguage } from "@/providers/language-provider"
-import { Play, CheckCircle2, Upload, Image, Loader2 } from "lucide-react"
+import { Play, CheckCircle2, Upload, Image, Loader2, X, AlertTriangle } from "lucide-react"
 
 type ProductionStatus = "not_started" | "in_production" | "sample_ready" | "sample_approved" | "quality_check" | "ready_to_ship"
 
@@ -19,6 +19,10 @@ interface ProductionProgressProps {
   onUpdateProgress: (value: number) => Promise<void>
   onUploadSample: (file: File) => Promise<void>
   onMarkReadyToShip: () => Promise<void>
+  /** Reload the current order/sample state (upload-conflict resolution). */
+  onReload?: () => Promise<void>
+  uploadDisabled?: boolean
+  productionAvailable?: boolean
 }
 
 const STATUS_LABELS: Record<ProductionStatus, { ar: string; en: string }> = {
@@ -38,19 +42,79 @@ export function ProductionProgress({
   onUpdateProgress,
   onUploadSample,
   onMarkReadyToShip,
+  onReload,
+  uploadDisabled = false,
+  productionAvailable = true,
 }: ProductionProgressProps) {
   const { language } = useLanguage()
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // The person's selected photo, kept locally until the upload commits
+  // (the page refetches and the photo arrives via samplePhotos) or the
+  // person explicitly removes it. A failed upload must neither present
+  // the photo as saved nor silently discard it.
+  const [pendingPhoto, setPendingPhoto] = useState<{ file: File; previewUrl: string } | null>(null)
+  const [uploadError, setUploadError] = useState<"conflict" | "generic" | null>(null)
+  const [reloading, setReloading] = useState(false)
+  const uploadInFlight = useRef(false)
+  const reloadInFlight = useRef(false)
+  useEffect(() => () => { if (pendingPhoto) URL.revokeObjectURL(pendingPhoto.previewUrl) }, [pendingPhoto])
+
+  const clearPendingPhoto = () => {
+    if (pendingPhoto) URL.revokeObjectURL(pendingPhoto.previewUrl)
+    setPendingPhoto(null)
+  }
+
+  const attemptUpload = async (file: File) => {
+    if (uploadInFlight.current || reloading || uploadDisabled || !["in_production", "sample_ready"].includes(currentStatus) || uploadError === "conflict") return
+    uploadInFlight.current = true
+    setUploading(true)
+    setUploadError(null)
+    try {
+      await onUploadSample(file)
+      clearPendingPhoto()
+    } catch (err) {
+      // No automatic retry: the photo stays selected and the failure is
+      // stated explicitly. A 409 means the sample state changed while
+      // the person was working (the backend asks for a reload before
+      // retrying); every other failure gets the generic wording.
+      setUploadError(
+        (err as { status?: unknown } | null)?.status === 409 ? "conflict" : "generic",
+      )
+    } finally {
+      uploadInFlight.current = false
+      setUploading(false)
+    }
+  }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true)
+    // Reset the input so re-selecting the same file later fires a fresh
+    // change (previously the same file could not even be picked again).
+    e.target.value = ""
+    if (!file || uploadInFlight.current || reloading || uploadDisabled || uploadError === "conflict") return
+    if (pendingPhoto) URL.revokeObjectURL(pendingPhoto.previewUrl)
+    setPendingPhoto({ file, previewUrl: URL.createObjectURL(file) })
+    await attemptUpload(file)
+  }
+
+  const handleRemovePending = () => {
+    clearPendingPhoto()
+    setUploadError(null)
+  }
+
+  const handleReloadOrder = async () => {
+    if (!onReload || reloadInFlight.current || uploadInFlight.current) return
+    reloadInFlight.current = true
+    setReloading(true)
     try {
-      await onUploadSample(file)
+      await onReload()
+      setUploadError(null)
+    } catch {
+      // The reload itself failed; keep the conflict message visible.
     } finally {
-      setUploading(false)
+      reloadInFlight.current = false
+      setReloading(false)
     }
   }
 
@@ -72,10 +136,10 @@ export function ProductionProgress({
     }
   }
 
-  const canStart = currentStatus === "not_started"
-  const canUpdateProgress = currentStatus === "in_production" || currentStatus === "sample_ready"
-  const canUploadSample = currentStatus === "in_production" || currentStatus === "sample_ready"
-  const canMarkReady = currentStatus === "quality_check"
+  const canStart = productionAvailable && currentStatus === "not_started"
+  const canUpdateProgress = productionAvailable && (currentStatus === "in_production" || currentStatus === "sample_ready")
+  const canUploadSample = !uploadDisabled && (currentStatus === "in_production" || currentStatus === "sample_ready")
+  const canMarkReady = productionAvailable && currentStatus === "quality_check"
 
   return (
     <Card>
@@ -92,7 +156,7 @@ export function ProductionProgress({
             {language === "ar" ? "الحالة:" : "Status:"}
           </span>
           <Badge variant="outline" className="bg-blue-50 text-blue-700">
-            {language === "ar"
+            {!productionAvailable ? (language === "ar" ? "بيانات الإنتاج غير متاحة" : "Production data unavailable") : language === "ar"
               ? STATUS_LABELS[currentStatus].ar
               : STATUS_LABELS[currentStatus].en}
           </Badge>
@@ -128,7 +192,7 @@ export function ProductionProgress({
                   accept="image/*"
                   className="hidden"
                   onChange={handleFileUpload}
-                  disabled={uploading}
+                  disabled={uploading || reloading || uploadError === "conflict"}
                 />
                 <Button variant="outline" size="sm" asChild>
                   <span>
@@ -157,6 +221,109 @@ export function ProductionProgress({
             <p className="text-sm text-slate-400">
               {language === "ar" ? "لم يتم رفع صور عينة بعد" : "No sample photos uploaded yet"}
             </p>
+          )}
+
+          {pendingPhoto && !canUploadSample && <p role="status">{language === "ar" ? "الرفع غير متاح في الحالة الحالية. الصورة المحددة محفوظة محليًا." : "Upload is unavailable in the current state. Your selected photo is kept locally."}</p>}
+          {pendingPhoto && (
+            <div
+              data-pending-photo
+              className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-2 space-y-2"
+            >
+              <div className="flex items-center gap-3">
+                <img
+                  src={pendingPhoto.previewUrl}
+                  alt=""
+                  className="h-12 w-12 shrink-0 rounded object-cover border bg-white"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{pendingPhoto.file.name}</p>
+                  <p className="text-xs text-slate-500">
+                    {language === "ar" ? "لم تُرفع بعد" : "Not uploaded yet"}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleRemovePending}
+                  disabled={uploading || reloading}
+                  aria-label={language === "ar" ? "حذف الصورة" : "Remove photo"}
+                  className="shrink-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={() => attemptUpload(pendingPhoto.file)}
+                disabled={uploading || reloading || !canUploadSample || uploadError === "conflict"}
+              >
+                {uploading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
+                )}
+                <span className="ml-1">
+                  {language === "ar" ? "رفع هذه الصورة" : "Upload this photo"}
+                </span>
+              </Button>
+            </div>
+          )}
+
+          {uploadError && (
+            <div
+              role="alert"
+              className={
+                uploadError === "conflict"
+                  ? "rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2"
+                  : "rounded-md border border-rose-200 bg-rose-50 p-3 space-y-2"
+              }
+            >
+              <p
+                className={
+                  uploadError === "conflict"
+                    ? "flex items-center gap-2 text-sm font-medium text-amber-800"
+                    : "flex items-center gap-2 text-sm font-medium text-rose-800"
+                }
+              >
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {uploadError === "conflict"
+                  ? language === "ar"
+                    ? "تغيّرت حالة العينة أثناء عملك"
+                    : "Sample changed while you were working"
+                  : language === "ar"
+                    ? "فشل الرفع"
+                    : "Upload failed"}
+              </p>
+              <p
+                className={
+                  uploadError === "conflict" ? "text-xs text-amber-700" : "text-xs text-rose-700"
+                }
+              >
+                {uploadError === "conflict"
+                  ? language === "ar"
+                    ? "ربما استُبدلت العينة أو تمت مراجعتها أو تغيّرت حالة الإنتاج. لم يُقبل هذا الإرسال. الصورة ما زالت محددة. حدّث بيانات الطلب قبل اتخاذ قرار بإعادة الرفع."
+                    : "The sample may have been replaced or reviewed, or production may have changed. This submission was not accepted. Your photo is still selected. Reload the current order before deciding whether to upload again."
+                  : language === "ar"
+                    ? "تعذر تأكيد الرفع. الصورة ما زالت محددة. يمكنك إعادة المحاولة أو حذفها."
+                    : "The upload could not be confirmed. Your photo is still selected. You can retry or remove it."}
+              </p>
+              {uploadError === "conflict" && onReload && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleReloadOrder}
+                  disabled={reloading}
+                >
+                  {reloading && <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />}
+                  {language === "ar" ? "تحديث بيانات الطلب" : "Reload order"}
+                </Button>
+              )}
+            </div>
           )}
         </div>
 

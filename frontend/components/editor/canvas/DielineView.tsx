@@ -15,9 +15,11 @@
 // products (count: `M7DielineFallback`) keep the frozen M7 rendering.
 
 import { useRef, useEffect, useState, useMemo } from "react"
+import { useDesignStore } from "@/lib/editor/state/store"
+import { unsupportedSheetArtwork, unsupportedArtworkOutputMessage } from "@/lib/editor/print-coverage"
 import { useLanguage } from "@/providers/language-provider"
 import { flatBounds } from "@/lib/editor/geometry/dieline"
-import { serializeSVG } from "@/lib/editor/services/dieline-service"
+import { serializeSVG, checkOverlaps } from "@/lib/editor/services/dieline-service"
 import {
   deriveFoldAngleAnnotations,
   deriveGlueTabAnnotations,
@@ -49,6 +51,9 @@ interface DielineViewProps {
   /** Canonical resolution produced at the single resolution point. */
   resolution?: DielineResolution
   backgroundColor: string
+  /** Display-only artwork (PNG data URL per outside face). Not exported. */
+  faceArtwork?: Record<string, string>
+  artworkDimensionsUnavailable?: boolean
   selectedFace: FaceId | null
   onSelectFace: (faceId: FaceId) => void
 }
@@ -56,18 +61,36 @@ interface DielineViewProps {
 export function DielineView({
   resolution,
   backgroundColor,
+  faceArtwork,
+  artworkDimensionsUnavailable,
   selectedFace,
   onSelectFace,
 }: DielineViewProps) {
+  const [outputNotice, setOutputNotice] = useState("")
   const { language } = useLanguage()
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [zoom, setZoom] = useState(1)
+  // Inside panels share the outside panels' flat coordinates (they are the
+  // reverse side of the same sheet). Only one print side is on top at a time.
+  const [printSide, setPrintSide] = useState<"outside" | "inside">("outside")
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 })
 
   const geometry = resolution?.ok ? resolution.geometry : undefined
+  // Panel overlap in resolved geometry (possible when a blueprint's own
+  // authored layout overlaps, which the engine preserves at its authored
+  // size): that geometry is shown (it is what the blueprint resolves to)
+  // but never exported silently.
+  const overlaps = geometry ? checkOverlaps(geometry) : []
+  // Panel rotation is metadata in the canonical geometry and this view draws
+  // panels unrotated. Artwork is withheld for any rotated panel rather than
+  // drawn in a plausible but wrong orientation.
+  const rotatedFaces = geometry
+    ? Object.entries(geometry.panels).filter(([, panel]) => (panel.rotation ?? 0) !== 0).map(([id]) => id)
+    : []
+  const artworkWithheld = rotatedFaces.filter((id) => faceArtwork?.[id])
   const bounds = geometry ? flatBounds(geometry) : undefined
   const sheetW = bounds ? bounds.x1 - bounds.x0 : 0
   const sheetH = bounds ? bounds.y1 - bounds.y0 : 0
@@ -87,15 +110,27 @@ export function DielineView({
     [geometry],
   )
 
-  // Center the view on the sheet (mm dims rendered 1:1).
+  // Fit the real net bounds, including authored offsets and negative origins.
+  // A container resize (sidebar/toolbar/viewport) must refit the same geometry.
   useEffect(() => {
-    if (!geometry || !containerRef.current) return
-    const cw = containerRef.current.clientWidth
-    const ch = containerRef.current.clientHeight
-    const scale = Math.min((cw - 100) / sheetW, (ch - 100) / sheetH)
-    setZoom(Math.min(scale, 1))
-    setPan({ x: (cw - sheetW * scale) / 2, y: (ch - sheetH * scale) / 2 })
-  }, [geometry, sheetW, sheetH])
+    const container = containerRef.current
+    if (!geometry || !container || !bounds) return
+    const fit = () => {
+      const cw = container.clientWidth
+      const ch = container.clientHeight
+      if (cw <= 0 || ch <= 0) return
+      const scale = Math.max(0.01, Math.min((cw - 48) / sheetW, (ch - 48) / sheetH, 2))
+      setZoom(scale)
+      setPan({
+        x: (cw - sheetW * scale) / 2 - bounds.x0 * scale,
+        y: (ch - sheetH * scale) / 2 - bounds.y0 * scale,
+      })
+    }
+    fit()
+    const observer = new ResizeObserver(fit)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [geometry, sheetW, sheetH, bounds?.x0, bounds?.y0])
 
   const handleZoom = (delta: number) => {
     setZoom((prev) => Math.max(0.25, Math.min(2, prev + delta)))
@@ -122,7 +157,21 @@ export function DielineView({
   }
 
   const handleExport = () => {
+    const live = useDesignStore.getState()
+    const unsupported = unsupportedSheetArtwork(live.model.faces, live.layers, live.model.type)
+    if (unsupported) {
+      setOutputNotice(`Export blocked: ${unsupportedArtworkOutputMessage(unsupported)}`)
+      return
+    }
+    setOutputNotice("")
     if (!geometry) return
+    if (overlaps.length > 0) {
+      const pairs = overlaps.map((o) => `${o.a}/${o.b}`).join(", ")
+      setOutputNotice(
+        `Export blocked: the resolved dieline panels overlap (${pairs}) at the current dimensions, so this geometry is not a coherent flat layout.`
+      )
+      return
+    }
     const svg = serializeSVG(geometry)
     const blob = new Blob([svg], { type: "image/svg+xml" })
     const url = URL.createObjectURL(blob)
@@ -133,6 +182,24 @@ export function DielineView({
     URL.revokeObjectURL(url)
   }
 
+  // Fail-closed: a blueprint WAS present but resolution failed — an
+  // unsupported size or a malformed blueprint. This must NOT fall through
+  // to the generic legacy delegate: its export would generate plausible
+  // but wrong geometry for a product that has a real blueprint. Show the
+  // explicit reason and offer no export at all.
+  if (!geometry && resolution && !resolution.ok && resolution.reason !== "no-blueprint") {
+    return (
+      <div className="flex flex-col h-full bg-slate-100 items-center justify-center p-6" data-dieline-blocked={resolution.reason}>
+        <p role="alert" className="text-sm text-red-700 max-w-md text-center">
+          {language === "ar"
+            ? "لا يمكن إنشاء مخطط القص (الدايلاين) بالأبعاد الحالية — لم يتم إنشاء أي مخطط بديل."
+            : "The dieline cannot be generated at the current dimensions — no substitute layout has been generated."}
+        </p>
+        {resolution.error && <p className="text-xs text-slate-600 max-w-md text-center mt-2">{resolution.error}</p>}
+      </div>
+    )
+  }
+
   // Blueprint-absent path — exact M7 rendering (frozen legacy delegate).
   if (!geometry) {
     return <M7DielineFallback />
@@ -140,8 +207,9 @@ export function DielineView({
 
   return (
     <div className="flex flex-col h-full bg-slate-100">
+      {outputNotice && <p role="alert" className="text-xs text-red-700 p-2">{outputNotice}</p>}
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-white border-b">
+      <div className="flex flex-wrap items-center justify-between gap-y-2 px-4 py-2 bg-white border-b">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-slate-700">
             {language === "ar" ? "عرض المخطط المسطح" : "Dieline View"}
@@ -149,9 +217,33 @@ export function DielineView({
           <span className="text-xs text-slate-500">
             ({sheetW.toFixed(0)} x {sheetH.toFixed(0)} mm)
           </span>
+          {artworkDimensionsUnavailable && <span role="status" className="text-xs text-amber-700" data-artwork-dimensions-unavailable>
+            {language === "ar" ? "معاينة التصميم غير متاحة أثناء تحديث الأبعاد" : "Artwork preview unavailable while dimensions update"}
+          </span>}
+          {artworkWithheld.length > 0 && (
+            <span className="text-xs text-amber-700" data-artwork-withheld={artworkWithheld.join(",")}>
+              {language === "ar"
+                ? "معاينة التصميم غير متاحة للوحات المدوّرة"
+                : "Artwork preview unavailable for rotated panels"}
+            </span>
+          )}
+          {overlaps.length > 0 && (
+            <span role="alert" className="text-xs text-red-700" data-dieline-overlaps={overlaps.map((o) => `${o.a}/${o.b}`).join(",")}>
+              {language === "ar"
+                ? "اللوحات متداخلة بالأبعاد الحالية — التصدير محظور"
+                : "Panels overlap at the current dimensions — export blocked"}
+            </span>
+          )}
+          {resolution?.ok && resolution.source === "stored" && (
+            <span role="status" className="text-xs text-amber-700" data-dieline-stored>
+              {language === "ar"
+                ? "هندسة محفوظة من إصدار سابق تُعرض كما حُفظت؛ التصدير يخضع لفحص الهندسة. عدّل الأبعاد لبدء مراجعة جديدة"
+                : "Stored geometry from an earlier version is shown as saved; export is subject to geometry checks. Edit the dimensions to start a new revision"}
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => handleZoom(-0.1)}>
             <ZoomOut className="h-4 w-4" />
           </Button>
@@ -172,6 +264,17 @@ export function DielineView({
             {language === "ar" ? "القياسات" : "Annotations"}
           </Button>
           <div className="w-px h-6 bg-slate-200 mx-1" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPrintSide((v) => (v === "outside" ? "inside" : "outside"))}
+            data-print-side-toggle={printSide}
+          >
+            {printSide === "outside"
+              ? (language === "ar" ? "الطباعة الخارجية" : "Outside print")
+              : (language === "ar" ? "الطباعة الداخلية" : "Inside print")}
+          </Button>
+          <div className="w-px h-6 bg-slate-200 mx-1" />
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="h-4 w-4 mr-1" />
             {language === "ar" ? "تصدير" : "Export SVG"}
@@ -179,9 +282,15 @@ export function DielineView({
         </div>
       </div>
 
+      {faceArtwork && Object.keys(faceArtwork).length > 0 && <p role="note" className="px-4 py-1 text-[11px] text-slate-600 bg-white border-b">
+        {language === "ar" ? "معاينة على لوحات مستطيلة فقط، بدون هوامش طباعة أو قص حسب الشكل. ملف SVG يصدر خطوط التصنيع بدون التصميم." : "Rectangular-panel artwork preview only, without bleed or cut-shape masking. SVG exports geometry without artwork."}
+      </p>}
+
       {/* Canvas */}
       <div
         ref={containerRef}
+        data-dieline-viewport
+        dir="ltr"
         className="flex-1 overflow-hidden cursor-grab active:cursor-grabbing"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -200,6 +309,7 @@ export function DielineView({
         >
           {/* Sheet background */}
           <div
+            data-dieline-sheet
             className="absolute shadow-lg bg-white"
             style={{
               left: bounds?.x0,
@@ -213,13 +323,15 @@ export function DielineView({
           {Object.entries(geometry.panels).map(([faceId, panel]) => {
             const isFlap = faceId.startsWith("inside_")
             const id = faceId as FaceId
+            // Visible side sits above the other; selection ring stays on top.
+            const onTop = isFlap === (printSide === "inside")
             return (
               <div
                 key={faceId}
                 data-face-id={faceId}
                 onClick={() => !isFlap && onSelectFace(id)}
                 className={`
-                  absolute border transition-all
+                  group absolute border
                   ${isFlap ? "cursor-default" : "cursor-pointer hover:ring-2 hover:ring-blue-400"}
                   ${selectedFace === id && !isFlap ? "ring-2 ring-blue-500 z-10" : ""}
                 `}
@@ -228,15 +340,27 @@ export function DielineView({
                   top: panel.y,
                   width: panel.w,
                   height: panel.h,
-                  backgroundColor: isFlap ? "#e2e8f0" : backgroundColor,
+                  backgroundColor: isFlap && printSide === "outside" ? "#e2e8f0" : backgroundColor,
+                  zIndex: onTop ? (selectedFace === id && !isFlap ? 3 : 2) : 0,
                   borderColor: selectedFace === id ? "#3b82f6" : "#cbd5e1",
                 }}
               >
-                <div className="absolute inset-0 flex items-center justify-center">
+                {faceArtwork?.[faceId] && (panel.rotation ?? 0) === 0 && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={faceArtwork[faceId]}
+                    alt=""
+                    data-dieline-artwork={faceId}
+                    draggable={false}
+                    className="absolute inset-0 w-full h-full pointer-events-none select-none"
+                  />
+                )}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <span
                     className={`
                       text-[9px] font-medium px-1 py-0.5 rounded bg-white/80
-                      ${isFlap ? "text-slate-400" : "text-slate-600"}
+                      ${faceArtwork?.[faceId] && (panel.rotation ?? 0) === 0 ? "opacity-0 group-hover:opacity-100 transition-opacity" : ""}
+                      ${isFlap ? "text-slate-500" : "text-slate-600"}
                     `}
                   >
                     {FACE_LABEL[id] ?? id}
@@ -265,7 +389,8 @@ export function DielineView({
             className="absolute inset-0 pointer-events-none"
             width={sheetW}
             height={sheetH}
-            style={{ left: bounds?.x0, top: bounds?.y0 }}
+            viewBox={bounds ? `${bounds.x0} ${bounds.y0} ${sheetW} ${sheetH}` : undefined}
+            style={{ left: bounds?.x0, top: bounds?.y0, zIndex: 4 }}
           >
             {geometry.cutPaths.map((p) => (
               <LineElement key={p.id} path={p} stroke="#1e293b" strokeWidth="1" dash="none" />

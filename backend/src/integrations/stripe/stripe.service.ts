@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
+import {PaymentStatusPreEffectError} from '../payments/payment-provider';
 import { prisma } from '../../lib/prisma';
-import { NotFoundError, ValidationError } from '../../utils/errors';
+import { AuthorizationError, NotFoundError, ValidationError } from '../../utils/errors';
 import { logger } from '../../utils/logger';
 import { notificationService } from '../../modules/notifications/notifications.service';
 import { notificationHub } from '../../modules/notifications/notification-hub';
@@ -14,6 +15,15 @@ export interface CreatePaymentIntentData {
   amount: number;
   currency?: string;
   customerEmail?: string;
+}
+
+/** Only currencies with two minor-unit decimals are supported by this checkout. */
+export function serverPaymentCurrency(): string {
+  const currency = (process.env.DEFAULT_CURRENCY || 'usd').toLowerCase();
+  if (!['usd', 'egp', 'eur', 'gbp', 'sar', 'aed'].includes(currency)) {
+    throw new ValidationError('Unsupported server payment currency');
+  }
+  return currency;
 }
 
 /**
@@ -88,55 +98,63 @@ export class StripeService {
       throw new ValidationError('Order is not in a state to accept payment');
     }
 
+    const amount = Number(order.total);
+    const currency = order.currency ? order.currency.toLowerCase() : serverPaymentCurrency();
+    if (!Number.isFinite(amount) || amount <= 0) throw new ValidationError('Invalid order total');
+
     // Check if payment already exists
     const existingPayment = await prisma.payment.findUnique({
       where: { orderId: data.orderId },
     });
 
     if (existingPayment && existingPayment.stripePaymentIntentId) {
-      // Retrieve existing payment intent
-      try {
-        const paymentIntent = await stripe.paymentIntents.retrieve(
-          existingPayment.stripePaymentIntentId
-        );
-        return paymentIntent;
-      } catch (error) {
-        // Payment intent doesn't exist, create new one
-      }
+      const paymentIntent = await stripe.paymentIntents.retrieve(existingPayment.stripePaymentIntentId);
+      this.assertPaymentMatches(paymentIntent, existingPayment, order);
+      return paymentIntent;
     }
 
     // Create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(data.amount * 100), // Convert to cents
-      currency: data.currency || 'usd',
+      amount: Math.round(amount * 100), // Convert to cents
+      currency: currency,
       metadata: {
         orderId: order.id,
         orderNumber: order.orderNumber,
       },
-      receipt_email: data.customerEmail || order.customer.user.email,
+      receipt_email: order.customer.user.email,
       automatic_payment_methods: {
         enabled: true,
       },
-    });
+    }, { idempotencyKey: `order-payment:${order.id}:${Math.round(amount * 100)}:${currency}` });
 
-    // Save payment record
-    await prisma.payment.upsert({
-      where: { orderId: data.orderId },
-      update: {
-        stripePaymentIntentId: paymentIntent.id,
-        amount: data.amount,
-        currency: data.currency || 'usd',
-      },
-      create: {
-        orderId: data.orderId,
-        stripePaymentIntentId: paymentIntent.id,
-        amount: data.amount,
-        currency: data.currency || 'usd',
-        status: 'pending',
-      },
-    });
+    // Never overwrite a reference that another worker/operator persisted while
+    // this external call was pending. A conflicting late response is ambiguous.
+    const persisted=await prisma.payment.upsert({where:{orderId:data.orderId},update:{},create:{orderId:data.orderId,stripePaymentIntentId:paymentIntent.id,amount,currency,status:'pending'}});
+    if(persisted.stripePaymentIntentId!==paymentIntent.id||Number(persisted.amount)!==amount||persisted.currency.toLowerCase()!==currency)throw new ValidationError('Existing local payment conflicts with late provider response');
 
     return paymentIntent;
+  }
+
+  async inspectExistingReference(orderId:string,reference:string){
+    if(!/^pi_[A-Za-z0-9]+$/.test(reference))throw new ValidationError('Invalid Stripe payment reference');
+    const order=await prisma.order.findUnique({where:{id:orderId}});
+    if(!order||!order.currency)throw new ValidationError('Order currency unavailable');
+    if(!Number.isFinite(Number(order.total))||Math.abs(Number(order.total)*100-Math.round(Number(order.total)*100))>0.000001)throw new ValidationError('Order precision unsupported');
+    if(!['usd','egp','eur','gbp','sar','aed'].includes(order.currency.toLowerCase()))throw new ValidationError('Unsupported reference currency');
+    const intent=await stripe.paymentIntents.retrieve(reference);
+    this.assertPaymentMatches(intent,{orderId,amount:order.total,currency:order.currency},order);
+    if(intent.id!==reference)throw new ValidationError('Provider reference does not match');
+    return {providerRef:intent.id,amount:intent.amount/100,currency:intent.currency.toUpperCase(),status:intent.status==='succeeded'?'succeeded' as const:intent.status==='canceled'?'canceled' as const:'pending' as const,localReference:{stripePaymentIntentId:intent.id}};
+  }
+
+  /** Read only: never creates a PaymentIntent, changes an order, or confirms money. */
+  async recoverExistingPayment(orderId: string) {
+    const payment = await prisma.payment.findUnique({where:{orderId},include:{order:true}});
+    if(!payment?.stripePaymentIntentId)return null;
+    const intent=await stripe.paymentIntents.retrieve(payment.stripePaymentIntentId);
+    this.assertPaymentMatches(intent,payment,payment.order);
+    const status: 'succeeded'|'failed'|'pending'|'canceled'=intent.status==='succeeded'?'succeeded':intent.status==='canceled'?'canceled':intent.status==='requires_payment_method'?'failed':'pending';
+    return {providerRef:intent.id,status,...(status!=='succeeded'&&status!=='canceled'&&intent.client_secret?{clientSecret:intent.client_secret}:{})};
   }
 
   /**
@@ -152,30 +170,64 @@ export class StripeService {
    *   same conditional transition guards make repeated calls no-ops.
    * - Stripe's retrieved PaymentIntent state stays authoritative.
    */
-  async confirmPayment(paymentIntentId: string, eventId?: string): Promise<void> {
-    const payment = await prisma.payment.findUnique({
-      where: { stripePaymentIntentId: paymentIntentId },
-      include: { order: true },
-    });
+  async confirmPayment(
+    paymentIntentId: string,
+    eventId?: string,
+    actor?: { userId: string; role: string },
+    preEffectClassification = false,
+    expectedOrderId?: string,
+  ): Promise<void> {
+    type PaymentWithOrder = NonNullable<Awaited<ReturnType<typeof readPayment>>>;
+    const readPayment = () => prisma.payment.findUnique({where:{stripePaymentIntentId:paymentIntentId},include:{order:{include:{customer:true}}}});
+    let payment: PaymentWithOrder, paymentIntent: Stripe.PaymentIntent;
+    try {
+      const found = await readPayment();
+      if(!found)throw new NotFoundError('Payment');
+      payment=found;
 
-    if (!payment) {
-      throw new NotFoundError('Payment');
+      if (!payment) {
+        throw new NotFoundError("Payment");
+      }
+
+      if (actor && payment.order.customer.userId !== actor.userId) {
+        throw new AuthorizationError("You do not own this payment");
+      }
+
+      // Stripe-authoritative state — never trust the webhook payload alone.
+      paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+      this.assertPaymentMatches(paymentIntent, payment, payment.order);
+
+      if (expectedOrderId && payment.orderId !== expectedOrderId)
+        throw new ValidationError("Payment order mismatch");
+    } catch (error) {
+      if (preEffectClassification) throw new PaymentStatusPreEffectError();
+      throw error;
     }
-
-    // Stripe-authoritative state — never trust the webhook payload alone.
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-
-    if (paymentIntent.status === 'succeeded') {
+    if (paymentIntent.status === "succeeded") {
       await this.applyCapturedTransition(payment, eventId);
     } else if (
-      paymentIntent.status === 'canceled' ||
-      (paymentIntent.status as string) === 'payment_failed'
+      paymentIntent.status === "canceled" ||
+      (paymentIntent.status as string) === "payment_failed"
     ) {
       await this.applyFailedTransition(payment, eventId);
     }
     // Other statuses (processing, requires_action, …): nothing to do — the
     // event is deliberately NOT ledgered, so a redelivery re-checks the
     // then-current authoritative state.
+  }
+
+  private assertPaymentMatches(intent: Stripe.PaymentIntent, payment: { orderId: string; amount: unknown; currency: string }, order: { id: string; total: unknown; currency?: string | null }): void {
+    const expected = Math.round(Number(order.total) * 100);
+    if (!Number.isSafeInteger(expected) || expected <= 0 ||
+        Math.round(Number(payment.amount) * 100) !== expected ||
+        payment.currency.toLowerCase() !== (order.currency?.toLowerCase() || serverPaymentCurrency()) ||
+        intent.currency.toLowerCase() !== payment.currency.toLowerCase() ||
+        intent.amount !== expected || intent.metadata?.orderId !== order.id ||
+        payment.orderId !== order.id ||
+        (intent.status === 'succeeded' && intent.amount_received !== expected)) {
+      throw new ValidationError('Payment does not match the order amount, currency or reference');
+    }
   }
 
   /**
@@ -330,21 +382,33 @@ export class StripeService {
           event.id
         );
         break;
-      case 'payment_intent.payment_failed': {
-        const failedPayment = event.data.object as Stripe.PaymentIntent;
-        const payment = await prisma.payment.findUnique({
-          where: { stripePaymentIntentId: failedPayment.id },
-        });
-        // Unknown payment → nothing to update (same as the previous
-        // updateMany matching zero rows) and nothing worth ledgering.
-        if (payment) {
-          await this.applyFailedTransition(payment, event.id);
-        }
+      case 'payment_intent.payment_failed':
+        await this.confirmPayment((event.data.object as Stripe.PaymentIntent).id, event.id);
         break;
-      }
       default:
         // Handle other event types if needed
         break;
+    }
+  }
+
+  /**
+   * Provider-authoritative status for a PaymentIntent, without applying any
+   * state transitions (unlike confirmPayment). Used by the payment provider
+   * boundary.
+   */
+  async retrievePaymentIntentStatus(
+    paymentIntentId: string
+  ): Promise<'succeeded' | 'failed' | 'pending' | 'canceled'> {
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    switch (paymentIntent.status) {
+      case 'succeeded':
+        return 'succeeded';
+      case 'canceled':
+        return 'canceled';
+      case 'requires_payment_method':
+        return 'failed';
+      default:
+        return 'pending';
     }
   }
 

@@ -11,7 +11,7 @@ Fastify + PostgreSQL backend and a Next.js frontend.
 [![CI](https://github.com/Ma7moudll/packagepro/workflows/CI/badge.svg)](https://github.com/Ma7moudll/packagepro/actions)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org/)
-[![Fastify](https://img.shields.io/badge/Fastify-4-green)](https://www.fastify.io/)
+[![Fastify](https://img.shields.io/badge/Fastify-5-green)](https://www.fastify.io/)
 
 ## Screenshots
 
@@ -176,11 +176,15 @@ API endpoints are available at `/api`. Main endpoints:
 ### Settlements & Finance
 - `POST /api/settlements/process/:id` · `GET /api/vendors/:id/payments` · `GET /api/finance/reports`
 
+## Capability status
+
+See [current repository capability boundaries](docs/CURRENT_CAPABILITIES.md) for the source-checked catalogue matrix, editor/output gaps and operational limits. Catalogue presence, a preview route and passing tests are not production or commercial approval. Unmerged review changes are not changes to main.
+
 ## Key Features
 
 - **Marketplace catalog** — search, categories, verified factories, featured products, sample requests.
 - **Dynamic Pricing Engine** — real-time quoting over materials and specs (`/api/pricing/calculate`).
-- **Custom Design Editor** — design sessions, save/session API, 200+ templates.
+- **Custom Design Editor** — design sessions, save/session API. There are 15 starting-point design presets (`frontend/lib/editor/data/templates.ts`). That is separate from the product catalogue (`shared/catalog/products.ts`), which lists 55 product types. Catalogue readiness at this revision is 1 supported, 30 in progress and 24 unavailable, so the catalogue size is not a count of finished or orderable products.
 - **Order lifecycle** — orders → pre-press quality check → soft-proof approval → vendor router (multi-criteria scoring + 4h handshake) → PO (PDF) → production/QA → DHL shipment → settlement (72h) → reviews.
 - **Payments** — Stripe payment intents + webhooks (also PayPal/COD scaffolding).
 - **Security baseline** — JWT (15 min access + 7d refresh), bcrypt cost 12, Redis rate limiting with exponential backoff + reCAPTCHA v3, persistent AuditLog.
@@ -189,7 +193,7 @@ API endpoints are available at `/api`. Main endpoints:
 ## Technology Stack
 
 ### Backend
-- Fastify 4 (web framework) · Prisma 5 ORM · PostgreSQL · Redis
+- Fastify 5 (web framework) · Prisma 5 ORM · PostgreSQL · Redis
 - BullMQ (job queues) · Stripe (payments) · AWS S3 / CloudFlare R2 (files)
 - JWT auth · bcrypt (cost 12) · reCAPTCHA v3 · nodemailer (SendGrid/SES)
 - pdfkit / pdf-lib (PO & reports)
@@ -211,8 +215,7 @@ See `backend/env.example` for all required environment variables
 
 ## Status & Known Limitations
 
-- **Backend is the most complete part** — 17 modules, 11 services, 18 Prisma
-  tables, 5 BullMQ workers, Stripe/DHL/SES wired (per `docs/guides/COMPLETION_SUMMARY.md`). The **frontend marketplace is the active focus** (connecting real APIs per `SPEC-029`); several pages currently render seed/fixture data.
+- **Repository inventory is not operational coverage**. The source-checked module/model and catalogue counts live in [current capability boundaries](docs/CURRENT_CAPABILITIES.md). Several integrations and product-specific editor/output paths remain incomplete. Historical completion reports must not be used as current readiness evidence.
 - **Third-party credentials are required, not bundled** — Stripe, DHL,
   SendGrid/SES, S3/R2, reCAPTCHA and analytics keys come from `backend/.env`
   (`cp env.example .env`). None are committed (`.env` is gitignored).

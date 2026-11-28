@@ -1,3 +1,4 @@
+import { verifyLoginCaptcha } from './services/captcha.service';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../../lib/prisma';
@@ -93,11 +94,8 @@ export class AuthService {
         throw new Error(AuthErrorCode.CAPTCHA_REQUIRED);
       }
       
-      // TODO: Implement CAPTCHA validation in Phase 4 (T030-T032)
-      // For now, accept any captcha token if provided
       if (captchaRequired && data.captchaToken) {
-        logger.info(`Login attempt with CAPTCHA token for ${data.email}`);
-        // CAPTCHA validation would go here
+        await verifyLoginCaptcha(data.captchaToken, ip);
       }
       
       // Apply backoff delay if needed

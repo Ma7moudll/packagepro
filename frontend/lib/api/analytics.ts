@@ -17,6 +17,8 @@ export interface ProductPopularity {
 }
 
 export interface DashboardSummary {
+  unclassifiedOrderCount?: number
+  revenueByCurrency?: Array<{ currency: string | null; amount: number }>;
   revenue: number
   revenueChange: number
   orders: number
@@ -24,14 +26,6 @@ export interface DashboardSummary {
   users: number
   products: number
   productsChange: number
-}
-
-interface PublicStats {
-  completedDeals: { value: number }
-  registeredFactories: { value: number }
-  transactionVolume: { value: number }
-  activeTraders: { value: number }
-  categories: Record<string, number>
 }
 
 function isoDaysAgo(days: number): string {
@@ -46,27 +40,10 @@ export const analyticsApi = {
     apiGet<ProductPopularity[]>('/analytics/products'),
 
   getDashboardSummary: async (): Promise<DashboardSummary> => {
-    const now = new Date().toISOString()
-    const [statsRes, funnelRes] = await Promise.all([
-      apiGet<PublicStats>('/public/stats'),
-      apiGet<ConversionFunnel>('/analytics/funnel', {
-        start: '2000-01-01T00:00:00.000Z',
-        end: now,
-      }),
-    ])
-
-    const stats = statsRes.data
-    const funnel = funnelRes.data
-
-    return {
-      revenue: stats?.transactionVolume?.value ?? 0,
-      revenueChange: 0,
-      orders: funnel?.ordersCreated ?? 0,
-      ordersChange: 0,
-      users: stats?.activeTraders?.value ?? 0,
-      products: Object.keys(stats?.categories ?? {}).length,
-      productsChange: 0,
-    }
+    const response = await apiGet<DashboardSummary>("/analytics/summary");
+    if (!response.success || !response.data)
+      throw new Error("Admin summary unavailable");
+    return response.data;
   },
 }
 

@@ -1,5 +1,7 @@
 "use client"
+import { getLoginCaptchaToken } from "@/lib/login-captcha"
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { API_BASE } from "@/lib/api/client"
 
 interface User {
   id: string
@@ -66,12 +68,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string
   ): Promise<{ ok: boolean; reason?: string }> => {
     try {
-      const res = await fetch("/api/auth/login", {
+      const submit = (captchaToken?: string) => fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, ...(captchaToken ? { captchaToken } : {}) }),
       })
-      const data = await res.json()
+      let res = await submit()
+      let data = await res.json()
+      if (!res.ok && data?.error === "CAPTCHA_REQUIRED") {
+        try {
+          const token = await getLoginCaptchaToken()
+          res = await submit(token)
+          data = await res.json()
+        } catch {
+          return { ok: false, reason: "CAPTCHA_UNAVAILABLE" }
+        }
+      }
 
       if (!res.ok || !data.success) {
         return {
@@ -80,31 +92,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      if (data.token) {
-        localStorage.setItem("token", data.token)
+      // Real backend wraps the payload: { success, data: { user, tokens } }
+      const payload = data.data ?? data
+      if (payload.token) {
+        localStorage.setItem("token", payload.token)
       }
-      if (data.tokens?.accessToken) {
-        localStorage.setItem("accessToken", data.tokens.accessToken)
+      if (payload.tokens?.accessToken) {
+        localStorage.setItem("accessToken", payload.tokens.accessToken)
       }
-      if (data.tokens?.refreshToken) {
-        localStorage.setItem("refreshToken", data.tokens.refreshToken)
+      if (payload.tokens?.refreshToken) {
+        localStorage.setItem("refreshToken", payload.tokens.refreshToken)
       }
 
       // Ensure name is properly formatted
-      let displayName = data.user?.name || ""
+      let displayName = payload.user?.name || ""
       if (!displayName || displayName.trim() === "") {
-        const emailName = data.user?.email?.split("@")[0] || "User"
+        const emailName = payload.user?.email?.split("@")[0] || "User"
         displayName = emailName.charAt(0).toUpperCase() + emailName.slice(1)
       } else {
         displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1)
       }
 
       const userData: User = {
-        id: String(data.user?.id || ""),
-        email: data.user?.email || email,
+        id: String(payload.user?.id || ""),
+        email: payload.user?.email || email,
         name: displayName,
-        role: data.user?.role || "TRADER",
-        company: data.user?.company,
+        role: payload.user?.role || "TRADER",
+        company: payload.user?.company,
       }
 
       setUser(userData)
@@ -118,14 +132,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (userData: RegisterData): Promise<boolean> => {
     try {
-      const res = await fetch("/api/auth/signup", {
+      const res = await fetch(`${API_BASE}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: userData.email,
           password: userData.password,
           name: userData.name,
-          role: userData.role,
+          // Backend whitelist: CUSTOMER or VENDOR
+          role: userData.role === "MANUFACTURER" ? "VENDOR" : "CUSTOMER",
         }),
       })
       const data = await res.json()
@@ -149,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("refreshToken")
 
     try {
-      fetch("/api/auth/logout", { method: "POST" }).catch(() => {
+      fetch(`${API_BASE}/auth/logout`, { method: "POST" }).catch(() => {
         // Best-effort: clears the httpOnly session cookie server-side
       })
     } catch {

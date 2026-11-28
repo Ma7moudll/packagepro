@@ -16,6 +16,6 @@ export const catalogApi = {
   quote: (slug: string, body: CatalogQuoteRequest) =>
     apiPost<CatalogQuote>(`/catalog/${encodeURIComponent(slug)}/quote`, body),
 
-  getEditorConfig: (slug: string, quantity: number) =>
-    apiGet<EditorConfig>(`/catalog/${encodeURIComponent(slug)}/editor-config`, { quantity: String(quantity) }),
+  getEditorConfig: (slug: string, quantity?: number) =>
+    apiGet<EditorConfig>(`/catalog/${encodeURIComponent(slug)}/editor-config`, quantity===undefined?undefined:{ quantity: String(quantity) }),
 }

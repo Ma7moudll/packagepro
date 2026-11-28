@@ -1,5 +1,5 @@
 # Frontend Dockerfile
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -14,6 +14,24 @@ WORKDIR /app/frontend
 
 COPY --from=deps /app/frontend/node_modules ./node_modules
 COPY frontend/ ./
+# The unified catalogue is shared source outside the frontend directory.
+COPY shared/ /app/shared/
+# Pure F42 review validator imported by the browser export module.
+COPY backend/src/modules/designs/artwork-review-contract.ts /app/backend/src/modules/designs/artwork-review-contract.ts
+# Pure scoped thank-you-card preview contract, no database/service imports.
+COPY backend/src/modules/catalog/thank-you-preview.ts /app/backend/src/modules/catalog/thank-you-preview.ts
+
+# Pure loyalty-card preview contract, no database/service imports.
+COPY backend/src/modules/catalog/loyalty-preview.ts /app/backend/src/modules/catalog/loyalty-preview.ts
+
+# Pure stand-up-pouch artwork surface safety contract.
+COPY backend/src/modules/catalog/pouch-preview-contract.ts /app/backend/src/modules/catalog/pouch-preview-contract.ts
+
+# Pure frosted ziplock artwork surface safety contract.
+COPY backend/src/modules/catalog/ziplock-preview.ts /app/backend/src/modules/catalog/ziplock-preview.ts
+
+# Pure menu-card preview and unsupported-artwork contract.
+COPY backend/src/modules/catalog/menu-preview.ts /app/backend/src/modules/catalog/menu-preview.ts
 
 # Set build-time environment variables
 ARG NEXT_PUBLIC_API_URL

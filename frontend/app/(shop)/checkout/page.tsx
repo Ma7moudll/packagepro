@@ -1,28 +1,82 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { useCartStore } from "@/lib/ecommerce/cart-store"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, CreditCard, AlertCircle, ShoppingCart, ArrowRight, ArrowLeft } from "lucide-react"
-import { useLanguage } from "@/providers/language-provider"
-import { useAuth } from "@/providers/auth-provider"
-import { StripePayment } from "@/components/ecommerce/StripePayment"
-import { shippingSplitRows } from "@/lib/ecommerce/shipping-split"
-import type { ShippingAddress } from "@/lib/ecommerce/types"
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCartStore } from "@/lib/ecommerce/cart-store";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Loader2,
+  CreditCard,
+  AlertCircle,
+  ShoppingCart,
+  ArrowRight,
+  ArrowLeft,
+} from "lucide-react";
+import { useLanguage } from "@/providers/language-provider";
+import { useAuth } from "@/providers/auth-provider";
+import { checkoutApi, readCheckout } from "@/lib/api/checkout";
+import { ApiClientError } from "@/lib/api/client";
+import type { CheckoutResponse } from "@shared/types";
+import { StripePayment } from "@/components/ecommerce/StripePayment";
+import { shippingSplitRows } from "@/lib/ecommerce/shipping-split";
+import type { ShippingAddress } from "@/lib/ecommerce/types";
 
 export default function CheckoutPage() {
-  const { language } = useLanguage()
-  const router = useRouter()
-  const { user } = useAuth()
-  const { cart, loading: cartLoading, error: cartError, refresh } = useCartStore()
+  const { language } = useLanguage();
+  const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
+  const {
+    cart,
+    loading: cartLoading,
+    error: cartError,
+    refresh,
+  } = useCartStore();
 
-  const [step, setStep] = useState<"shipping" | "payment">("shipping")
-  const [error, setError] = useState("")
+  const [recoveryChecking, setRecoveryChecking] = useState(true);
+  const [recovered, setRecovered] = useState<CheckoutResponse | null>(null);
+  const [recoveryError, setRecoveryError] = useState("");
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    (async () => {
+      try {
+        if (!readCheckout(user.id)) {
+          if (active) setRecoveryChecking(false);
+          return;
+        }
+        const response = await checkoutApi.recover(user.id);
+        if (active) {
+          setRecovered(response.data);
+          if (
+            response.data?.paymentState === "succeeded" &&
+            !response.data.cartChanged &&
+            !response.data.recoveryRequired
+          )
+            checkoutApi.forgetUnstarted(user.id);
+        }
+      } catch (e) {
+        if (active) {
+          if (!(e instanceof ApiClientError && e.status === 404))
+            setRecoveryError(
+              language === "ar"
+                ? "تعذر التحقق من الطلب المحفوظ. لا تبدأ دفعة أخرى."
+                : "Could not verify saved checkout. Do not start another payment.",
+            );
+        }
+      } finally {
+        if (active) setRecoveryChecking(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [user, language]);
+  const [step, setStep] = useState<"shipping" | "payment">("shipping");
+  const [error, setError] = useState("");
 
   const [shippingAddress, setShippingAddress] = useState<ShippingAddress>({
     name: user?.name || "",
@@ -33,20 +87,100 @@ export default function CheckoutPage() {
     state: "",
     postalCode: "",
     country: "United States",
-  })
+  });
 
   useEffect(() => {
+    if (authLoading) return;
     if (!user) {
-      router.push("/login?redirect=/checkout")
-      return
+      router.push("/login?redirect=/checkout");
+      return;
     }
-    refresh()
-  }, [user, refresh, router])
+    refresh();
+  }, [user, refresh, router, authLoading]);
 
-  const items = cart?.items ?? []
-  const summary = cart?.summary
-  const designSessionId = items.find((i) => i.sessionId)?.sessionId ?? undefined
+  const items = cart?.items ?? [];
+  const summary = cart?.summary;
+  const designSessionId =
+    items.find((i) => i.sessionId)?.sessionId ?? undefined;
 
+  if (user && (recovered || recoveryError || recoveryChecking))
+    return (
+      <div
+        className="container mx-auto max-w-lg py-8 px-4 space-y-4"
+        dir={language === "ar" ? "rtl" : "ltr"}
+      >
+        <h1 className="text-2xl font-bold">
+          {language === "ar" ? "استعادة الطلب" : "Recover checkout"}
+        </h1>
+        {recoveryChecking ? (
+          <p>
+            {language === "ar"
+              ? "جارٍ التحقق من الطلب المحفوظ..."
+              : "Checking saved checkout..."}
+          </p>
+        ) : (
+          <>
+            <p role="status">
+              {recoveryError ||
+                (recovered?.cartChanged
+                  ? language === "ar"
+                    ? "تغيرت السلة. راجع الكميات في الطلب والسلة قبل أي دفعة أخرى."
+                    : "The cart changed. Review order and cart quantities before another payment."
+                  : language === "ar"
+                    ? "تم العثور على الطلب المحفوظ. لن يتم إنشاء طلب جديد."
+                    : "Saved checkout found. No new order will be created.")}
+            </p>
+            {recovered && (
+              <div className="text-sm space-y-1">
+                <p>
+                  {language === "ar" ? "حالة الاستعادة" : "Recovery state"}:{" "}
+                  {recovered.attemptState}
+                </p>
+                <p>
+                  {language === "ar"
+                    ? "حالة الطلب الحالية"
+                    : "Current order state"}
+                  :{" "}
+                  {recovered.orderState ??
+                    (language === "ar" ? "غير متاحة" : "Unavailable")}
+                </p>
+                <p>
+                  {language === "ar"
+                    ? "حالة الدفع المحلية"
+                    : "Local payment state"}
+                  :{" "}
+                  {recovered.localPaymentState ??
+                    (language === "ar" ? "غير متاحة" : "Unavailable")}
+                </p>
+              </div>
+            )}
+            {recovered?.orderId && (
+              <Button
+                onClick={() => router.push(`/orders/${recovered.orderId}`)}
+              >
+                {language === "ar" ? "مراجعة الطلب" : "Review order"}
+              </Button>
+            )}
+            {recovered?.clientSecret &&
+              !recovered.recoveryRequired &&
+              !recovered.cartChanged &&
+              recovered.paymentState !== "succeeded" && (
+                <StripePayment
+                  resume={recovered}
+                  shippingAddress={shippingAddress}
+                />
+              )}
+            {recovered && !recovered.clientSecret && (
+              <p>
+                {language === "ar"
+                  ? "راجع الطلب أو تواصل مع الدعم. لا تبدأ دفعة جديدة."
+                  : "Review the order or contact support. Do not start a new payment."}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    );
   if (cartLoading) {
     return (
       <div className="min-h-screen bg-slate-50 py-8">
@@ -54,11 +188,11 @@ export default function CheckoutPage() {
           <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
         </div>
       </div>
-    )
+    );
   }
 
   if (!user) {
-    return null
+    return null;
   }
 
   if (cartError) {
@@ -71,28 +205,27 @@ export default function CheckoutPage() {
           </Alert>
         </div>
       </div>
-    )
+    );
   }
 
   if (items.length === 0) {
-    router.replace("/cart")
-    return null
+    router.replace("/cart");
+    return null;
   }
 
   const handleShippingSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setStep("payment")
-  }
+    e.preventDefault();
+    setError("");
+    setStep("payment");
+  };
 
-  const currency = cart?.currency || "USD"
-  const formatMoney = (n: number) =>
-    `${n.toFixed(2)} ${currency}`
+  const currency = cart?.currency || "EGP";
+  const formatMoney = (n: number) => `${n.toFixed(2)} ${currency}`;
 
   // 4c: one shipping row per vendor group when the cart spans multiple
   // productTypes (multiple purchase orders will ship separately); the flat
   // row stays for single-group carts.
-  const splitRows = shippingSplitRows(summary, items)
+  const splitRows = shippingSplitRows(summary, items);
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -108,17 +241,25 @@ export default function CheckoutPage() {
               <div key={s} className="flex items-center gap-2">
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                    step === s ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-600"
+                    step === s
+                      ? "bg-emerald-600 text-white"
+                      : "bg-slate-200 text-slate-600"
                   }`}
                 >
                   {idx + 1}
                 </div>
                 <span className="font-medium text-sm hidden sm:inline">
                   {s === "shipping"
-                    ? language === "ar" ? "الشحن" : "Shipping"
-                    : language === "ar" ? "الدفع" : "Payment"}
+                    ? language === "ar"
+                      ? "الشحن"
+                      : "Shipping"
+                    : language === "ar"
+                      ? "الدفع"
+                      : "Payment"}
                 </span>
-                {idx === 0 && <div className="flex-1 h-0.5 bg-slate-200 mx-4 w-16" />}
+                {idx === 0 && (
+                  <div className="flex-1 h-0.5 bg-slate-200 mx-4 w-16" />
+                )}
               </div>
             ))}
           </div>
@@ -145,42 +286,141 @@ export default function CheckoutPage() {
                   <form onSubmit={handleShippingSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="name">{language === "ar" ? "الاسم الكامل" : "Full Name"} *</Label>
-                        <Input id="name" value={shippingAddress.name} onChange={(e) => setShippingAddress({ ...shippingAddress, name: e.target.value })} required />
+                        <Label htmlFor="name">
+                          {language === "ar" ? "الاسم الكامل" : "Full Name"} *
+                        </Label>
+                        <Input
+                          id="name"
+                          value={shippingAddress.name}
+                          onChange={(e) =>
+                            setShippingAddress({
+                              ...shippingAddress,
+                              name: e.target.value,
+                            })
+                          }
+                          required
+                        />
                       </div>
                       <div>
-                        <Label htmlFor="phone">{language === "ar" ? "الهاتف" : "Phone"} *</Label>
-                        <Input id="phone" type="tel" value={shippingAddress.phone} onChange={(e) => setShippingAddress({ ...shippingAddress, phone: e.target.value })} required />
+                        <Label htmlFor="phone">
+                          {language === "ar" ? "الهاتف" : "Phone"} *
+                        </Label>
+                        <Input
+                          id="phone"
+                          type="tel"
+                          value={shippingAddress.phone}
+                          onChange={(e) =>
+                            setShippingAddress({
+                              ...shippingAddress,
+                              phone: e.target.value,
+                            })
+                          }
+                          required
+                        />
                       </div>
                     </div>
                     <div>
-                      <Label htmlFor="email">{language === "ar" ? "البريد الإلكتروني" : "Email"}</Label>
-                      <Input id="email" type="email" value={shippingAddress.email} onChange={(e) => setShippingAddress({ ...shippingAddress, email: e.target.value })} />
+                      <Label htmlFor="email">
+                        {language === "ar" ? "البريد الإلكتروني" : "Email"}
+                      </Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={shippingAddress.email}
+                        onChange={(e) =>
+                          setShippingAddress({
+                            ...shippingAddress,
+                            email: e.target.value,
+                          })
+                        }
+                      />
                     </div>
                     <div>
-                      <Label htmlFor="street">{language === "ar" ? "العنوان" : "Address"} *</Label>
-                      <Input id="street" value={shippingAddress.street} onChange={(e) => setShippingAddress({ ...shippingAddress, street: e.target.value })} required />
+                      <Label htmlFor="street">
+                        {language === "ar" ? "العنوان" : "Address"} *
+                      </Label>
+                      <Input
+                        id="street"
+                        value={shippingAddress.street}
+                        onChange={(e) =>
+                          setShippingAddress({
+                            ...shippingAddress,
+                            street: e.target.value,
+                          })
+                        }
+                        required
+                      />
                     </div>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
-                        <Label htmlFor="city">{language === "ar" ? "المدينة" : "City"} *</Label>
-                        <Input id="city" value={shippingAddress.city} onChange={(e) => setShippingAddress({ ...shippingAddress, city: e.target.value })} required />
+                        <Label htmlFor="city">
+                          {language === "ar" ? "المدينة" : "City"} *
+                        </Label>
+                        <Input
+                          id="city"
+                          value={shippingAddress.city}
+                          onChange={(e) =>
+                            setShippingAddress({
+                              ...shippingAddress,
+                              city: e.target.value,
+                            })
+                          }
+                          required
+                        />
                       </div>
                       <div>
-                        <Label htmlFor="state">{language === "ar" ? "المنطقة" : "State"} *</Label>
-                        <Input id="state" value={shippingAddress.state} onChange={(e) => setShippingAddress({ ...shippingAddress, state: e.target.value })} required />
+                        <Label htmlFor="state">
+                          {language === "ar" ? "المنطقة" : "State"} *
+                        </Label>
+                        <Input
+                          id="state"
+                          value={shippingAddress.state}
+                          onChange={(e) =>
+                            setShippingAddress({
+                              ...shippingAddress,
+                              state: e.target.value,
+                            })
+                          }
+                          required
+                        />
                       </div>
                       <div>
-                        <Label htmlFor="postalCode">{language === "ar" ? "الرمز البريدي" : "Zip Code"} *</Label>
-                        <Input id="postalCode" value={shippingAddress.postalCode} onChange={(e) => setShippingAddress({ ...shippingAddress, postalCode: e.target.value })} required />
+                        <Label htmlFor="postalCode">
+                          {language === "ar" ? "الرمز البريدي" : "Zip Code"} *
+                        </Label>
+                        <Input
+                          id="postalCode"
+                          value={shippingAddress.postalCode}
+                          onChange={(e) =>
+                            setShippingAddress({
+                              ...shippingAddress,
+                              postalCode: e.target.value,
+                            })
+                          }
+                          required
+                        />
                       </div>
                     </div>
                     <div>
-                      <Label htmlFor="country">{language === "ar" ? "الدولة" : "Country"} *</Label>
-                      <Input id="country" value={shippingAddress.country} onChange={(e) => setShippingAddress({ ...shippingAddress, country: e.target.value })} required />
+                      <Label htmlFor="country">
+                        {language === "ar" ? "الدولة" : "Country"} *
+                      </Label>
+                      <Input
+                        id="country"
+                        value={shippingAddress.country}
+                        onChange={(e) =>
+                          setShippingAddress({
+                            ...shippingAddress,
+                            country: e.target.value,
+                          })
+                        }
+                        required
+                      />
                     </div>
                     <Button type="submit" className="w-full">
-                      {language === "ar" ? "المتابعة للدفع" : "Continue to Payment"}
+                      {language === "ar"
+                        ? "المتابعة للدفع"
+                        : "Continue to Payment"}
                       <ArrowRight className="h-4 w-4 ml-2" />
                     </Button>
                   </form>
@@ -191,24 +431,29 @@ export default function CheckoutPage() {
             {step === "payment" && (
               <Card>
                 <CardHeader>
-                  <CardTitle>{language === "ar" ? "طريقة الدفع" : "Payment Method"}</CardTitle>
+                  <CardTitle>
+                    {language === "ar" ? "طريقة الدفع" : "Payment Method"}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center gap-2 text-sm text-slate-600">
                     <CreditCard className="h-4 w-4" />
                     {language === "ar"
-                      ? "الدفع بالبطاقة عبر Stripe (بيئة اختبار – استخدم 4242 4242 4242 4242)"
-                      : "Card payment via Stripe (test mode — use card 4242 4242 4242 4242)"}
+                      ? "الدفع بالبطاقة عبر Stripe"
+                      : "Card payment via Stripe"}
                   </div>
                   <Alert>
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
                       {language === "ar"
-                        ? "سيتم إنشاء طلبك فور تأكيد الدفع"
-                        : "Your order is created immediately when payment is confirmed"}
+                        ? "سيتم حفظ الطلب قبل تجهيز الدفع. لا يعني حفظه نجاح الدفع."
+                        : "Your order is saved before payment preparation. A saved order does not mean payment succeeded."}
                     </AlertDescription>
                   </Alert>
-                  <StripePayment shippingAddress={shippingAddress} designSessionId={designSessionId} />
+                  <StripePayment
+                    shippingAddress={shippingAddress}
+                    designSessionId={designSessionId}
+                  />
                   <Button
                     variant="ghost"
                     onClick={() => setStep("shipping")}
@@ -226,7 +471,9 @@ export default function CheckoutPage() {
           <div className="lg:col-span-1">
             <Card className="sticky top-4">
               <CardHeader>
-                <CardTitle>{language === "ar" ? "ملخص الطلب" : "Order Summary"}</CardTitle>
+                <CardTitle>
+                  {language === "ar" ? "ملخص الطلب" : "Order Summary"}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -235,11 +482,17 @@ export default function CheckoutPage() {
                       <span className="flex items-center gap-2 min-w-0">
                         {item.thumbnail ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={item.thumbnail} alt={item.name || item.productType} className="w-10 h-10 rounded object-cover shrink-0" />
+                          <img
+                            src={item.thumbnail}
+                            alt={item.name || item.productType}
+                            className="w-10 h-10 rounded object-cover shrink-0"
+                          />
                         ) : (
                           <ShoppingCart className="w-4 h-4 text-slate-400 shrink-0" />
                         )}
-                        <span className="truncate">{item.name || item.productType} x {item.quantity}</span>
+                        <span className="truncate">
+                          {item.name || item.productType} x {item.quantity}
+                        </span>
                       </span>
                       <span>{item.totalPrice.toFixed(2)}</span>
                     </div>
@@ -248,16 +501,23 @@ export default function CheckoutPage() {
                 {summary && (
                   <div className="border-t pt-4 space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-slate-600">{language === "ar" ? "المجموع الفرعي" : "Subtotal"}</span>
+                      <span className="text-slate-600">
+                        {language === "ar" ? "المجموع الفرعي" : "Subtotal"}
+                      </span>
                       <span>{formatMoney(summary.subtotal)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-slate-600">{language === "ar" ? "الضريبة" : "Tax"}</span>
+                      <span className="text-slate-600">
+                        {language === "ar" ? "الضريبة" : "Tax"}
+                      </span>
                       <span>{formatMoney(summary.tax)}</span>
                     </div>
                     {splitRows.length > 1 ? (
                       splitRows.map((row) => (
-                        <div key={row.productType} className="flex justify-between text-sm">
+                        <div
+                          key={row.productType}
+                          className="flex justify-between text-sm"
+                        >
                           <span className="text-slate-600">
                             {language === "ar"
                               ? `الشحن — ${row.productType}`
@@ -268,10 +528,14 @@ export default function CheckoutPage() {
                       ))
                     ) : (
                       <div className="flex justify-between text-sm">
-                        <span className="text-slate-600">{language === "ar" ? "الشحن" : "Shipping"}</span>
+                        <span className="text-slate-600">
+                          {language === "ar" ? "الشحن" : "Shipping"}
+                        </span>
                         <span>
                           {summary.shipping === 0
-                            ? language === "ar" ? "مجاني" : "Free"
+                            ? language === "ar"
+                              ? "مجاني"
+                              : "Free"
                             : formatMoney(summary.shipping)}
                         </span>
                       </div>
@@ -293,5 +557,5 @@ export default function CheckoutPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

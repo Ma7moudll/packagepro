@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -42,39 +42,40 @@ export default function ManufacturerOrderDetailPage() {
   const [productionProgress, setProductionProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
+  const loadSeq = useRef(0)
+  const [productionSeen, setProductionSeen] = useState(false)
+  const [uploadRefreshError, setUploadRefreshError] = useState(false)
 
+  const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
+    const seq = ++loadSeq.current
+    try {
+      if (!opts?.silent) setLoading(true)
       const [orderRes, vendorData] = await Promise.all([
         ordersApi.getById(orderId!),
-        vendorsApi.getOrders().catch(() => ({ success: false, data: [] as PurchaseOrder[] })),
+        vendorsApi.getOrders().catch(err => {
+          if (opts?.silent) throw err
+          return { success: false, data: [] as PurchaseOrder[] }
+        }),
       ])
-
-      if (orderRes.success && orderRes.data) {
-        setOrder(orderRes.data as unknown as BackendOrder)
-      } else {
-        setOrder(null)
-        setError(language === "ar" ? "لم يتم العثور على الطلب" : "Order not found")
-      }
-
-      const rows = (vendorData.success ? vendorData.data : []) as unknown as PurchaseOrder[]
+      if (seq !== loadSeq.current) throw new Error("Reload superseded")
+      if (!orderRes.success || !orderRes.data || (opts?.silent && !vendorData.success))
+        throw new Error("Order could not refresh")
+      setError(null)
+      setOrder(orderRes.data as unknown as BackendOrder)
+      const rows = vendorData.data as unknown as PurchaseOrder[]
       const matched = rows.find((r) => r.orderId === orderId)
       setPo(matched || null)
-      if (matched?.production) {
-        setProductionStatus(PRODUCTION_MAP[matched.production.status] || "not_started")
-        setProductionProgress(matched.production.progressPercent || 0)
-      } else {
-        setProductionStatus("not_started")
-        setProductionProgress(0)
+      if (matched?.production || matched?.handshake?.status === "accepted") setProductionSeen(true)
+      setProductionStatus(matched?.production ? PRODUCTION_MAP[matched.production.status] || "not_started" : "not_started")
+      setProductionProgress(matched?.production?.progressPercent || 0)
+    } catch (err) {
+      if (seq === loadSeq.current) {
+        setError(language === "ar" ? "تعذر تحديث الطلب. الحالة المعروضة قديمة." : "Order could not refresh. The displayed state may be stale.")
+        if (!opts?.silent) setOrder(null)
       }
-    } catch (err: any) {
-      console.error("Error fetching order:", err)
-      setError(err.message || "Failed to fetch order")
-      setOrder(null)
+      if (opts?.silent) throw err
     } finally {
-      setLoading(false)
+      if (seq === loadSeq.current) setLoading(false)
     }
   }, [orderId, language])
 
@@ -86,6 +87,7 @@ export default function ManufacturerOrderDetailPage() {
     if (orderId) {
       fetchData()
     }
+    return () => { loadSeq.current++ }
   }, [user, router, orderId, fetchData])
 
   const handleAcceptHandshake = async () => {
@@ -123,7 +125,8 @@ export default function ManufacturerOrderDetailPage() {
   }
 
   const handleUploadSample = async (file: File) => {
-    if (!po?.production?.id) return
+    if (!po?.production?.id) throw new Error("Production unavailable")
+    setUploadRefreshError(false)
     const dataBase64 = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = () => {
@@ -133,10 +136,11 @@ export default function ManufacturerOrderDetailPage() {
       reader.onerror = () => reject(new Error("Failed to read file"))
       reader.readAsDataURL(file)
     })
-    await vendorsApi.uploadSamples(po.production.id, [
+    const res = await vendorsApi.uploadSamples(po.production.id, [
       { fileName: file.name, mimeType: file.type || "image/jpeg", dataBase64 },
     ])
-    await fetchData()
+    if (!res.success) throw new Error("Upload failed")
+    try { await fetchData({ silent: true }) } catch { setUploadRefreshError(true) }
   }
 
   const handleMarkReadyToShip = async () => {
@@ -379,9 +383,9 @@ export default function ManufacturerOrderDetailPage() {
           />
 
           {/* Production Progress */}
-          {po && (po.handshake?.status === "accepted" || productionStatus !== "not_started" || po.production) && (
+          {productionSeen && (
             <>
-              {po.production?.samples?.[0]?.status === "rejected" && po.production.samples[0].revisionNotes && (
+              {po?.production?.samples?.[0]?.status === "rejected" && po?.production?.samples?.[0]?.revisionNotes && (
                 <Alert className="border-rose-200 bg-rose-50 text-rose-800">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
@@ -392,15 +396,21 @@ export default function ManufacturerOrderDetailPage() {
                   </AlertDescription>
                 </Alert>
               )}
+              {error && <p role="alert">{error}</p>}
+              {uploadRefreshError && <p role="status">{language === "ar" ? "تم رفع الصورة، لكن تعذر تحديث بيانات الطلب." : "Photo uploaded, but order data could not be refreshed."}</p>}
               <ProductionProgress
+                key={order.id}
                 orderId={order.id}
+                productionAvailable={!!po}
+                uploadDisabled={!po?.production?.id || ["cancelled", "shipped", "delivered", "completed"].includes(order.status)}
                 currentStatus={productionStatus}
                 progress={productionProgress}
-                samplePhotos={po.production?.samples?.[0]?.photoUrls ?? []}
+                samplePhotos={po?.production?.samples?.[0]?.photoUrls ?? []}
                 onStartProduction={handleStartProduction}
                 onUpdateProgress={handleUpdateProgress}
                 onUploadSample={handleUploadSample}
                 onMarkReadyToShip={handleMarkReadyToShip}
+                onReload={() => fetchData({ silent: true })}
               />
             </>
           )}

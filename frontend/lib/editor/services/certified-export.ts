@@ -17,12 +17,13 @@
 //
 // Pure module (no DOM / fetch): unit-tested with the Node test runner.
 
-import { resolveDieline } from "../geometry/resolve-dieline.ts"
-import { serializeSVG } from "./dieline-service.ts"
+import { resolveDieline, selectEffectiveDieline } from "../geometry/resolve-dieline.ts"
+import { serializeSVG, DIELINE_SERIALIZER_VERSION } from "./dieline-service.ts"
 import type {
   DielineBlueprint,
   DielineGeometry,
 } from "../../../../shared/types/index.ts"
+import type { StoredDielineSnapshot } from "../state/types.ts"
 
 export type CertificationStatus =
   | "CERTIFIED"
@@ -64,6 +65,12 @@ export type DielineDelivery =
       svg: string
       fileName: string
       bytes: number
+      /** Serializer version this delivery was produced under (see
+       *  DIELINE_SERIALIZER_VERSION), recorded on the receipt. It
+       *  identifies the producing serializer only — it does not prove
+       *  that a previously delivered artifact is unchanged, and it is
+       *  not certification evidence for historical artifacts. */
+      serializerVersion: number
       certification: { status: "CERTIFIED"; checkedAt: string | null; reason: string }
     }
   | {
@@ -180,13 +187,26 @@ export function canonicalPersistedGeometry(args: {
   return resolution.ok ? resolution.geometry : null
 }
 
-/** Resolve the LIVE editor geometry through the same canonical resolution point. */
+/**
+ * Resolve the LIVE editor geometry through the same canonical resolution
+ * point AND the shared effective-geometry selector: for a restored design
+ * whose geometry inputs are unchanged, the effective live geometry is the
+ * saved snapshot itself, so the certified comparison below compares the
+ * artifact that was certified against itself — never against a silently
+ * different fresh net.
+ */
 export function canonicalLiveGeometry(args: {
   blueprint?: DielineBlueprint | null
   dims?: DielineDims | null
+  productId?: string
+  stored?: StoredDielineSnapshot
 }): DielineGeometry | null {
   if (!args.blueprint || !args.dims) return null
-  const resolution = resolveDieline(args.blueprint, args.dims)
+  const resolution = selectEffectiveDieline(resolveDieline(args.blueprint, args.dims), {
+    productId: args.productId,
+    dims: args.dims,
+    stored: args.stored,
+  })
   return resolution.ok ? resolution.geometry : null
 }
 
@@ -222,6 +242,7 @@ export function assembleDielineDelivery(input: DielineDeliveryInput): DielineDel
       svg,
       fileName,
       bytes,
+      serializerVersion: DIELINE_SERIALIZER_VERSION,
       certification: {
         status: "CERTIFIED",
         checkedAt: checkedAt ?? null,

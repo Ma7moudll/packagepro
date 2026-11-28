@@ -24,7 +24,7 @@ import { checkCompression } from './validators/quality.validator';
 import { checkFonts } from './validators/font.validator';
 import { detectFileKind } from './validators/file-kind';
 import { analyzeGeometry, AutoFix } from './geometry-mirror';
-import axios from 'axios';
+import { fetchStoredFile, StoredFileFetchError } from '../file-upload/stored-file-fetch';
 
 export type IssueSeverity = 'error' | 'warning' | 'info';
 
@@ -87,15 +87,12 @@ export class PrePressCheckService {
 
       let buffer: Buffer;
       try {
-        const response = await axios.get(file.fileUrl, {
-          responseType: 'arraybuffer',
-        });
-        buffer = Buffer.from(response.data);
+        buffer = await fetchStoredFile(file.fileUrl);
       } catch (error) {
         issues.push({
           type: 'file_access',
           severity: 'error',
-          message: `Failed to download file ${file.fileName}: ${error}`,
+          message: `Failed to download file ${file.fileName}: ${error instanceof StoredFileFetchError ? error.code : 'DOWNLOAD_FAILED'}`,
         });
         continue;
       }

@@ -1,12 +1,14 @@
+import { ConflictError } from '../../utils/errors';
+import { prisma } from '../../lib/prisma';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { stripeService } from '../../integrations/stripe/stripe.service';
+import { getPaymentProvider } from '../../integrations/payments/registry';
 import { z } from 'zod';
 import { authenticate, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { handleStripeWebhook } from '../../integrations/stripe/webhooks';
 
 const createPaymentIntentSchema = z.object({
   orderId: z.string(),
-  currency: z.string().optional(),
 });
 
 export class PaymentController {
@@ -16,7 +18,6 @@ export class PaymentController {
     const body = createPaymentIntentSchema.parse(request.body);
 
     // Get order and verify ownership
-    const { prisma } = require('../../lib/prisma');
     const order = await prisma.order.findUnique({
       where: { id: body.orderId },
       include: {
@@ -38,18 +39,21 @@ export class PaymentController {
       });
     }
 
-    const paymentIntent = await stripeService.createPaymentIntent({
+    const attempt=await prisma.checkoutAttempt.findUnique({where:{orderId:body.orderId}});
+    if(attempt)throw new ConflictError('This order has a saved checkout. Recover that attempt instead of creating another payment');
+
+    const payment = await getPaymentProvider().createPayment({
       orderId: body.orderId,
       amount: Number(order.total),
-      currency: body.currency || 'usd',
+      currency: order.currency?.toLowerCase() || (()=>{throw new ConflictError('Order currency requires review before payment')})(),
       customerEmail: user.email,
     });
 
     return reply.send({
       success: true,
       data: {
-        clientSecret: paymentIntent.client_secret,
-        paymentIntentId: paymentIntent.id,
+        clientSecret: payment.clientSecret,
+        paymentIntentId: payment.providerRef,
       },
     });
   }
@@ -62,7 +66,7 @@ export class PaymentController {
       })
       .parse(request.body);
 
-    await stripeService.confirmPayment(body.paymentIntentId);
+    await stripeService.confirmPayment(body.paymentIntentId, undefined, (request as AuthenticatedRequest).user);
 
     return reply.send({
       success: true,

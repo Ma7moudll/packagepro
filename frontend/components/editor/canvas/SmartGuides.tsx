@@ -1,7 +1,7 @@
 "use client"
 
 import { useDesignStore } from "@/lib/editor/state/store"
-import { fabric } from "fabric"
+import * as fabric from "fabric"
 import { useEffect, useRef, useCallback } from "react"
 
 interface SmartGuidesProps {
@@ -20,7 +20,7 @@ interface GuideLine {
 
 // Helper to get object bounds
 function getObjectBounds(obj: fabric.Object) {
-  const bound = obj.getBoundingRect(true, true)
+  const bound = obj.getBoundingRect()
   const center = obj.getCenterPoint()
   return {
     left: bound.left,
@@ -64,6 +64,9 @@ export function useSmartGuides({
           ? [position, 0, position, canvasHeight]
           : [0, position, canvasWidth, position],
         {
+          // Fabric7 defaults changed to center; keep guide coordinates unchanged.
+          originX: "left",
+          originY: "top",
           stroke: guideColor,
           strokeWidth: 1,
           strokeDashArray: [5, 5],
@@ -74,7 +77,7 @@ export function useSmartGuides({
       )
 
       canvas.add(line)
-      canvas.bringToFront(line)
+      canvas.bringObjectToFront(line)
       guideLinesRef.current.push(line)
     },
     [canvas, guideColor]
@@ -184,7 +187,7 @@ export function useSmartGuides({
   useEffect(() => {
     if (!canvas || !enabled) return
 
-    const handleObjectMoving = (e: fabric.IEvent) => {
+    const handleObjectMoving = (e: fabric.CanvasEvents["object:moving"]) => {
       if (e.target) {
         snapObject(e.target)
       }

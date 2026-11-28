@@ -158,6 +158,10 @@ model User {
   designs       Design[]
   notifications Notification[]
   auditLogs     AuditLog[]
+  consolidationCapabilities ConsolidationCapability[]
+  consolidationPlans ConsolidationManifest[]
+  consolidationReceipts ConsolidationReceiptEvent[]
+  consolidationConfirmations ConsolidationConfirmation[]
 
   @@map("users")
 }
@@ -266,6 +270,10 @@ model Order {
   shippingCost Decimal @db.Decimal(10, 2)
   total        Decimal @db.Decimal(10, 2)
 
+  // New-order quote currency only. Historical unknown rows remain null.
+  currency String?
+  checkoutAttempt CheckoutAttempt?
+
   // Shipping
   shippingAddress Json // Full address object
   shippingName    String
@@ -290,6 +298,7 @@ model Order {
   // Multi-vendor orders: one order can fulfill through several vendors,
   // one PurchaseOrder per vendor item-group (Step-4 Piece 4a).
   purchaseOrders  PurchaseOrder[]
+  consolidationManifest ConsolidationManifest?
   shipment        Shipment?
   payment         Payment?
   // SEC-03a: a delivered order settles every vendor — the relation is
@@ -298,6 +307,8 @@ model Order {
   reviews         Review[]
 
   @@map("orders")
+  approvalTokens OrderApprovalToken[]
+  approvalRequests ApprovalRequest[]
 }
 
 model OrderItem {
@@ -336,7 +347,7 @@ model OrderItem {
 model Cart {
   id         String   @id @default(cuid())
   customerId String   @unique
-  currency   String   @default("USD")
+  currency   String   @default("EGP")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -348,6 +359,7 @@ model Cart {
 }
 
 model CartItem {
+  revision Int @default(0)
   id           String   @id @default(cuid())
   cartId       String
   productType  String // "box", "bag", "label"
@@ -403,6 +415,7 @@ model Design {
   prepressCheck PrePressCheck?
   cartItems     CartItem[]
   orderItems    OrderItem[]
+  approvalRequests ApprovalRequest[]
 
   @@index([ownerId])
   @@index([sessionId])
@@ -460,7 +473,7 @@ model PurchaseOrder {
 
   // Pricing
   vendorCost Decimal @db.Decimal(10, 2)
-  currency   String  @default("USD")
+  currency   String  @default("EGP")
 
   // Files
   poDocumentUrl  String? // PDF URL
@@ -528,6 +541,7 @@ model Production {
 }
 
 model Sample {
+  submissionId String @default(uuid())
   id            String       @id @default(cuid())
   productionId  String
   status        SampleStatus @default(pending)
@@ -574,7 +588,7 @@ model Payment {
   orderId               String        @unique
   stripePaymentIntentId String?       @unique
   amount                Decimal       @db.Decimal(10, 2)
-  currency              String        @default("USD")
+  currency              String        @default("EGP")
   status                PaymentStatus @default(pending)
   capturedAt            DateTime?
   refundedAt            DateTime?
@@ -611,7 +625,7 @@ model Settlement {
   orderId                  String
   vendorId                 String
   amount                   Decimal          @db.Decimal(10, 2)
-  currency                 String           @default("USD")
+  currency                 String           @default("EGP")
   convertedAmount          Decimal?         @db.Decimal(10, 2) // EGP amount
   exchangeRate             Decimal?         @db.Decimal(10, 4)
   status                   SettlementStatus @default(pending)
@@ -688,7 +702,7 @@ model Material {
   name        String   @unique
   code        String   @unique
   unitPrice   Decimal  @db.Decimal(10, 6) // Price per square unit
-  currency    String   @default("USD")
+  currency    String   @default("EGP")
   isActive    Boolean  @default(true)
   lastUpdated DateTime @default(now()) @updatedAt
   metadata    Json? // Additional material properties
@@ -893,4 +907,166 @@ model ProductOptionValue {
   @@index([optionId, sortOrder])
   @@index([productId])
   @@map("product_option_values")
+}
+
+// Approval capabilities are durable, hashed, expiring and single-use.
+model OrderApprovalToken {
+  tokenHash String @id
+  orderId String
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  consumedAt DateTime?
+  requestId String?
+  request ApprovalRequest? @relation(fields:[requestId], references:[id], onDelete:Cascade)
+  @@index([orderId])
+  @@map("order_approval_tokens")
+}
+
+// Additive, legacy rows stay unbound and require explicit review renewal.
+model ApprovalRequest {
+  id                 String               @id @default(cuid())
+  orderId            String
+  designId           String
+  order              Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  design             Design               @relation(fields: [designId], references: [id], onDelete: Cascade)
+  status             String               @default("generating")
+  contentHash        String
+  designSnapshot     Json
+  printFileId        String
+  printSha256        String
+  printSnapshotUrl   String
+  dielineFileId      String?
+  dielineSha256      String?
+  dielineSnapshotUrl String?
+  proofFileId        String?
+  proofSha256        String?
+  proofUrl           String?
+  deliveryState      String               @default("not_sent")
+  failureCode        String?
+  createdAt          DateTime             @default(now())
+  expiresAt          DateTime
+  approvedAt         DateTime?
+  tokens             OrderApprovalToken[]
+
+  @@index([orderId, createdAt])
+  @@map("approval_requests")
+}
+
+model CheckoutAttempt {
+  statusOperations CheckoutStatusOperation[]
+  attachment Json?
+  isolation Json?
+  reconciliation Json?
+  id String @id @default(cuid())
+  customerId String
+  snapshotHash String
+  intentHash String
+  provider String
+  orderId String @unique
+  order Order @relation(fields: [orderId], references: [id])
+  cartSnapshot Json
+  state String @default("reserved")
+  result Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  keys CheckoutRequestKey[]
+  @@unique([customerId, snapshotHash])
+  @@index([customerId, state])
+  @@map("checkout_attempts")
+}
+model CheckoutRequestKey {
+  customerId String
+  key String
+  attemptId String
+  attempt CheckoutAttempt @relation(fields: [attemptId], references: [id])
+  @@id([customerId, key])
+  @@map("checkout_request_keys")
+}
+
+model CheckoutStatusOperation {
+ id String @id @default(cuid())
+ attemptId String
+ attempt CheckoutAttempt @relation(fields:[attemptId],references:[id])
+ actorId String
+ reason String
+ providerRef String
+ observedProviderStatus String
+ state String @default("started")
+ outcome Json?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@index([attemptId,state])
+ @@map("checkout_status_operations")
+}
+
+// Local consolidation candidate. No routes or carrier dispatch wiring.
+model ConsolidationHub {
+ id String @id
+ revision Int @default(1)
+ enabled Boolean @default(false)
+ capabilities ConsolidationCapability[]
+ manifests ConsolidationManifest[]
+ @@map("consolidation_hubs")
+}
+model ConsolidationCapability {
+ id String @id @default(cuid())
+ userId String
+ hubId String
+ canPlan Boolean @default(false)
+ canReceive Boolean @default(false)
+ user User @relation(fields:[userId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_capability_user_fk")
+ hub ConsolidationHub @relation(fields:[hubId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_capability_hub_fk")
+ @@unique([userId,hubId])
+ @@map("consolidation_capabilities")
+}
+model ConsolidationManifest {
+ id String @id @default(cuid())
+ orderId String @unique
+ hubId String
+ hubRevision Int
+ revision Int @default(1)
+ receiptRevision Int @default(0)
+ sourceHash String
+ allocations Json
+ createdBy String
+ updatedAt DateTime @updatedAt
+ order Order @relation(fields:[orderId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_manifest_order_fk")
+ hub ConsolidationHub @relation(fields:[hubId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_manifest_hub_fk")
+ creator User @relation(fields:[createdBy],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_manifest_actor_fk")
+ receipts ConsolidationReceiptEvent[]
+ confirmations ConsolidationConfirmation[]
+ @@map("consolidation_manifests")
+}
+model ConsolidationReceiptEvent {
+ id String @id @default(cuid())
+ manifestId String
+ manifestRevision Int
+ receiptRevision Int
+ eventKey String
+ requestHash String
+ actorId String
+ allocationId String
+ snapshot Json
+ reason String
+ createdAt DateTime @default(now())
+ manifest ConsolidationManifest @relation(fields:[manifestId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_receipt_manifest_fk")
+ actor User @relation(fields:[actorId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_receipt_actor_fk")
+ @@unique([manifestId,eventKey])
+ @@unique([manifestId,receiptRevision])
+ @@map("consolidation_receipt_events")
+}
+model ConsolidationConfirmation {
+ id String @id @default(cuid())
+ manifestId String
+ manifestRevision Int
+ receiptRevision Int
+ sourceHash String
+ hubRevision Int
+ actorId String
+ createdAt DateTime @default(now())
+ manifest ConsolidationManifest @relation(fields:[manifestId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_confirmation_manifest_fk")
+ actor User @relation(fields:[actorId],references:[id],onDelete:Restrict,onUpdate:Cascade,map:"consolidation_confirmation_actor_fk")
+ @@unique([manifestId,manifestRevision,receiptRevision])
+ @@map("consolidation_confirmations")
 }

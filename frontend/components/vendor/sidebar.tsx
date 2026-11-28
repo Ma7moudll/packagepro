@@ -34,10 +34,10 @@ export function VendorSidebar() {
 
   return (
     <aside className={cn(
-      "w-64 bg-white border-l border-gray-200 flex flex-col h-screen sticky top-0",
+      "w-full md:w-64 md:shrink-0 bg-white border-b md:border-b-0 border-gray-200 flex flex-col md:h-screen md:sticky md:top-0",
       isRTL ? "border-l" : "border-r"
     )}>
-      <div className="p-6 border-b border-gray-200">
+      <div className="p-4 md:p-6 border-b border-gray-200">
         <Link href="/manufacturer" className="flex items-center gap-2">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
             <Factory className="h-4 w-4 text-white" />
@@ -49,21 +49,22 @@ export function VendorSidebar() {
       </div>
 
       {user && (
-        <div className="px-6 py-4 border-b border-gray-100">
+        <div className="hidden md:block px-6 py-4 border-b border-gray-100">
           <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
           <p className="text-xs text-gray-500 truncate">{user.email}</p>
         </div>
       )}
 
-      <nav className="flex-1 p-4 space-y-1">
+      <nav aria-label={language === "ar" ? "تنقل المورد" : "Vendor navigation"} className="grid grid-cols-2 md:flex-1 md:block p-3 md:p-4 gap-1 md:space-y-1">
         {NAV_ITEMS.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+          const isActive = pathname === item.href || (item.href !== "/manufacturer" && pathname.startsWith(item.href + "/"))
           return (
             <Link
               key={item.href}
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                "flex min-w-0 items-center gap-2 md:gap-3 px-2 md:px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                 isActive
                   ? "bg-indigo-50 text-indigo-700"
                   : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
@@ -77,7 +78,7 @@ export function VendorSidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-2 md:p-4 border-t border-gray-200">
         <Button
           variant="ghost"
           className="w-full justify-start text-gray-600 hover:text-red-600 hover:bg-red-50"

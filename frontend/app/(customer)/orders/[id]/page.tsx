@@ -37,7 +37,7 @@ export default function OrderDetailPage() {
 
   const t = (en: string, ar: string) => (language === "ar" ? ar : en)
 
-  const currency = order ? currencyOf(order) : "USD"
+  const currency = order ? currencyOf(order) : "EGP"
   const shippingCost = order ? shippingOf(order) : 0
   const canGetInvoice = order ? isPaid(order) : false
   const orderTrackNo = order ? trackingNumber(order) : null
@@ -278,7 +278,7 @@ export default function OrderDetailPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-slate-600 whitespace-pre-line">
-                {order.shippingAddress.firstName} {order.shippingAddress.lastName}
+                {(order.shippingAddress as any).name || [order.shippingAddress.firstName,order.shippingAddress.lastName].filter(Boolean).join(" ")}
                 {"\n"}
                 {order.shippingAddress.street}
                 {"\n"}

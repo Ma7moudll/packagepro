@@ -1,7 +1,11 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
-import { z } from 'zod';
-import { authenticate, AuthenticatedRequest } from '../../middleware/auth.middleware';
-import { checkoutService } from './checkout.service';
+import { FastifyRequest, FastifyReply } from "fastify";
+import { z } from "zod";
+import {
+  authenticate,
+  AuthenticatedRequest,
+} from "../../middleware/auth.middleware";
+import { checkoutService } from "./checkout.service";
+import { prisma } from "../../lib/prisma";
 
 const shippingAddressSchema = z.object({
   name: z.string().min(1),
@@ -39,6 +43,7 @@ export class CheckoutController {
 
     const result = await checkoutService.checkout(customer.id, {
       customerId: customer.id,
+      requestKey: request.headers["idempotency-key"] as string | undefined,
       shippingAddress: body.shippingAddress,
       notes: body.notes,
       designSessionId: body.designSessionId,
@@ -47,9 +52,19 @@ export class CheckoutController {
     return reply.send({ success: true, data: result });
   }
 
+  async recover(request: FastifyRequest, reply: FastifyReply) {
+    await authenticate(request, reply);
+    const customer = await this.resolveCustomer(request, reply);
+    if (!customer) return;
+    const result = await checkoutService.recover(
+      customer.id,
+      request.headers["idempotency-key"] as string,
+    );
+    return reply.send({ success: true, data: result });
+  }
+
   private async resolveCustomer(request: FastifyRequest, reply: FastifyReply) {
     const user = (request as AuthenticatedRequest).user;
-    const { prisma } = require('../../lib/prisma');
     const customer = await prisma.customer.findUnique({
       where: { userId: user?.userId },
     });
@@ -57,7 +72,7 @@ export class CheckoutController {
     if (!customer) {
       reply.status(404).send({
         success: false,
-        error: 'Customer profile not found',
+        error: "Customer profile not found",
       });
       return null;
     }

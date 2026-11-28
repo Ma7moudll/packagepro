@@ -21,6 +21,7 @@ import type { ReactNode } from "react"
 import { designsApi } from "@/lib/api/designs"
 import { useDesignStore } from "@/lib/editor/state/store"
 import { deserializeDesignData } from "@/lib/editor/services/dieline-manifest"
+import { assertNoUnsupportedSheetArtwork, unsupportedArtworkOutputMessage, unsupportedSheetArtwork } from "@/lib/editor/print-coverage"
 import {
   assessCertification,
   assembleDielineDelivery,
@@ -68,7 +69,12 @@ export function CertifiedExportProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     setState({ status: "loading", delivery: null, serverReceipt: null, error: null })
     try {
-      const { sessionId, designId, product, model } = useDesignStore.getState()
+      const { sessionId, designId, product, model, storedDielineSnapshot } = useDesignStore.getState()
+      // Shared output boundary, derived from the actual design data: a
+      // two-face sheet carrying inside-face artwork gets no certified
+      // delivery (a normal card has no dieline and is unavailable here
+      // anyway; this stops stale or crafted states at the same boundary).
+      assertNoUnsupportedSheetArtwork(model?.faces, useDesignStore.getState().layers, model?.type)
 
       // 1) persisted side — session carries the saved designData (v2 manifest).
       const sessionIdValue = sessionId ?? sessionStorage.getItem("designSessionId")
@@ -97,10 +103,14 @@ export function CertifiedExportProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 2) live side — current editor blueprint + dims through the canonical point.
+      // 2) live side — current editor blueprint + dims through the canonical
+      //    point and the shared effective-geometry selector (a restored
+      //    design's effective live geometry is its saved snapshot).
       const liveGeometry = canonicalLiveGeometry({
         blueprint: product?.dieline,
         dims: model?.dimensions ?? null,
+        productId: product?.id,
+        stored: storedDielineSnapshot,
       })
 
       // 3) persisted geometry — the manifest snapshot, else resolve persisted inputs.
@@ -172,6 +182,16 @@ export function CertifiedExportProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const downloadCertified = useCallback(() => {
+    // Recheck at download time against the live design data — a delivery
+    // assembled earlier must not download for a design that has since
+    // become (or was restored as) unsupported.
+    const live = useDesignStore.getState()
+    const unsupported = unsupportedSheetArtwork(live.model.faces, live.layers, live.model.type)
+    if (unsupported) {
+      const message = `Export blocked: ${unsupportedArtworkOutputMessage(unsupported)}`
+      setState((prev) => ({ ...prev, delivery: { status: "error", message }, error: message }))
+      return
+    }
     const delivery = state.delivery
     if (!delivery || delivery.status !== "delivered") return
     const blob = new Blob([delivery.svg], { type: "image/svg+xml" })

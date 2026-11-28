@@ -1,3 +1,4 @@
+import {sumByCurrency} from '../../utils/currency-summary';
 import { prisma } from '../../lib/prisma';
 import { publicStatsService } from '../public/public.service';
 
@@ -13,6 +14,8 @@ interface FunnelShape {
 }
 
 export interface DashboardSummary {
+  unclassifiedOrderCount?: number;
+  revenueByCurrency?: Array<{currency:string|null;amount:number}>;
   revenue: number;
   revenueChange: number;
   orders: number;
@@ -126,7 +129,13 @@ export class AnalyticsService {
       this.getConversionFunnel(new Date('2000-01-01T00:00:00.000Z'), new Date()),
     ]);
 
-    return buildDashboardSummary(stats, funnel);
+    const groups = await prisma.order.groupBy({
+      by: ["currency"],
+      where: { status: { not: "cancelled" }, currency: { not: null } },
+      _sum: { total: true },
+    });
+    const unclassifiedOrderCount = await prisma.order.count({where:{status:{not:'cancelled'},currency:null}});
+    return {...buildDashboardSummary(stats, funnel),revenueByCurrency:sumByCurrency(groups.map(g=>({currency:g.currency,amount:g._sum.total??0}))),unclassifiedOrderCount};
   }
 
   /**
